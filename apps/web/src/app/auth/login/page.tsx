@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AuthLink, Button, Input } from "@/components/auth/AuthForm";
+import { AuthField } from "@/components/auth/AuthField";
+import { Button } from "@/components/Button";
 
 function LoginForm() {
   const router = useRouter();
@@ -39,33 +41,35 @@ function LoginForm() {
   return (
     <>
       <h1 className="auth-title">Sign in</h1>
-      <p className="auth-subtitle">Welcome back to Rhodes.</p>
+      <p className="auth-subtitle">Welcome back to your workspace.</p>
       <form className="auth-form" onSubmit={onSubmit}>
-        <Input
+        <AuthField
           label="Email"
           name="email"
           type="email"
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={setEmail}
         />
-        <Input
+        <AuthField
           label="Password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
         />
-        {error ? <p className="auth-error">{error}</p> : null}
-        <Button disabled={loading}>{loading ? "Signing in…" : "Sign in"}</Button>
+        {error ? <p className="auth-message auth-message--error">{error}</p> : null}
+        <Button type="submit" loading={loading}>
+          Sign in
+        </Button>
       </form>
       <p className="auth-footer">
-        <AuthLink href="/auth/forgot-password">Forgot password?</AuthLink>
+        <Link href="/auth/forgot-password">Forgot password?</Link>
         {" · "}
-        <AuthLink href="/auth/register">Create account</AuthLink>
+        <Link href="/auth/register">Create account</Link>
       </p>
     </>
   );

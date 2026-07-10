@@ -1,0 +1,13 @@
+.block-drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin: var(--space-xs) 0;
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 500;
+}

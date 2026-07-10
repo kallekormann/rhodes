@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { AuthLink, Button, Input } from "@/components/auth/AuthForm";
+import { AuthField } from "@/components/auth/AuthField";
+import { Button } from "@/components/Button";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -37,21 +39,23 @@ export default function ForgotPasswordPage() {
       <h1 className="auth-title">Reset password</h1>
       <p className="auth-subtitle">We&apos;ll email you a reset link.</p>
       <form className="auth-form" onSubmit={onSubmit}>
-        <Input
+        <AuthField
           label="Email"
           name="email"
           type="email"
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={setEmail}
         />
-        {error ? <p className="auth-error">{error}</p> : null}
-        {success ? <p className="auth-success">{success}</p> : null}
-        <Button disabled={loading}>{loading ? "Sending…" : "Send reset link"}</Button>
+        {error ? <p className="auth-message auth-message--error">{error}</p> : null}
+        {success ? <p className="auth-message auth-message--success">{success}</p> : null}
+        <Button type="submit" loading={loading}>
+          Send reset link
+        </Button>
       </form>
       <p className="auth-footer">
-        <AuthLink href="/auth/login">Back to sign in</AuthLink>
+        <Link href="/auth/login">Back to sign in</Link>
       </p>
     </>
   );

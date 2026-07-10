@@ -88,6 +88,8 @@ Then run `./scripts/pull-models.sh` from the host (default `OLLAMA_HOST` is `htt
 
 Verification and password-reset emails are captured in [Mailpit](http://localhost:8025). GoTrue uses `SITE_URL=http://localhost:3001/app` — auth pages live under `/app/auth/*`.
 
+Confirmation links go through **`/app/auth/confirm`** (not Kong `:8000`) so browser cookies from the Next.js app do not hit Kong’s header size limit. If an older email still points at `localhost:8000/auth/v1/verify`, change the host/path to `http://localhost:3001/app/auth/confirm` and keep the same `token` and `type` query params.
+
 | Dev | VPS (Phase 13) |
 |-----|----------------|
 | `GOTRUE_SMTP_HOST=mailpit` | Resend or AWS SES EU |

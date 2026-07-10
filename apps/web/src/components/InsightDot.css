@@ -1,0 +1,40 @@
+.insight-dot {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-accent-on-accent);
+  box-shadow: var(--shadow-float);
+  animation: insightAppear 400ms var(--ease-out) both;
+  z-index: 5;
+  transition: transform var(--duration-fast) ease;
+}
+
+.insight-dot:hover {
+  transform: scale(1.04);
+}
+
+.insight-dot:active {
+  transform: scale(0.98);
+}
+
+.insight-dot__count {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@keyframes insightAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

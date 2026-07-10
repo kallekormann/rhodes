@@ -7,6 +7,7 @@ const AUTH_PATHS = new Set([
   "/auth/forgot-password",
   "/auth/reset-password",
   "/auth/verify",
+  "/auth/confirm",
   "/auth/callback",
 ]);
 

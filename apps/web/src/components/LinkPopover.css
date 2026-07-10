@@ -1,0 +1,111 @@
+.link-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: 280px;
+  padding: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--color-float-bg);
+  border: 1px solid var(--color-float-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float-chrome);
+  animation: linkPopoverIn 150ms var(--ease-out);
+}
+
+.link-popover--static {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+  animation: none;
+}
+
+.link-popover__external,
+.link-popover__internal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.link-popover__apply {
+  align-self: flex-end;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent-on-accent);
+  background: var(--color-accent);
+  transition: background var(--duration-normal) ease;
+}
+
+.link-popover__apply:hover {
+  background: var(--color-accent-hover);
+}
+
+.link-popover__results {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.link-popover__group + .link-popover__group {
+  margin-top: var(--space-xs);
+}
+
+.link-popover__group-label {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.link-popover__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.link-popover__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--color-text);
+  text-align: left;
+  transition: background var(--duration-normal) ease;
+}
+
+.link-popover__item:hover {
+  background: var(--color-surface-hover);
+}
+
+.link-popover__empty {
+  margin: 0;
+  padding: var(--space-sm);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+@keyframes linkPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.link-popover--static {
+  animation: none;
+}

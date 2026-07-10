@@ -5,6 +5,9 @@ services:
     ports:
       - "${KONG_HTTP_PORT:-8000}:8000/tcp"
       - "${KONG_HTTPS_PORT:-8443}:8443/tcp"
+    environment:
+      KONG_NGINX_HTTP_CLIENT_HEADER_BUFFER_SIZE: 160k
+      KONG_NGINX_HTTP_LARGE_CLIENT_HEADER_BUFFERS: 64 160k
 
   studio:
     ports:
@@ -26,6 +29,11 @@ services:
       GOTRUE_SMTP_PASS: ""
       GOTRUE_SMTP_ADMIN_EMAIL: auth@rhodes.local
       GOTRUE_MAILER_AUTOCONFIRM: "false"
+      # Full URLs required — GoTrue uses API_EXTERNAL_URL (:8000) as host for relative paths.
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: http://localhost:3001/app/auth/confirm
+      GOTRUE_MAILER_URLPATHS_INVITE: http://localhost:3001/app/auth/confirm
+      GOTRUE_MAILER_URLPATHS_RECOVERY: http://localhost:3001/app/auth/confirm
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: http://localhost:3001/app/auth/confirm
 
   ollama:
     ports:

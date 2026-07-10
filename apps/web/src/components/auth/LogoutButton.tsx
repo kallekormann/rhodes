@@ -1,32 +1,33 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-async function logout() {
-  await fetch("/app/api/auth/logout", { method: "POST" });
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("rhodes:active_workspace");
-  }
-}
+import { Button } from "@/components/Button";
+import { signOutAction } from "@/lib/auth/actions";
+import { createClient } from "@/lib/supabase/client";
 
 export function LogoutButton() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   return (
-    <button
-      type="button"
-      className="app-logout"
-      disabled={loading}
+    <Button
+      variant="ghost"
+      size="small"
+      loading={loading}
       onClick={async () => {
         setLoading(true);
-        await logout();
-        router.push("/auth/login");
-        router.refresh();
+        localStorage.removeItem("rhodes:active_workspace");
+
+        try {
+          const supabase = createClient();
+          await supabase.auth.signOut({ scope: "global" });
+        } catch {
+          // Server action still clears HTTP-only session cookies.
+        }
+
+        await signOutAction();
       }}
     >
-      {loading ? "Signing out…" : "Sign out"}
-    </button>
+      Sign out
+    </Button>
   );
 }

@@ -1,0 +1,104 @@
+.editor-view {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.editor-view__canvas {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--color-editor-bg);
+  position: relative;
+  transition:
+    margin-top var(--duration-header) var(--ease-out),
+    height var(--duration-header) var(--ease-out);
+}
+
+.editor-view__canvas--header-visible {
+  margin-top: var(--header-height);
+  height: calc(100% - var(--header-height));
+}
+
+.editor-content {
+  --editor-gutter-left: 32px;
+  --editor-gutter-right: 260px;
+  --editor-grid-gap: 12px;
+  max-width: calc(
+    var(--editor-gutter-left) + var(--editor-grid-gap) + var(--editor-max-width) +
+      var(--editor-grid-gap) + var(--editor-gutter-right)
+  );
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) var(--space-2xl);
+  position: relative;
+}
+
+.editor-content__header {
+  display: grid;
+  grid-template-columns: var(--editor-gutter-left) minmax(0, 1fr) var(--editor-gutter-right);
+  column-gap: var(--editor-grid-gap);
+  margin-bottom: 0;
+}
+
+.editor-content__main {
+  grid-column: 2;
+  min-width: 0;
+  max-width: var(--editor-max-width);
+}
+
+.editor-content__title {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text);
+}
+
+.editor-content__title::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.editor-content__title:hover,
+.editor-content__title:focus,
+.editor-content__title:focus-visible {
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editor-content__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.editor-content__meta-sep {
+  color: var(--color-text-tertiary);
+  user-select: none;
+}
+
+.editor-content__rule {
+  border: none;
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-lg) 0;
+}
+
+.editor-view--panel-open .editor-content {
+  padding-right: var(--space-md);
+}

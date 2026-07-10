@@ -1,6 +1,6 @@
 # Phase 04 — UI Foundation
 
-**Status:** planned  
+**Status:** in progress  
 **Depends on:** Phase 03  
 **Blocks:** Phase 05  
 **Estimated duration:** 5–7 days

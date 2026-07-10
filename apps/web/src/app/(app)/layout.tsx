@@ -1,26 +1,38 @@
-import { LogoutButton } from "@/components/auth/LogoutButton";
+import { AppShell } from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (!user) {
+    redirect("/auth/login");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const displayName =
+    profile?.display_name?.trim() ||
+    user.email?.split("@")[0] ||
+    "User";
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <span className="app-brand">Rhodes</span>
-        <div className="app-header-actions">
-          <span className="app-user">{user?.email}</span>
-          <LogoutButton />
-        </div>
-      </header>
-      <main className="app-main">{children}</main>
-    </div>
+    <AppShell
+      session={{
+        userId: user.id,
+        userEmail: user.email ?? "",
+        displayName,
+      }}
+    >
+      {children}
+    </AppShell>
   );
 }

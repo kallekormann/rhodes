@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { AuthLink, Button, Input } from "@/components/auth/AuthForm";
+import { AuthField } from "@/components/auth/AuthField";
+import { Button } from "@/components/Button";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -38,16 +40,16 @@ export default function RegisterPage() {
       <h1 className="auth-title">Create account</h1>
       <p className="auth-subtitle">Start your private Rhodes workspace.</p>
       <form className="auth-form" onSubmit={onSubmit}>
-        <Input
+        <AuthField
           label="Email"
           name="email"
           type="email"
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={setEmail}
         />
-        <Input
+        <AuthField
           label="Password"
           name="password"
           type="password"
@@ -55,14 +57,17 @@ export default function RegisterPage() {
           required
           minLength={8}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
+          hint="8+ characters"
         />
-        {error ? <p className="auth-error">{error}</p> : null}
-        {success ? <p className="auth-success">{success}</p> : null}
-        <Button disabled={loading}>{loading ? "Creating…" : "Create account"}</Button>
+        {error ? <p className="auth-message auth-message--error">{error}</p> : null}
+        {success ? <p className="auth-message auth-message--success">{success}</p> : null}
+        <Button type="submit" loading={loading}>
+          Create account
+        </Button>
       </form>
       <p className="auth-footer">
-        <AuthLink href="/auth/login">Already have an account?</AuthLink>
+        <Link href="/auth/login">Already have an account?</Link>
       </p>
     </>
   );

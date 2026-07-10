@@ -1,0 +1,114 @@
+.icon-label-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  line-height: 1;
+  transition:
+    background var(--duration-normal) ease,
+    color var(--duration-normal) ease,
+    border-color var(--duration-normal) ease,
+    transform var(--duration-fast) ease;
+}
+
+.icon-label-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.icon-label-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Meta — document chrome, 13px */
+.icon-label-btn--meta {
+  padding: 0;
+  gap: 4px;
+  border-radius: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.icon-label-btn--meta:hover {
+  color: var(--color-text);
+}
+
+.icon-label-btn--meta.icon-label-btn--active {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.icon-label-btn--meta:focus-visible {
+  outline: none;
+  box-shadow: none;
+  color: var(--color-accent);
+}
+
+/* Primary */
+.icon-label-btn--primary {
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  background: var(--color-accent);
+  color: var(--color-accent-on-accent);
+}
+
+.icon-label-btn--primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+}
+
+/* Secondary */
+.icon-label-btn--secondary {
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  background: transparent;
+}
+
+.icon-label-btn--secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+/* Ghost — same scale as secondary, no border */
+.icon-label-btn--ghost {
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+
+.icon-label-btn--ghost:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+/* Danger */
+.icon-label-btn--danger {
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  background: var(--color-error);
+  color: #fff;
+}
+
+.icon-label-btn--danger:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+/* Small — matches btn--small scale */
+.icon-label-btn--small.icon-label-btn--primary,
+.icon-label-btn--small.icon-label-btn--secondary,
+.icon-label-btn--small.icon-label-btn--ghost,
+.icon-label-btn--small.icon-label-btn--danger {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.icon-label-btn--small.icon-label-btn--meta {
+  font-size: 13px;
+}

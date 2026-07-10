@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AuthField } from "@/components/auth/AuthField";
+import { Button } from "@/components/Button";
 import { createClient } from "@/lib/supabase/client";
-import { AuthLink, Button, Input } from "@/components/auth/AuthForm";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -45,7 +47,7 @@ export default function ResetPasswordPage() {
           Open the reset link from your email to continue.
         </p>
         <p className="auth-footer">
-          <AuthLink href="/auth/forgot-password">Request a new link</AuthLink>
+          <Link href="/auth/forgot-password">Request a new link</Link>
         </p>
       </>
     );
@@ -55,7 +57,7 @@ export default function ResetPasswordPage() {
     <>
       <h1 className="auth-title">Choose a new password</h1>
       <form className="auth-form" onSubmit={onSubmit}>
-        <Input
+        <AuthField
           label="New password"
           name="password"
           type="password"
@@ -63,10 +65,12 @@ export default function ResetPasswordPage() {
           required
           minLength={8}
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={setPassword}
         />
-        {error ? <p className="auth-error">{error}</p> : null}
-        <Button disabled={loading}>{loading ? "Saving…" : "Update password"}</Button>
+        {error ? <p className="auth-message auth-message--error">{error}</p> : null}
+        <Button type="submit" loading={loading}>
+          Update password
+        </Button>
       </form>
     </>
   );
