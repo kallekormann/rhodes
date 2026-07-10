@@ -77,6 +77,30 @@ async function main() {
       throw new Error("RLS failure: user A could not read own document");
     }
 
+    const memberships = await client.query(
+      `select workspace_id, role from workspace_members`,
+    );
+    if (memberships.rows.length < 1) {
+      throw new Error("RLS failure: user A could not read workspace memberships");
+    }
+
+    const bootstrap = await client.query(
+      `select public.bootstrap_user_workspace() as workspace_id`,
+    );
+    if (!bootstrap.rows[0]?.workspace_id) {
+      throw new Error("bootstrap_user_workspace failed under RLS");
+    }
+
+    const inserted = await client.query(
+      `insert into documents (workspace_id, created_by, title, content_plain)
+       values ($1, $2, 'RLS insert test', 'ok')
+       returning id`,
+      [workspaceId, userA],
+    );
+    if (!inserted.rows[0]?.id) {
+      throw new Error("RLS failure: could not insert and return document");
+    }
+
     await client.query("rollback");
     console.log("RLS cross-workspace denial test passed.");
   } catch (error) {

@@ -95,6 +95,11 @@
   text-align: center;
 }
 
+.link-popover__empty--muted {
+  text-align: left;
+  padding: 4px 8px 8px;
+}
+
 @keyframes linkPopoverIn {
   from {
     opacity: 0;

@@ -9,6 +9,17 @@ import {
   writeActiveWorkspaceId,
 } from "@/lib/workspaces/scope";
 
+type MembershipRow = {
+  workspace_id: string;
+  role: string;
+};
+
+type WorkspaceRow = {
+  id: string;
+  name: string;
+  is_team_workspace: boolean;
+};
+
 type UseWorkspacesResult = {
   scopes: Scope[];
   activeScopeId: string | null;
@@ -16,7 +27,34 @@ type UseWorkspacesResult = {
   error: string | null;
   setActiveScopeId: (workspaceId: string) => void;
   refresh: () => Promise<void>;
+  ensureWorkspace: () => Promise<Scope | null>;
 };
+
+async function bootstrapWorkspace(): Promise<boolean> {
+  const response = await fetch("/app/api/workspaces/bootstrap", {
+    method: "POST",
+  });
+  return response.ok;
+}
+
+function mergeMemberships(
+  memberships: MembershipRow[],
+  workspaces: WorkspaceRow[],
+): Scope[] {
+  const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws]));
+
+  return memberships
+    .map((row) => {
+      const workspace = workspaceById.get(row.workspace_id);
+      if (!workspace) return null;
+      return membershipToScope({ role: row.role, workspaces: workspace });
+    })
+    .filter((scope): scope is Scope => scope !== null)
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === "private" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
 
 export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const [scopes, setScopes] = useState<Scope[]>([]);
@@ -24,51 +62,123 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadScopes = useCallback(async (allowBootstrap: boolean) => {
+    const supabase = createClient();
+
+    const { data: memberships, error: membershipError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id, role");
+
+    if (membershipError) {
+      throw new Error(membershipError.message);
+    }
+
+    let rows = memberships ?? [];
+
+    if (rows.length === 0 && allowBootstrap) {
+      const bootstrapped = await bootstrapWorkspace();
+      if (bootstrapped) {
+        const retry = await supabase
+          .from("workspace_members")
+          .select("workspace_id, role");
+        if (retry.error) {
+          throw new Error(retry.error.message);
+        }
+        rows = retry.data ?? [];
+      }
+    }
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
+    const { data: workspaces, error: workspaceError } = await supabase
+      .from("workspaces")
+      .select("id, name, is_team_workspace")
+      .in("id", workspaceIds);
+
+    if (workspaceError) {
+      throw new Error(workspaceError.message);
+    }
+
+    return mergeMemberships(rows, workspaces ?? []);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!userId) {
       setScopes([]);
       setActiveScopeIdState(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { data, error: fetchError } = await supabase
-      .from("workspace_members")
-      .select("role, workspaces(id, name, is_team_workspace)");
+    try {
+      const nextScopes = await loadScopes(true);
+      setScopes(nextScopes);
 
-    if (fetchError) {
-      setError(fetchError.message);
+      const storedId = readActiveWorkspaceId();
+      const validStored = nextScopes.find((s) => s.id === storedId)?.id;
+      const fallbackId = nextScopes[0]?.id ?? null;
+      const resolvedId = validStored ?? fallbackId;
+
+      setActiveScopeIdState(resolvedId);
+      if (resolvedId) {
+        writeActiveWorkspaceId(resolvedId);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to load workspaces";
+      setError(message);
       setScopes([]);
+      setActiveScopeIdState(null);
+    } finally {
       setLoading(false);
-      return;
     }
+  }, [userId, loadScopes]);
 
-    const nextScopes = (data ?? [])
-      .map((row) => membershipToScope(row))
-      .filter((scope): scope is Scope => scope !== null)
-      .sort((a, b) => {
-        if (a.type !== b.type) return a.type === "private" ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
+  const ensureWorkspace = useCallback(async () => {
+    if (!userId) return null;
 
-    setScopes(nextScopes);
+    setLoading(true);
+    setError(null);
 
-    const storedId = readActiveWorkspaceId();
-    const validStored = nextScopes.find((s) => s.id === storedId)?.id;
-    const fallbackId = nextScopes[0]?.id ?? null;
-    const resolvedId = validStored ?? fallbackId;
+    try {
+      let nextScopes = await loadScopes(true);
 
-    setActiveScopeIdState(resolvedId);
-    if (resolvedId) {
-      writeActiveWorkspaceId(resolvedId);
+      if (nextScopes.length === 0) {
+        const bootstrapped = await bootstrapWorkspace();
+        if (!bootstrapped) {
+          throw new Error("Couldn't create your private workspace");
+        }
+        nextScopes = await loadScopes(false);
+      }
+
+      setScopes(nextScopes);
+
+      const storedId = readActiveWorkspaceId();
+      const validStored = nextScopes.find((s) => s.id === storedId)?.id;
+      const resolvedId = validStored ?? nextScopes[0]?.id ?? null;
+
+      setActiveScopeIdState(resolvedId);
+      if (resolvedId) {
+        writeActiveWorkspaceId(resolvedId);
+      }
+
+      return nextScopes.find((s) => s.id === resolvedId) ?? nextScopes[0] ?? null;
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to prepare workspace";
+      setError(message);
+      return null;
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  }, [userId]);
+  }, [userId, loadScopes]);
 
   useEffect(() => {
     void refresh();
@@ -86,5 +196,6 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     error,
     setActiveScopeId,
     refresh,
+    ensureWorkspace,
   };
 }

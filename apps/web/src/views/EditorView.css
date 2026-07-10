@@ -24,8 +24,9 @@
 }
 
 .editor-content {
+  /* Symmetric gutters until comment rail ships in 05b (overlay, not reserved width). */
   --editor-gutter-left: 32px;
-  --editor-gutter-right: 260px;
+  --editor-gutter-right: 32px;
   --editor-grid-gap: 12px;
   max-width: calc(
     var(--editor-gutter-left) + var(--editor-grid-gap) + var(--editor-max-width) +
@@ -46,7 +47,9 @@
 .editor-content__main {
   grid-column: 2;
   min-width: 0;
+  width: 100%;
   max-width: var(--editor-max-width);
+  justify-self: center;
 }
 
 .editor-content__title {
@@ -63,15 +66,25 @@
   letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--color-text);
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  field-sizing: content;
 }
 
 .editor-content__title::placeholder {
   color: var(--color-text-tertiary);
 }
 
-.editor-content__title:hover,
-.editor-content__title:focus,
 .editor-content__title:focus-visible {
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editor-content__title:hover,
+.editor-content__title:focus {
   outline: none;
   background: transparent;
   box-shadow: none;
@@ -79,17 +92,34 @@
 
 .editor-content__meta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   margin: 0;
   font-size: 13px;
   color: var(--color-text-tertiary);
 }
 
+.editor-content__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .editor-content__meta-sep {
   color: var(--color-text-tertiary);
   user-select: none;
+}
+
+.editor-content__share-anchor {
+  position: relative;
+}
+
+.editor-content__share-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
 }
 
 .editor-content__rule {
@@ -99,6 +129,36 @@
   margin: var(--space-lg) 0;
 }
 
+.editor-content__template-banner {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+}
+
+.editor-content__body {
+  display: grid;
+  grid-template-columns: var(--editor-gutter-left) minmax(0, 1fr) var(--editor-gutter-right);
+  column-gap: var(--editor-grid-gap);
+}
+
+.editor-content__main--body {
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+  max-width: var(--editor-max-width);
+  justify-self: center;
+}
+
+.editor-content__gutter {
+  pointer-events: none;
+}
+
 .editor-view--panel-open .editor-content {
   padding-right: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .editor-content {
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
 }

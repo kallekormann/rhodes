@@ -1,0 +1,23 @@
+.editor-comments-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.editor-comments-overlay__marker {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.editor-comments-overlay__thread {
+  position: absolute;
+  width: 280px;
+  pointer-events: auto;
+  z-index: 7;
+}
+
+.comment-thread--overlay {
+  gap: var(--space-sm);
+}
+

@@ -1,0 +1,21 @@
+.editor-link-tooltip__button {
+  display: block;
+  max-width: 280px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-float-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-float-bg);
+  box-shadow: var(--shadow-float-chrome);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.editor-link-tooltip__button:hover {
+  background: var(--color-surface-hover);
+}

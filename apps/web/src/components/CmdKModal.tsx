@@ -21,16 +21,20 @@ const items = [
 ];
 
 export function CmdKModal() {
-  const { cmdKOpen, closeCmdK, setView, openPanel } = useApp();
+  const { cmdKOpen, closeCmdK, setView, openPanel, createNewDocument } = useApp();
 
   if (!cmdKOpen) return null;
 
-  const handleAction = (action: (typeof items)[number]["action"]) => {
+  const handleAction = (item: (typeof items)[number]) => {
     closeCmdK();
-    if (action === "editor") setView("editor");
-    else if (action === "documents") setView("documents");
-    else if (action === "library") setView("library");
-    else if (action === "ask") {
+    if (item.label === "New document") {
+      void createNewDocument();
+      return;
+    }
+    if (item.action === "editor") setView("editor");
+    else if (item.action === "documents") setView("documents");
+    else if (item.action === "library") setView("library");
+    else if (item.action === "ask") {
       setView("editor");
       openPanel("ask");
     }
@@ -64,7 +68,7 @@ export function CmdKModal() {
                 <button
                   type="button"
                   className="cmdk-list__item"
-                  onClick={() => handleAction(item.action)}
+                  onClick={() => handleAction(item)}
                 >
                   <Icon size={18} strokeWidth={1.75} />
                   {item.label}

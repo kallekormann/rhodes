@@ -7,6 +7,10 @@ import {
   listDocumentsQuerySchema,
 } from "@/lib/documents/schemas";
 import { createClient } from "@/lib/supabase/server";
+import { stripLeadingTitleHeading } from "@/lib/templates/content";
+
+const DOCUMENT_FIELDS =
+  "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -32,13 +36,85 @@ export async function GET(request: Request) {
     );
   }
 
+  if (parsed.data.filter === "shared") {
+    const { data: memberships } = await supabase
+      .from("workspace_members")
+      .select("workspace_id");
+
+    const workspaceIds = (memberships ?? []).map((row) => row.workspace_id);
+
+    const { data: incomingShares } = await supabase
+      .from("document_shares")
+      .select("document_id")
+      .or(
+        [
+          `grantee_user_id.eq.${user.id}`,
+          workspaceIds.length > 0
+            ? `grantee_workspace_id.in.(${workspaceIds.join(",")})`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(","),
+      );
+
+    const { data: workspaceDocs } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("workspace_id", parsed.data.workspace_id);
+
+    const workspaceDocIds = (workspaceDocs ?? []).map((row) => row.id);
+
+    const { data: outgoingShares } =
+      workspaceDocIds.length > 0
+        ? await supabase
+            .from("document_shares")
+            .select("document_id")
+            .in("document_id", workspaceDocIds)
+        : { data: [] };
+
+    const documentIds = new Set<string>();
+    for (const row of incomingShares ?? []) {
+      if (row.document_id) documentIds.add(row.document_id);
+    }
+    for (const row of outgoingShares ?? []) {
+      if (row.document_id) documentIds.add(row.document_id);
+    }
+
+    if (documentIds.size === 0) {
+      return withSecurityHeaders(NextResponse.json({ documents: [] }));
+    }
+
+    const { data, error } = await supabase
+      .from("documents")
+      .select(DOCUMENT_FIELDS)
+      .in("id", [...documentIds])
+      .or("metadata->template_draft.is.null,metadata->template_draft.eq.false")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: error.message }, { status: 400 }),
+      );
+    }
+
+    return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
+  }
+
   let query = supabase
     .from("documents")
-    .select(
-      "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at",
-    )
+    .select(DOCUMENT_FIELDS)
     .eq("workspace_id", parsed.data.workspace_id)
     .order("updated_at", { ascending: false });
+
+  if (parsed.data.filter === "archive") {
+    query = query.contains("metadata", { archived: true });
+  } else {
+    query = query.or("metadata->archived.is.null,metadata->archived.eq.false");
+  }
+
+  query = query.or(
+    "metadata->template_draft.is.null,metadata->template_draft.eq.false",
+  );
 
   if (parsed.data.filter === "recent") {
     query = query.limit(50);
@@ -95,6 +171,11 @@ export async function POST(request: Request) {
   }
 
   const title = parsed.data.title ?? "Untitled Document";
+
+  if (parsed.data.template_id) {
+    content = stripLeadingTitleHeading(content, title);
+  }
+
   const content_plain = extractPlainText(content).trim();
 
   const { data, error } = await supabase
@@ -105,11 +186,9 @@ export async function POST(request: Request) {
       title,
       content,
       content_plain,
-      metadata: {},
+      metadata: parsed.data.metadata ?? {},
     })
-    .select(
-      "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at",
-    )
+    .select(DOCUMENT_FIELDS)
     .single();
 
   if (error || !data) {

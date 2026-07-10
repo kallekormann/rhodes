@@ -19,6 +19,7 @@ docker/volumes/storage/
 dist/
 .next/
 out/
+apps/web/.data/
 *.tsbuildinfo
 ui-mock/dist/
 

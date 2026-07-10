@@ -35,9 +35,15 @@ type BubbleMenuProps = {
   onAsk?: () => void;
   onLinkApply?: (payload: { mode: "external" | "internal"; value: string; label: string }) => void;
   onCommentSave?: (text: string) => void;
+  onMarkClick?: (mark: BubbleActiveMark) => void;
+  onLinkToggle?: () => void;
+  onLinkClose?: () => void;
   linkOpen?: boolean;
   commentOpen?: boolean;
   onCommentToggle?: () => void;
+  onCommentClose?: () => void;
+  workspaceId?: string | null;
+  currentDocumentId?: string | null;
 };
 
 const marks: { id: BubbleActiveMark; icon: typeof Bold; label: string }[] = [
@@ -59,9 +65,15 @@ export function BubbleMenu({
   onAsk,
   onLinkApply,
   onCommentSave,
+  onMarkClick,
+  onLinkToggle,
+  onLinkClose,
   linkOpen: linkOpenProp,
   commentOpen: commentOpenProp,
   onCommentToggle,
+  onCommentClose,
+  workspaceId,
+  currentDocumentId,
 }: BubbleMenuProps) {
   const active = new Set(activeMarks);
   const [linkOpenState, setLinkOpenState] = useState(false);
@@ -93,18 +105,20 @@ export function BubbleMenu({
                 aria-label={label}
                 aria-pressed={active.has(id) || linkOpen}
                 aria-expanded={linkOpen}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  if (linkOpenProp === undefined) setLinkOpenState((open) => !open);
+                  if (onLinkToggle) onLinkToggle();
+                  else if (linkOpenProp === undefined) setLinkOpenState((open) => !open);
                 }}
               >
                 <Icon size={16} strokeWidth={1.75} />
               </button>
               {linkOpen && (
                 <LinkPopover
+                  workspaceId={workspaceId}
+                  currentDocumentId={currentDocumentId}
                   onApply={onLinkApply}
-                  onClose={() => {
-                    if (linkOpenProp === undefined) setLinkOpenState(false);
-                  }}
+                  onClose={() => onLinkClose?.()}
                 />
               )}
             </div>
@@ -120,9 +134,14 @@ export function BubbleMenu({
                 aria-label={label}
                 aria-pressed={active.has(id) || commentOpen}
                 aria-expanded={commentOpen}
-                onClick={() => {
-                  if (commentOpenProp === undefined) setCommentOpenState((open) => !open);
-                  else onCommentToggle?.();
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (commentOpenProp === undefined) {
+                    setCommentOpenState((open) => !open);
+                  } else {
+                    onCommentToggle?.();
+                  }
                 }}
               >
                 <Icon size={16} strokeWidth={1.75} />
@@ -132,7 +151,7 @@ export function BubbleMenu({
                   onSave={onCommentSave}
                   onClose={() => {
                     if (commentOpenProp === undefined) setCommentOpenState(false);
-                    else onCommentToggle?.();
+                    else onCommentClose?.();
                   }}
                 />
               )}
@@ -147,6 +166,7 @@ export function BubbleMenu({
             className={`bubble-menu__item ${active.has(id) ? "bubble-menu__item--active" : ""}`}
             aria-label={label}
             aria-pressed={active.has(id)}
+            onClick={() => onMarkClick?.(id)}
           >
             <Icon size={16} strokeWidth={1.75} />
           </button>

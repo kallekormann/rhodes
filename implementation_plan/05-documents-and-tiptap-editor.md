@@ -189,10 +189,103 @@ On save, walk TipTap JSON tree → plain text string for search/embed (Phase 07)
 function extractPlainText(json: JSONContent): string { ... }
 ```
 
-### 11. Image upload (basic)
+### 12. Document lifecycle: archive, share, delete
 
-- Drag-drop image → upload to `storage/{workspace_id}/documents/{doc_id}/{filename}`
-- Insert TipTap Image node with signed URL
+**Documents list row actions (hover):**
+- Share → opens editor (share popover under scope meta)
+- Archive / restore → `metadata.archived`
+- Delete → hard delete via `DELETE /api/documents/[id]`
+
+**Documents tabs:** Recent / All / Favorites / **Archive** / **Shared**
+
+**Archive filter:** `metadata.archived = true`  
+**Shared filter:** documents with `document_shares` rows (outgoing in workspace + incoming grants)
+
+**Editor share popover:**
+- Click scope meta (`Personal · Private`) under title
+- Search people and team spaces via `GET /api/share-targets`
+- Persist grants in `document_shares` table
+
+### 13. `document_shares` table
+
+```sql
+document_shares (
+  document_id, shared_by,
+  grantee_type user|workspace,
+  grantee_user_id | grantee_workspace_id,
+  label
+)
+```
+
+RLS: workspace members manage shares; grantees gain document read via extended documents SELECT policy.
+
+---
+
+## Remaining tasks (Phase 05)
+
+| Task | Status |
+|------|--------|
+| Document CRUD API | done |
+| Workspace bootstrap + RLS fixes | done |
+| Documents view wired to real data | done |
+| Last document resume | done |
+| Header **+** and Cmd+K **New document** | done |
+| Favorites via `metadata.favorite` | done |
+| TipTap replaces plain input | done |
+| Bubble menu (ui-mock chrome) | done |
+| Slash menu (`/paragraph`, `/table`, `/image`, etc.) | done |
+| Tables via slash + insert modal | done |
+| Image upload (storage bucket + drag/drop) | done (basic) |
+| CitationBlock extension structure | done |
+| Archive tab + row action | done |
+| Shared tab + share popover | done |
+| Delete row action | done |
+| Slash menu positioning + keyboard/mouse selection | done (polish ongoing) |
+| Bubble menu viewport clamping (flip/shift) | done |
+| Link popover internal search → real documents API | done |
+| Template strip from DB (`is_system`) | done |
+| Create template flow (draft in editor → publish) | done |
+| Save existing document as template | done |
+| Documents: delete confirmation dialog (not browser) | done |
+| Documents: share popover inline (not open editor) | done |
+| Documents: unarchive control on archived rows | done |
+| Templates view layout matches documents width | done |
+| Template edit flow (`?template=` + Edit button) | done |
+| Delete owned templates from sidebar | done |
+| Hide template drafts from documents list | done |
+| Block drag-and-drop + comment overlay | **→ [05b](05b-editor-block-drag-and-comments.md)** |
+| Metadata, properties, template fields, Created at, signed URLs | **→ [05c](05c-metadata-properties-and-polish.md)** |
+
+**Sub-phases:** [05b](05b-editor-block-drag-and-comments.md) · [05c](05c-metadata-properties-and-polish.md)
+
+---
+
+## Testing checklist
+
+- [x] Create blank document → opens in editor
+- [x] Title editable inline in meta row
+- [x] TipTap: bold, italic, headings, lists work
+- [x] Slash menu inserts blocks
+- [x] Bubble menu on selection
+- [x] Link popover: external URL + internal doc link
+- [ ] Table insert via slash menu
+- [ ] Image drag-drop uploads and renders
+- [x] Auto-save: edit → reload → content persisted
+- [x] `content_plain` updated on save
+- [x] Documents view: recent list, search, favorites toggle
+- [x] Login → last edited document opens automatically
+- [x] Document isolated to workspace (RLS)
+- [x] Template selection creates structured document (no duplicate title in body)
+- [x] Create template: draft in editor → Publish template
+- [x] Save existing document as template from editor
+- [x] Documents: delete uses in-app dialog
+- [x] Documents: share button shows popover on list row
+- [x] Documents: unarchive from archived list
+- [x] Templates view layout matches documents width
+- [x] Header auto-hide during typing
+- [x] Archive / restore document
+- [ ] Share with person or team → appears in Shared tab *(blocked: no team members on dev; needs Phase 08 teams)*
+- [x] Delete document from list (confirmation dialog)
 
 ---
 
@@ -201,26 +294,6 @@ function extractPlainText(json: JSONContent): string { ... }
 | Variable | Purpose |
 |----------|---------|
 | `SUPABASE_SERVICE_ROLE_KEY` | Signed URL generation (server route only) |
-
----
-
-## Testing checklist
-
-- [ ] Create blank document → opens in editor
-- [ ] Title editable inline in meta row
-- [ ] TipTap: bold, italic, headings, lists work
-- [ ] Slash menu inserts blocks
-- [ ] Bubble menu on selection
-- [ ] Link popover: external URL + internal doc link
-- [ ] Table insert via slash menu
-- [ ] Image drag-drop uploads and renders
-- [ ] Auto-save: edit → reload → content persisted
-- [ ] `content_plain` updated on save
-- [ ] Documents view: recent list, search, favorites toggle
-- [ ] Login → last edited document opens automatically
-- [ ] Document isolated to workspace (RLS)
-- [ ] Template selection creates structured document
-- [ ] Header auto-hide during typing
 
 ---
 
@@ -246,13 +319,10 @@ function extractPlainText(json: JSONContent): string { ... }
 
 ---
 
-## Optional sub-phase (05b)
+## Optional sub-phases
 
-If schedule allows, port from mock in same phase:
-- Block drag-and-drop (`BlockDragHandle`, `BlockDropZone`)
-- Comment markers + gutter threads
-
-Otherwise defer to Phase 08.
+- **[05b — Block drag & comment overlay](05b-editor-block-drag-and-comments.md)** — in progress
+- **[05c — Metadata, properties & polish](05c-metadata-properties-and-polish.md)** — planned
 
 ---
 

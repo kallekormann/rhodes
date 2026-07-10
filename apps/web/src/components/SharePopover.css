@@ -1,0 +1,123 @@
+.share-popover {
+  width: min(360px, calc(100vw - 32px));
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.share-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.share-popover__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.share-popover__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.share-popover__close:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.share-popover__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.share-popover__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.share-popover__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.share-popover__item,
+.share-popover__shared-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.share-popover__item {
+  cursor: pointer;
+}
+
+.share-popover__item:hover {
+  background: var(--color-surface-hover);
+}
+
+.share-popover__shared-item {
+  justify-content: space-between;
+  background: var(--color-surface);
+}
+
+.share-popover__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.share-popover__item-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.share-popover__item-subtitle,
+.share-popover__empty,
+.share-popover__error {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.share-popover__remove {
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.share-popover__remove:hover {
+  text-decoration: underline;
+}

@@ -1,13 +1,15 @@
 "use client";
 
-import { SlidersHorizontal, Star } from "lucide-react";
+import { LayoutTemplate, SlidersHorizontal, Star } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { getScopeMetaLabel } from "@/data/scopes";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
+import { EditorTitleField } from "@/components/EditorTitleField";
 import { IconLabelButton } from "@/components/IconLabelButton";
 import { InsightDot } from "@/components/InsightDot";
 import { RightPanel } from "@/components/RightPanel";
+import { SharePopover } from "@/components/SharePopover";
 import { useEditorSession } from "@/hooks/useEditorSession";
 import "./EditorView.css";
 
@@ -23,14 +25,31 @@ function EditorViewContent() {
     setHeaderHidden,
     openPanel,
     panelTab,
-    documentId,
-    isFavorite,
-    toggleFavorite,
     activeScope,
   } = useApp();
 
-  const { loading, error, content, onContentUpdate, onTitleChange } =
-    useEditorSession();
+  const {
+    loading,
+    error,
+    content,
+    documentId,
+    workspaceId,
+    createdAtLabel,
+    updatedAtLabel,
+    isFavorite,
+    isTemplateDraft,
+    isEditingTemplate,
+    isTemplateMode,
+    publishingTemplate,
+    saveAsTemplate,
+    toggleFavorite,
+    comments,
+    addComment,
+    onContentUpdate: handleContentUpdate,
+    onTitleChange,
+  } = useEditorSession();
+
+  const [shareOpen, setShareOpen] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
@@ -83,33 +102,71 @@ function EditorViewContent() {
           <header className="editor-content__header">
             <div className="editor-content__gutter" aria-hidden="true" />
             <div className="editor-content__main">
-            <input
-              type="text"
-              className="editor-content__title"
+            <EditorTitleField
               value={documentTitle}
-              onChange={(e) => onTitleChange(e.target.value)}
-              placeholder="Untitled"
-              aria-label="Document title"
+              onChange={onTitleChange}
+              placeholder={isTemplateMode ? "Template name" : "Untitled"}
+              aria-label={isTemplateMode ? "Template name" : "Document title"}
               disabled={loading}
             />
             <div className="editor-content__meta">
-              <span>Updated 8 min ago</span>
-              <span className="editor-content__meta-sep" aria-hidden="true">
-                ·
-              </span>
-              <IconLabelButton variant="meta">
-                {getScopeMetaLabel(activeScope)}
-              </IconLabelButton>
+              <div className="editor-content__meta-row">
+                {createdAtLabel && <span>{createdAtLabel}</span>}
+                {createdAtLabel && (
+                  <span className="editor-content__meta-sep" aria-hidden="true">
+                    ·
+                  </span>
+                )}
+                <span>{updatedAtLabel ?? "Updated just now"}</span>
+              </div>
+              <div className="editor-content__meta-row">
+              {!isTemplateMode && (
+                <>
+              <div className="editor-content__share-anchor">
+                <IconLabelButton
+                  variant="meta"
+                  active={shareOpen}
+                  onClick={() => setShareOpen((open) => !open)}
+                >
+                  {getScopeMetaLabel(activeScope)}
+                </IconLabelButton>
+                {shareOpen && documentId && (
+                  <div className="editor-content__share-popover">
+                    <SharePopover
+                      documentId={documentId}
+                      onClose={() => setShareOpen(false)}
+                    />
+                  </div>
+                )}
+              </div>
               <span className="editor-content__meta-sep" aria-hidden="true">
                 ·
               </span>
               <IconLabelButton
                 variant="meta"
                 icon={Star}
-                active={isFavorite(documentId)}
-                onClick={() => toggleFavorite(documentId)}
+                active={isFavorite}
+                onClick={toggleFavorite}
               >
                 Favorite
+              </IconLabelButton>
+              <span className="editor-content__meta-sep" aria-hidden="true">
+                ·
+              </span>
+                </>
+              )}
+              <IconLabelButton
+                variant="meta"
+                icon={LayoutTemplate}
+                onClick={() => void saveAsTemplate()}
+              >
+                {publishingTemplate
+                  ? "Saving…"
+                  : isEditingTemplate
+                    ? "Save template"
+                    : isTemplateDraft
+                      ? "Publish template"
+                      : "Save as template"}
               </IconLabelButton>
               <span className="editor-content__meta-sep" aria-hidden="true">
                 ·
@@ -122,6 +179,7 @@ function EditorViewContent() {
               >
                 Properties
               </IconLabelButton>
+              </div>
             </div>
             <hr className="editor-content__rule" />
             </div>
@@ -133,7 +191,22 @@ function EditorViewContent() {
           ) : error ? (
             <p className="caption editor-content__loading">{error}</p>
           ) : (
-            <TipTapEditor content={content} onUpdate={onContentUpdate} />
+            <div className="editor-content__body">
+              <div className="editor-content__gutter" aria-hidden="true" />
+              <div className="editor-content__main editor-content__main--body">
+                <TipTapEditor
+                  key={documentId ?? "template"}
+                  content={content}
+                  documentId={documentId}
+                  workspaceId={workspaceId}
+                  comments={isTemplateMode ? [] : comments}
+                  onAddComment={isTemplateMode ? undefined : addComment}
+                  onUpdate={handleContentUpdate}
+                  onAsk={() => openPanel("ask")}
+                />
+              </div>
+              <div className="editor-content__gutter" aria-hidden="true" />
+            </div>
           )}
         </article>
 

@@ -35,6 +35,10 @@
   --color-editor-bg: #ffffff;
   --color-editor-selection: rgba(124, 92, 246, 0.18);
   --color-editor-cursor: var(--color-accent);
+  --color-comment-highlight: #fde68a;
+  --color-comment-highlight-text: #1d1d1f;
+  --color-comment-highlight-emphasis: #fca5a5;
+  --color-comment-highlight-ring: rgba(248, 113, 113, 0.55);
 
   --color-success: #2e7d32;
   --color-success-bg: #e8f5e9;
@@ -117,6 +121,10 @@
 
   --color-editor-bg: #0a0a0a;
   --color-editor-selection: rgba(167, 139, 250, 0.25);
+  --color-comment-highlight: #fde68a;
+  --color-comment-highlight-text: #1d1d1f;
+  --color-comment-highlight-emphasis: #fca5a5;
+  --color-comment-highlight-ring: rgba(248, 113, 113, 0.65);
 
   --color-success: #4ade80;
   --color-success-bg: #14532d;

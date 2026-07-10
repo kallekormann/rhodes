@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { isDocumentId } from "@/lib/documents/ids";
 
 export type DocumentRecord = {
   id: string;
@@ -19,9 +20,10 @@ export function useDocument(documentId: string | null) {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!documentId) {
+    if (!documentId || !isDocumentId(documentId)) {
       setDocument(null);
       setLoading(false);
+      setError(documentId ? "Invalid document id" : null);
       return;
     }
 

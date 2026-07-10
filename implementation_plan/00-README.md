@@ -33,6 +33,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 03 | [03-authentication-and-tenancy.md](03-authentication-and-tenancy.md) | Supabase Auth, RLS, workspace bootstrap | 4–6 days |
 | 04 | [04-ui-foundation.md](04-ui-foundation.md) | Port design system + app shell from ui-mock | 5–7 days |
 | 05 | [05-documents-and-tiptap-editor.md](05-documents-and-tiptap-editor.md) | Document CRUD, TipTap editor | 7–10 days |
+| 05b | [05b-editor-block-drag-and-comments.md](05b-editor-block-drag-and-comments.md) | Block drag-drop, comment overlay | 2–3 days |
+| 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, Created at | 3–5 days |
 | 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | 5–7 days |
 | 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, insights sidebar, Ask | 7–10 days |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, metadata, templates | 7–10 days |

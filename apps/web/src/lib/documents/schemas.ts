@@ -1,11 +1,18 @@
 import { z } from "zod";
 
-export const documentFilterSchema = z.enum(["recent", "all", "favorites"]);
+export const documentFilterSchema = z.enum([
+  "recent",
+  "all",
+  "favorites",
+  "archive",
+  "shared",
+]);
 
 export const createDocumentSchema = z.object({
   workspace_id: z.string().uuid(),
   title: z.string().min(1).max(500).optional(),
   template_id: z.string().uuid().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export const updateDocumentSchema = z.object({

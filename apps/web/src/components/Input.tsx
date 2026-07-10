@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
 import "./Input.css";
 import "./FieldControl.css";
 
@@ -14,22 +14,26 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "onChange"> & {
   className?: string;
 };
 
-export function Input({
-  value,
-  onChange,
-  placeholder,
-  icon,
-  hint,
-  variant = "field",
-  className = "",
-  ...props
-}: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  {
+    value,
+    onChange,
+    placeholder,
+    icon,
+    hint,
+    variant = "field",
+    className = "",
+    ...props
+  },
+  ref,
+) {
   const isPlain = variant === "plain";
 
   return (
     <div className={`input-wrap ${isPlain ? "input-wrap--plain" : ""} ${className}`.trim()}>
       {icon && <span className="input-wrap__icon">{icon}</span>}
       <input
+        ref={ref}
         className={`input ${isPlain ? "input--plain" : ""}`}
         type="text"
         value={value}
@@ -40,4 +44,4 @@ export function Input({
       {hint && <span className="input-wrap__hint">{hint}</span>}
     </div>
   );
-}
+});

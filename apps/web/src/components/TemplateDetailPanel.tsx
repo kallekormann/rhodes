@@ -9,12 +9,16 @@ type TemplateDetailPanelProps = {
   template: Template | null;
   onClose: () => void;
   onUse: (template: Template) => void;
+  onEdit?: (template: Template) => void;
+  onDelete?: (template: Template) => void;
 };
 
 export function TemplateDetailPanel({
   template,
   onClose,
   onUse,
+  onEdit,
+  onDelete,
 }: TemplateDetailPanelProps) {
   const isOpen = template !== null;
 
@@ -65,7 +69,21 @@ export function TemplateDetailPanel({
           </div>
 
           <div className="template-detail__actionbar">
-            <Button onClick={() => onUse(template)}>Use</Button>
+            <div className="template-detail__actionbar-start">
+              {template.mine && onDelete && (
+                <Button variant="danger" onClick={() => onDelete(template)}>
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="template-detail__actionbar-end">
+              {template.mine && onEdit && (
+                <Button variant="secondary" onClick={() => onEdit(template)}>
+                  Edit
+                </Button>
+              )}
+              <Button onClick={() => onUse(template)}>Use</Button>
+            </div>
           </div>
         </>
       )}

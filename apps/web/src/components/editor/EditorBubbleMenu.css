@@ -1,0 +1,25 @@
+.editor-bubble-anchor {
+  pointer-events: auto;
+}
+
+.editor-bubble-anchor--above {
+  transform: translate(-50%, -100%);
+}
+
+.editor-bubble-anchor--below {
+  transform: translate(-50%, 0);
+}
+
+.bubble-menu--anchored {
+  position: relative;
+  left: auto;
+  top: auto;
+  bottom: auto;
+  transform: none;
+  animation: none;
+}
+
+.bubble-menu--anchored.bubble-menu--above,
+.bubble-menu--anchored.bubble-menu--below {
+  transform: none;
+}

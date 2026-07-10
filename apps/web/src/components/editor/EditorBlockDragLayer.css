@@ -1,0 +1,51 @@
+.tiptap-editor-body > .tiptap-block--drag-source {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tiptap-editor-body .editor-block-drop-slot {
+  margin: 0 0 var(--space-xs);
+  pointer-events: none;
+  user-select: none;
+}
+
+.tiptap-editor-body .editor-block-drop-slot .block-drop-zone {
+  margin: 0;
+}
+
+.editor-block-drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.72;
+  transform: rotate(1.2deg) translate(4px, 4px);
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.editor-block-drag-ghost__content {
+  min-height: 0;
+  pointer-events: none;
+}
+
+.editor-block-drag-ghost__content > * {
+  margin: 0;
+}
+
+.editor-block-drag-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.editor-block-drag-layer__handle {
+  position: absolute;
+  left: 0;
+  width: var(--editor-drag-handle-width, 44px);
+  display: flex;
+  justify-content: center;
+  padding-top: 2px;
+  pointer-events: auto;
+}

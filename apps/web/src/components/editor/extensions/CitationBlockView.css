@@ -1,0 +1,43 @@
+.editor-citation__chip,
+.editor-citation__excerpt {
+  outline: none;
+  box-shadow: none;
+  border: none;
+  background: transparent;
+  resize: none;
+  min-height: 0;
+}
+
+.editor-citation__chip:focus,
+.editor-citation__excerpt:focus,
+.editor-citation__chip:focus-visible,
+.editor-citation__excerpt:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.editor-citation__chip:empty::before,
+.editor-citation__excerpt:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.editor-citation__chip {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--space-xs);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.editor-citation__excerpt {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}

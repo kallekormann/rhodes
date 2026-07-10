@@ -154,6 +154,7 @@ export function AppHeader() {
     headerHidden,
     setHeaderHidden,
     documentTitle,
+    createNewDocument,
   } = useApp();
 
   const isEditor = view === "editor";
@@ -234,7 +235,11 @@ export function AppHeader() {
 
         <div className="app-header__zone app-header__zone--right">
           <IconButton icon={Search} label="Search" onClick={openCmdK} />
-          <IconButton icon={Plus} label="New document" />
+          <IconButton
+            icon={Plus}
+            label="New document"
+            onClick={() => void createNewDocument()}
+          />
           <IconButton
             icon={BookOpen}
             label="Library"

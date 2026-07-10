@@ -16,6 +16,7 @@ import {
   canCreateTeamSpace,
   type Scope,
 } from "@/data/scopes";
+import { useDocuments } from "@/hooks/useDocuments";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { pathToView, viewToPath } from "@/lib/navigation";
 
@@ -47,6 +48,9 @@ type AppContextValue = {
   session: AppSession;
   view: AppView;
   setView: (view: AppView) => void;
+  openEditor: (documentId?: string) => void;
+  openTemplateEditor: (templateId: string) => void;
+  createNewDocument: () => Promise<void>;
   theme: Theme;
   themeMode: ThemeMode;
   setTheme: (theme: Theme) => void;
@@ -74,6 +78,8 @@ type AppContextValue = {
   activeScope: Scope;
   scopes: Scope[];
   scopesLoading: boolean;
+  workspaceId: string | null;
+  ensureWorkspace: () => Promise<Scope | null>;
   setActiveScope: (scopeId: string) => void;
   createPersonalSpace: (name: string) => void;
   createTeamSpace: (name: string) => void;
@@ -131,8 +137,8 @@ export function AppProvider({
   const [cmdKOpen, setCmdKOpen] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
-  const [documentTitle, setDocumentTitle] = useState("Q3 Product Spec");
-  const [documentId, setDocumentId] = useState("q3-product-spec");
+  const [documentTitle, setDocumentTitle] = useState("Untitled Document");
+  const [documentId, setDocumentId] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(
     () => new Set(initialFavoriteIds),
   );
@@ -143,11 +149,17 @@ export function AppProvider({
     scopes,
     activeScopeId,
     loading: scopesLoading,
+    error: scopesError,
     setActiveScopeId,
+    ensureWorkspace,
   } = useWorkspaces(session.userId);
 
   const activeScope =
     scopes.find((s) => s.id === activeScopeId) ?? scopes[0] ?? FALLBACK_SCOPE;
+  const workspaceId = scopesLoading
+    ? null
+    : (activeScopeId ?? scopes[0]?.id ?? null);
+  const { createDocument } = useDocuments(workspaceId, "recent");
   const allowPersonalCreate = canCreatePersonalSpace(scopes);
 
   useEffect(() => {
@@ -237,6 +249,62 @@ export function AppProvider({
     [router],
   );
 
+  const openEditor = useCallback(
+    (docId?: string) => {
+      const base = viewToPath.editor;
+      router.push(docId ? `${base}?doc=${encodeURIComponent(docId)}` : base);
+    },
+    [router],
+  );
+
+  const openTemplateEditor = useCallback(
+    (templateId: string) => {
+      router.push(
+        `${viewToPath.editor}?template=${encodeURIComponent(templateId)}`,
+      );
+    },
+    [router],
+  );
+
+  const createNewDocument = useCallback(async () => {
+    let targetWorkspaceId = workspaceId;
+
+    if (!targetWorkspaceId) {
+      if (scopesLoading) {
+        showToast("Workspace is still loading…", "info");
+        return;
+      }
+
+      const scope = await ensureWorkspace();
+      if (!scope) {
+        showToast(
+          scopesError ?? "Couldn't set up your private workspace",
+          "error",
+        );
+        return;
+      }
+      targetWorkspaceId = scope.id;
+    }
+
+    const created = await createDocument(undefined, targetWorkspaceId);
+    if (!created) {
+      showToast("Couldn't create document", "error");
+      return;
+    }
+
+    setDocumentId(created.id);
+    setDocumentTitle(created.title);
+    openEditor(created.id);
+  }, [
+    workspaceId,
+    scopesLoading,
+    ensureWorkspace,
+    scopesError,
+    createDocument,
+    openEditor,
+    showToast,
+  ]);
+
   const setTheme = useCallback((next: Theme) => {
     setThemeModeState(next);
   }, []);
@@ -280,6 +348,9 @@ export function AppProvider({
       session,
       view,
       setView,
+      openEditor,
+      openTemplateEditor,
+      createNewDocument,
       theme,
       themeMode,
       setTheme,
@@ -307,6 +378,8 @@ export function AppProvider({
       activeScope,
       scopes,
       scopesLoading,
+      workspaceId,
+      ensureWorkspace,
       setActiveScope,
       createPersonalSpace,
       createTeamSpace,
@@ -320,6 +393,9 @@ export function AppProvider({
       session,
       view,
       setView,
+      openEditor,
+      openTemplateEditor,
+      createNewDocument,
       theme,
       themeMode,
       setTheme,
@@ -341,6 +417,8 @@ export function AppProvider({
       activeScope,
       scopes,
       scopesLoading,
+      workspaceId,
+      ensureWorkspace,
       setActiveScope,
       createPersonalSpace,
       createTeamSpace,
