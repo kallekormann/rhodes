@@ -38,8 +38,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     const supabase = createClient();
     const { data, error: fetchError } = await supabase
       .from("workspace_members")
-      .select("role, workspaces(id, name, is_team_workspace)")
-      .eq("user_id", userId);
+      .select("role, workspaces(id, name, is_team_workspace)");
 
     if (fetchError) {
       setError(fetchError.message);

@@ -32,8 +32,9 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
 
 export function useEditorSession() {
   const searchParams = useSearchParams();
-  const { activeScope, setDocumentTitle, setDocumentId } = useApp();
-  const workspaceId = activeScope.id === "loading" ? null : activeScope.id;
+  const { activeScope, scopesLoading, setDocumentTitle, setDocumentId } = useApp();
+  const workspaceId =
+    scopesLoading || activeScope.id === "loading" ? null : activeScope.id;
 
   const requestedId = searchParams.get("doc");
   const [resolvedId, setResolvedId] = useState<string | null>(requestedId);
@@ -97,7 +98,7 @@ export function useEditorSession() {
 
   return {
     document: document as DocumentRecord | null,
-    loading: loading || !resolvedId,
+    loading: scopesLoading || loading || !resolvedId || !workspaceId,
     error,
     content,
     onContentUpdate: debouncedSaveContent,
