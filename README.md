@@ -26,10 +26,16 @@ cp docker/.env.example docker/.env
 ./scripts/generate-keys.sh --update-env
 
 ./scripts/dev-up.sh
-./scripts/pull-models.sh   # downloads nomic-embed-text + llama3.2:3b-instruct-q4_K_M
+./scripts/pull-models.sh
+
+pnpm install
+./scripts/sync-web-env.sh
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
 ```
 
-After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
+App: http://localhost:3001/app — Health: http://localhost:3001/app/api/health
 
 ## Service URLs (local dev)
 
@@ -39,7 +45,7 @@ After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
 | Supabase Studio | http://localhost:54323 |
 | Mailpit (email capture) | http://localhost:8025 |
 | Ollama | http://localhost:11434 |
-| Postgres (via Supavisor) | localhost:5432 |
+| Postgres (direct, dev) | localhost:5433 |
 
 ## Scripts
 
@@ -51,6 +57,7 @@ After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
 | `./scripts/health-check.sh` | Verify all services are healthy |
 | `./scripts/pull-models.sh` | Pull required Ollama models |
 | `./scripts/generate-keys.sh` | Generate Supabase secrets and API keys |
+| `./scripts/sync-web-env.sh` | Copy public Supabase vars into `apps/web/.env.local` |
 
 ## Mac: native Ollama (optional)
 
@@ -77,7 +84,25 @@ Then run `./scripts/pull-models.sh` from the host (default `OLLAMA_HOST` is `htt
 | `dev` | Integration branch |
 | `feature/*` | Phase slices; PR → `dev` |
 
-## Documentation
+## Auth (dev)
+
+Verification and password-reset emails are captured in [Mailpit](http://localhost:8025). GoTrue uses `SITE_URL=http://localhost:3001/app` — auth pages live under `/app/auth/*`.
+
+Confirmation links go through **`/app/auth/confirm`** (not Kong `:8000`) so browser cookies from the Next.js app do not hit Kong’s header size limit. If an older email still points at `localhost:8000/auth/v1/verify`, change the host/path to `http://localhost:3001/app/auth/confirm` and keep the same `token` and `type` query params.
+
+| Dev | VPS (Phase 13) |
+|-----|----------------|
+| `GOTRUE_SMTP_HOST=mailpit` | Resend or AWS SES EU |
+| `GOTRUE_SMTP_PORT=1025` | `587` (TLS) |
+| `GOTRUE_MAILER_AUTOCONFIRM=false` | `false` |
+
+Run RLS integration test (requires Docker Postgres on port 5433):
+
+```bash
+pnpm db:migrate
+pnpm db:test:rls
+```
+
 
 - [Implementation plan index](implementation_plan/00-README.md)
 - [Product specs](docs/README.md)

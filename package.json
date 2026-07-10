@@ -1,0 +1,23 @@
+{
+  "name": "rhodes",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "db:test:rls": "node packages/db/tests/rls.test.js",
+    "db:types": "node -e \"console.log('Configure supabase CLI against local stack, then: supabase gen types typescript --local > packages/db/src/types.ts')\""
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.49.8",
+    "pg": "^8.14.1"
+  }
+}

@@ -1,0 +1,21 @@
+.nav-link-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  font-weight: 500;
+  color: var(--color-accent);
+  transition: color var(--duration-normal) ease;
+}
+
+.nav-link-inline:hover {
+  color: var(--color-accent-hover);
+}
+
+.nav-link-inline--default {
+  font-size: 15px;
+}
+
+.nav-link-inline--small {
+  font-size: 13px;
+}

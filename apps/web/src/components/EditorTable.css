@@ -1,0 +1,32 @@
+.editor-table {
+  margin: 0 0 var(--space-md);
+}
+
+.editor-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.editor-table td {
+  border: 1px solid var(--color-border);
+  padding: 0;
+  min-width: 80px;
+  vertical-align: top;
+}
+
+.editor-table__cell {
+  min-height: 36px;
+  padding: 8px 12px;
+  outline: none;
+}
+
+.editor-table__cell:focus {
+  background: var(--color-accent-subtle);
+}
+
+.editor-table__toolbar {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
