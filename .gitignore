@@ -6,6 +6,7 @@ ui-mock/node_modules/
 .env
 .env.*
 !.env.example
+apps/web/.env.local
 docker/.env
 docker/.env.*
 !docker/.env.example
@@ -18,6 +19,7 @@ docker/volumes/storage/
 dist/
 .next/
 out/
+*.tsbuildinfo
 ui-mock/dist/
 
 # Logs and OS

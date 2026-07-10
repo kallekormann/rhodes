@@ -10,9 +10,12 @@ services:
     ports:
       - "54323:3000"
 
+  db:
+    ports:
+      - "${DEV_POSTGRES_PORT:-5433}:5432"
+
   supavisor:
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
       - "${POOLER_PROXY_PORT_TRANSACTION:-6543}:6543"
 
   auth:
@@ -27,6 +30,10 @@ services:
   ollama:
     ports:
       - "11434:11434"
+
+  redis:
+    ports:
+      - "${DEV_REDIS_PORT:-6379}:6379"
 
   mailpit:
     container_name: rhodes-mailpit

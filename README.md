@@ -26,10 +26,16 @@ cp docker/.env.example docker/.env
 ./scripts/generate-keys.sh --update-env
 
 ./scripts/dev-up.sh
-./scripts/pull-models.sh   # downloads nomic-embed-text + llama3.2:3b-instruct-q4_K_M
+./scripts/pull-models.sh
+
+pnpm install
+./scripts/sync-web-env.sh
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
 ```
 
-After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
+App: http://localhost:3001/app — Health: http://localhost:3001/app/api/health
 
 ## Service URLs (local dev)
 
@@ -39,7 +45,7 @@ After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
 | Supabase Studio | http://localhost:54323 |
 | Mailpit (email capture) | http://localhost:8025 |
 | Ollama | http://localhost:11434 |
-| Postgres (via Supavisor) | localhost:5432 |
+| Postgres (direct, dev) | localhost:5433 |
 
 ## Scripts
 
@@ -51,6 +57,7 @@ After Phase 02 you will also run `pnpm install && pnpm dev` for the Next.js app.
 | `./scripts/health-check.sh` | Verify all services are healthy |
 | `./scripts/pull-models.sh` | Pull required Ollama models |
 | `./scripts/generate-keys.sh` | Generate Supabase secrets and API keys |
+| `./scripts/sync-web-env.sh` | Copy public Supabase vars into `apps/web/.env.local` |
 
 ## Mac: native Ollama (optional)
 
