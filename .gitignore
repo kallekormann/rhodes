@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+ui-mock/node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+docker/.env
+docker/.env.*
+
+# Docker persistent data (created on first `dev-up`)
+docker/volumes/db/data/
+docker/volumes/storage/
+
+# Build output
+dist/
+.next/
+out/
+ui-mock/dist/
+
+# Logs and OS
+*.log
+.DS_Store
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json

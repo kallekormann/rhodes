@@ -1,0 +1,99 @@
+.date-picker {
+  width: 280px;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-float);
+}
+
+.date-picker--embedded {
+  width: 280px;
+  box-shadow: none;
+  border: none;
+  padding: var(--space-sm);
+}
+
+.date-range-picker--embedded {
+  width: 280px;
+}
+
+.date-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-sm);
+}
+
+.date-picker__month {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.date-picker__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: var(--space-xs);
+}
+
+.date-picker__weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  padding: 4px 0;
+}
+
+.date-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.date-picker__cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--color-text);
+  transition: background var(--duration-normal) ease;
+}
+
+.date-picker__cell:not(.date-picker__cell--empty):hover {
+  background: var(--color-surface-hover);
+}
+
+.date-picker__cell--selected {
+  background: var(--color-accent);
+  color: var(--color-accent-on-accent);
+}
+
+.date-picker__cell--selected:hover {
+  background: var(--color-accent-hover);
+}
+
+.date-picker__cell--today:not(.date-picker__cell--selected) {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.date-picker__cell--in-range:not(.date-picker__cell--selected) {
+  background: var(--color-accent-subtle);
+  border-radius: 0;
+}
+
+.date-picker__cell--range-start {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.date-picker__cell--range-end {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.date-picker__cell--empty {
+  pointer-events: none;
+}

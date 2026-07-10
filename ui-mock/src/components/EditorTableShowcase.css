@@ -1,0 +1,35 @@
+.editor-table-showcase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.editor-table-showcase__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.editor-table-showcase__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+}
+
+.editor-table-showcase__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.editor-table-showcase__item .modal-overlay {
+  position: relative;
+  background: transparent;
+  padding: 0;
+}
+
+.editor-table-showcase__item .modal {
+  position: relative;
+  max-width: 360px;
+  box-shadow: var(--shadow-float);
+}

@@ -1,0 +1,12 @@
+# Rhodes production overrides — filled in during Phase 13 (VPS deployment).
+#
+# Expected additions:
+# - Caddy/Traefik TLS termination
+# - Resend or AWS SES SMTP (replace Mailpit)
+# - Resource limits and restart policies
+# - OLLAMA_MAX_LOADED_MODELS, OLLAMA_NUM_PARALLEL
+#
+# Usage on VPS:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services: {}

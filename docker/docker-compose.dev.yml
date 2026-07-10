@@ -1,0 +1,40 @@
+# Rhodes development overrides — exposed ports, Mailpit, Studio direct access.
+
+services:
+  kong:
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000/tcp"
+      - "${KONG_HTTPS_PORT:-8443}:8443/tcp"
+
+  studio:
+    ports:
+      - "54323:3000"
+
+  supavisor:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POOLER_PROXY_PORT_TRANSACTION:-6543}:6543"
+
+  auth:
+    environment:
+      GOTRUE_SMTP_HOST: mailpit
+      GOTRUE_SMTP_PORT: 1025
+      GOTRUE_SMTP_USER: ""
+      GOTRUE_SMTP_PASS: ""
+      GOTRUE_SMTP_ADMIN_EMAIL: auth@rhodes.local
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+
+  ollama:
+    ports:
+      - "11434:11434"
+
+  mailpit:
+    container_name: rhodes-mailpit
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1

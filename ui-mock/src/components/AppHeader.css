@@ -1,0 +1,233 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--space-md);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-header);
+  flex-shrink: 0;
+  z-index: 20;
+  transition: transform var(--duration-header) var(--ease-out);
+}
+
+.app-header--overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.app-header--hidden {
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+
+.header-reveal-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  z-index: 21;
+}
+
+.app-header__zone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.app-header__zone--left {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-header__context {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-header__sep {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-tertiary);
+  user-select: none;
+}
+
+.app-header__trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.scope-btn,
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition:
+    background var(--duration-normal) ease,
+    color var(--duration-normal) ease;
+}
+
+.nav-link:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.nav-link--active {
+  color: var(--color-accent);
+}
+
+.app-header__context-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.app-header__breadcrumb-link {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  transition: color var(--duration-normal) ease;
+}
+
+.app-header__breadcrumb-link:hover {
+  color: var(--color-text);
+}
+
+.app-header__breadcrumb-sep {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.app-header__title {
+  min-width: 0;
+  max-width: 280px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header__zone--right {
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.app-header__action--collapsible {
+  display: inline-flex;
+}
+
+.header-overflow {
+  position: relative;
+  display: none;
+}
+
+.header-overflow__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 200px;
+  padding: var(--space-xs);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
+  animation: headerMenuIn 150ms var(--ease-out);
+}
+
+.header-overflow__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) 10px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  text-align: left;
+  color: var(--color-text);
+  transition: background var(--duration-normal) ease;
+}
+
+.header-overflow__item:hover {
+  background: var(--color-surface-hover);
+}
+
+.header-overflow__item--active {
+  color: var(--color-accent);
+  background: var(--color-accent-subtle);
+}
+
+.nav-link__label {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .nav-link__label {
+    display: none;
+  }
+
+  .app-header__title {
+    max-width: 160px;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-header__action--collapsible {
+    display: none;
+  }
+
+  .header-overflow {
+    display: block;
+  }
+
+  .app-header__sep--trail {
+    display: none;
+  }
+
+  .app-header__trail {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 0 var(--space-sm);
+  }
+
+  .app-header__sep:not(:first-of-type) {
+    width: 8px;
+  }
+}
+
+@keyframes headerMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

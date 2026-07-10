@@ -1,0 +1,29 @@
+.block-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-normal) ease,
+    background var(--duration-normal) ease,
+    color var(--duration-normal) ease;
+}
+
+.block-drag-handle--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.block-drag-handle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+.block-drag-handle:active {
+  cursor: grabbing;
+}

@@ -1,0 +1,73 @@
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  z-index: 100;
+  animation: overlayIn 150ms ease;
+}
+
+.cmdk-modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-md);
+  animation: modalIn 150ms var(--ease-out);
+}
+
+.cmdk-list {
+  list-style: none;
+  margin: var(--space-md) 0 0;
+  padding: 0;
+}
+
+.cmdk-list__section {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: var(--space-sm) var(--space-sm) 4px;
+}
+
+.cmdk-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: 10px var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-text);
+  text-align: left;
+  transition: background var(--duration-normal) ease;
+}
+
+.cmdk-list__item:hover {
+  background: var(--color-surface-hover);
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

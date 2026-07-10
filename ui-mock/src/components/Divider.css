@@ -1,0 +1,6 @@
+.divider-ui {
+  border: none;
+  height: 1px;
+  margin: var(--space-lg) 0;
+  background: var(--color-border-subtle);
+}
