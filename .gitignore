@@ -8,6 +8,7 @@ ui-mock/node_modules/
 !.env.example
 docker/.env
 docker/.env.*
+!docker/.env.example
 
 # Docker persistent data (created on first `dev-up`)
 docker/volumes/db/data/
