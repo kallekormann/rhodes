@@ -1,29 +1,26 @@
 "use client";
 
 import { SlidersHorizontal, Star } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { getScopeMetaLabel } from "@/data/scopes";
-import { EditorBody } from "@/components/EditorBody";
-import type { BubbleMenuPlacement } from "@/components/BubbleMenu";
+import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { IconLabelButton } from "@/components/IconLabelButton";
 import { InsightDot } from "@/components/InsightDot";
 import { RightPanel } from "@/components/RightPanel";
+import { useEditorSession } from "@/hooks/useEditorSession";
 import "./EditorView.css";
 
 const SCROLL_TOP_THRESHOLD = 16;
 const SCROLL_HIDE_OFFSET = 48;
 const SCROLLBAR_FADE_MS = 900;
 
-export function EditorView() {
+function EditorViewContent() {
   const {
     documentTitle,
-    setDocumentTitle,
     panelOpen,
     headerHidden,
     setHeaderHidden,
-    setShowBubble,
-    showBubble,
     openPanel,
     panelTab,
     documentId,
@@ -32,11 +29,13 @@ export function EditorView() {
     activeScope,
   } = useApp();
 
+  const { loading, error, content, onContentUpdate, onTitleChange } =
+    useEditorSession();
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
   const scrollFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
-  const [bubblePlacement, setBubblePlacement] = useState<BubbleMenuPlacement>("above");
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -88,9 +87,10 @@ export function EditorView() {
               type="text"
               className="editor-content__title"
               value={documentTitle}
-              onChange={(e) => setDocumentTitle(e.target.value)}
+              onChange={(e) => onTitleChange(e.target.value)}
               placeholder="Untitled"
               aria-label="Document title"
+              disabled={loading}
             />
             <div className="editor-content__meta">
               <span>Updated 8 min ago</span>
@@ -128,18 +128,26 @@ export function EditorView() {
             <div className="editor-content__gutter" aria-hidden="true" />
           </header>
 
-          <EditorBody
-            showBubble={showBubble}
-            setShowBubble={setShowBubble}
-            bubblePlacement={bubblePlacement}
-            setBubblePlacement={setBubblePlacement}
-            onAsk={() => openPanel("ask")}
-          />
+          {loading ? (
+            <p className="caption editor-content__loading">Loading document…</p>
+          ) : error ? (
+            <p className="caption editor-content__loading">{error}</p>
+          ) : (
+            <TipTapEditor content={content} onUpdate={onContentUpdate} />
+          )}
         </article>
 
         {!panelOpen && <InsightDot />}
       </div>
       <RightPanel />
     </div>
+  );
+}
+
+export function EditorView() {
+  return (
+    <Suspense fallback={<p className="caption">Loading editor…</p>}>
+      <EditorViewContent />
+    </Suspense>
   );
 }

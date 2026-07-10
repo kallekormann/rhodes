@@ -1,6 +1,6 @@
 # Phase 05 — Documents and TipTap Editor
 
-**Status:** planned  
+**Status:** in progress  
 **Depends on:** Phase 04  
 **Blocks:** Phase 06, Phase 09  
 **Estimated duration:** 7–10 days
