@@ -84,7 +84,23 @@ Then run `./scripts/pull-models.sh` from the host (default `OLLAMA_HOST` is `htt
 | `dev` | Integration branch |
 | `feature/*` | Phase slices; PR → `dev` |
 
-## Documentation
+## Auth (dev)
+
+Verification and password-reset emails are captured in [Mailpit](http://localhost:8025). GoTrue uses `SITE_URL=http://localhost:3001/app` — auth pages live under `/app/auth/*`.
+
+| Dev | VPS (Phase 13) |
+|-----|----------------|
+| `GOTRUE_SMTP_HOST=mailpit` | Resend or AWS SES EU |
+| `GOTRUE_SMTP_PORT=1025` | `587` (TLS) |
+| `GOTRUE_MAILER_AUTOCONFIRM=false` | `false` |
+
+Run RLS integration test (requires Docker Postgres on port 5433):
+
+```bash
+pnpm db:migrate
+pnpm db:test:rls
+```
+
 
 - [Implementation plan index](implementation_plan/00-README.md)
 - [Product specs](docs/README.md)

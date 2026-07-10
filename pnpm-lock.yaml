@@ -35,6 +35,9 @@ importers:
       next:
         specifier: ^15.2.4
         version: 15.5.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      rate-limiter-flexible:
+        specifier: ^5.0.5
+        version: 5.0.5
       react:
         specifier: ^19.0.0
         version: 19.2.7
@@ -1806,6 +1809,9 @@ packages:
 
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
+
+  rate-limiter-flexible@5.0.5:
+    resolution: {integrity: sha512-+/dSQfo+3FYwYygUs/V2BBdwGa9nFtakDwKt4l0bnvNB53TNT++QSFewwHX9qXrZJuMe9j+TUaU21lm5ARgqdQ==}
 
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
@@ -3884,6 +3890,8 @@ snapshots:
   punycode@2.3.1: {}
 
   queue-microtask@1.2.3: {}
+
+  rate-limiter-flexible@5.0.5: {}
 
   react-dom@19.2.7(react@19.2.7):
     dependencies:
