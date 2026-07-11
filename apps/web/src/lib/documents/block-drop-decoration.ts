@@ -44,7 +44,7 @@ export function getBlockInsertPos(editor: Editor, blockIndex: number): number {
   const { doc } = editor.state;
   if (blockIndex >= doc.childCount) return doc.content.size;
 
-  let pos = 0;
+  let pos = 1;
   for (let i = 0; i < blockIndex; i += 1) {
     pos += doc.child(i).nodeSize;
   }

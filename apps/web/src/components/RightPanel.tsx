@@ -3,8 +3,10 @@
 import { PanelRightClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp, type PanelTab } from "@/context/AppContext";
+import type { StoredDocumentComment } from "@/lib/documents/comments";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
 import { ChatMessageBubble } from "./ChatMessageBubble";
+import { CommentsTab } from "./CommentsTab";
 import { DatePickerField } from "./DatePickerField";
 import { DateRangeField, type DateRange } from "./DateRangePicker";
 import { Dropdown } from "./Dropdown";
@@ -19,6 +21,7 @@ import "./RightPanel.css";
 const tabOptions: { value: PanelTab; label: string }[] = [
   { value: "insights", label: "Insights" },
   { value: "ask", label: "Ask" },
+  { value: "comments", label: "Comments" },
   { value: "properties", label: "Properties" },
 ];
 
@@ -57,7 +60,25 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
-export function RightPanel() {
+type RightPanelProps = {
+  comments?: StoredDocumentComment[];
+  selectedCommentId?: string | null;
+  hoverCommentId?: string | null;
+  onSelectComment?: (commentId: string) => void;
+  onHoverComment?: (commentId: string | null) => void;
+  onAddReply?: (parentId: string, text: string) => void;
+  onRemoveComment?: (commentId: string) => void;
+};
+
+export function RightPanel({
+  comments = [],
+  selectedCommentId = null,
+  hoverCommentId = null,
+  onSelectComment,
+  onHoverComment,
+  onAddReply,
+  onRemoveComment,
+}: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
 
   return (
@@ -78,6 +99,17 @@ export function RightPanel() {
       <div className="right-panel__content overlay-scrollbar" key={panelTab}>
         {panelTab === "insights" && <InsightsTab />}
         {panelTab === "ask" && <AskTab />}
+        {panelTab === "comments" && (
+          <CommentsTab
+            comments={comments}
+            selectedCommentId={selectedCommentId}
+            hoverCommentId={hoverCommentId}
+            onSelectComment={onSelectComment ?? (() => {})}
+            onHoverComment={onHoverComment ?? (() => {})}
+            onAddReply={onAddReply ?? (() => {})}
+            onRemoveComment={onRemoveComment ?? (() => {})}
+          />
+        )}
         {panelTab === "properties" && <PropertiesTab />}
       </div>
     </aside>

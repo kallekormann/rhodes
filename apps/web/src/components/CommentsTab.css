@@ -1,0 +1,125 @@
+.comments-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.comments-tab--empty {
+  padding-top: var(--space-md);
+}
+
+.comments-tab__empty-title {
+  margin: 0 0 var(--space-xs);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.comments-tab__empty-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.comments-tab__card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-float);
+  transition:
+    border-color var(--duration-normal) ease,
+    box-shadow var(--duration-normal) ease;
+}
+
+.comments-tab__card--selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent-muted);
+}
+
+.comments-tab__card-remove {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.comments-tab__card:hover .comments-tab__card-remove,
+.comments-tab__card:focus-within .comments-tab__card-remove {
+  opacity: 1;
+}
+
+.comments-tab__thread {
+  display: flex;
+  flex-direction: column;
+}
+
+.comments-tab__message {
+  position: relative;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.comments-tab__message + .comments-tab__message {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.comments-tab__message:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent-muted);
+}
+
+.comments-tab__message-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: 6px;
+}
+
+.comments-tab__message-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.comments-tab__message-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.comments-tab__message-date {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.comments-tab__message-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.comments-tab__card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.comments-tab__answer-btn {
+  align-self: flex-start;
+}

@@ -4,3 +4,7 @@ const UUID_RE =
 export function isDocumentId(value: string | null | undefined): value is string {
   return Boolean(value && UUID_RE.test(value));
 }
+
+export function createBlockId(): string {
+  return crypto.randomUUID();
+}

@@ -173,6 +173,7 @@
   color: var(--color-comment-highlight-text);
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  cursor: pointer;
 }
 
 .tiptap-editor-body .editor-comment-highlight--emphasized {

@@ -27,7 +27,7 @@ export type AppView =
   | "library"
   | "settings"
   | "sticker-sheet";
-export type PanelTab = "insights" | "ask" | "properties";
+export type PanelTab = "insights" | "ask" | "comments" | "properties";
 export type Theme = "light" | "dark";
 export type ThemeMode = Theme | "system";
 export type ToastVariant = "success" | "error" | "info";

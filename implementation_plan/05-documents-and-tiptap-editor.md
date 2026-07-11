@@ -321,7 +321,8 @@ RLS: workspace members manage shares; grantees gain document read via extended d
 
 ## Optional sub-phases
 
-- **[05b — Block drag & comment overlay](05b-editor-block-drag-and-comments.md)** — in progress
+- **[05b — Block drag & comment foundation](05b-editor-block-drag-and-comments.md)** — drag done; overlay superseded
+- **[05d — Sidebar comments](05d-sidebar-comments.md)** — in progress
 - **[05c — Metadata, properties & polish](05c-metadata-properties-and-polish.md)** — planned
 
 ---

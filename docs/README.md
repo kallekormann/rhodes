@@ -67,7 +67,7 @@ This folder is the **canonical specification** for building Rhodes. The incubato
 | Doc | Topic |
 |-----|-------|
 | [19-open-decisions.md](19-open-decisions.md) | Decision log |
-| [adr/](adr/) | Architecture Decision Records (001–007) |
+| [adr/](adr/) | Architecture Decision Records (001–008) |
 
 ---
 

@@ -34,6 +34,7 @@ type EditorBlockDragLayerProps = {
   containerRef: React.RefObject<HTMLElement | null>;
   onDragActiveChange?: (active: boolean) => void;
   onLayoutChange?: () => void;
+  onBlockMoved?: () => void;
 };
 
 function clearDragLayout(blocks: HTMLElement[]) {
@@ -67,6 +68,7 @@ export function EditorBlockDragLayer({
   containerRef,
   onDragActiveChange,
   onLayoutChange,
+  onBlockMoved,
 }: EditorBlockDragLayerProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -84,10 +86,12 @@ export function EditorBlockDragLayer({
   } | null>(null);
   const onLayoutChangeRef = useRef(onLayoutChange);
   const onDragActiveChangeRef = useRef(onDragActiveChange);
+  const onBlockMovedRef = useRef(onBlockMoved);
 
   dragIndexRef.current = dragIndex;
   onLayoutChangeRef.current = onLayoutChange;
   onDragActiveChangeRef.current = onDragActiveChange;
+  onBlockMovedRef.current = onBlockMoved;
 
   useEffect(() => {
     const plugin = createBlockDropPlugin();
@@ -259,6 +263,7 @@ export function EditorBlockDragLayer({
 
       if (from !== null && to !== null && !isNoOpDrop(from, to)) {
         moveTopLevelBlock(editor, from, to);
+        onBlockMovedRef.current?.();
       }
 
       resetDragVisuals();

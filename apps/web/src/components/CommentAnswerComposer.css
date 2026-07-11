@@ -1,0 +1,13 @@
+.comment-answer-composer__input {
+  min-height: 56px;
+}
+
+.comment-answer-composer__footer {
+  justify-content: flex-end;
+}
+
+.comment-answer-composer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}

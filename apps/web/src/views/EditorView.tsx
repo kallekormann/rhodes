@@ -1,7 +1,7 @@
 "use client";
 
-import { LayoutTemplate, SlidersHorizontal, Star } from "lucide-react";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { LayoutTemplate, MessageSquare, SlidersHorizontal, Star } from "lucide-react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { getScopeMetaLabel } from "@/data/scopes";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -11,6 +11,7 @@ import { InsightDot } from "@/components/InsightDot";
 import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { getCommentIdsToRemove } from "@/lib/documents/comments";
 import "./EditorView.css";
 
 const SCROLL_TOP_THRESHOLD = 16;
@@ -45,11 +46,72 @@ function EditorViewContent() {
     toggleFavorite,
     comments,
     addComment,
+    addReply,
+    removeComment,
+    syncCommentsFromEditor,
     onContentUpdate: handleContentUpdate,
     onTitleChange,
   } = useEditorSession();
 
   const [shareOpen, setShareOpen] = useState(false);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
+  const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
+
+  const selectComment = useCallback(
+    (
+      commentId: string | null,
+      options?: { scroll?: boolean; openPanel?: boolean },
+    ) => {
+      setSelectedCommentId(commentId);
+      if (options?.openPanel) {
+        openPanel("comments");
+      }
+      if (commentId && options?.scroll !== false) {
+        scrollToCommentRef.current(commentId);
+      }
+    },
+    [openPanel],
+  );
+
+  const handleCommentHighlightClick = useCallback(
+    (commentId: string) => {
+      setHoverCommentId(null);
+      selectComment(commentId, { openPanel: true, scroll: true });
+    },
+    [selectComment],
+  );
+
+  const handleSelectCommentFromPanel = useCallback(
+    (commentId: string) => {
+      setHoverCommentId(null);
+      selectComment(commentId, { scroll: true, openPanel: false });
+    },
+    [selectComment],
+  );
+
+  const handleOpenCommentsPanel = useCallback(() => {
+    openPanel("comments");
+  }, [openPanel]);
+
+  const handleRemoveComment = useCallback(
+    (commentId: string) => {
+      const idsToRemove = getCommentIdsToRemove(comments, commentId);
+      removeComment(commentId);
+      setSelectedCommentId((current) =>
+        current && idsToRemove.has(current) ? null : current,
+      );
+      setHoverCommentId((current) =>
+        current && idsToRemove.has(current) ? null : current,
+      );
+    },
+    [comments, removeComment],
+  );
+
+  useEffect(() => {
+    setSelectedCommentId(null);
+    setHoverCommentId(null);
+  }, [documentId]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const lastScrollTop = useRef(0);
@@ -168,6 +230,21 @@ function EditorViewContent() {
                       ? "Publish template"
                       : "Save as template"}
               </IconLabelButton>
+              {!isTemplateMode && comments.length > 0 && (
+                <>
+                  <span className="editor-content__meta-sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <IconLabelButton
+                    variant="meta"
+                    icon={MessageSquare}
+                    active={panelOpen && panelTab === "comments"}
+                    onClick={handleOpenCommentsPanel}
+                  >
+                    Comments ({comments.length})
+                  </IconLabelButton>
+                </>
+              )}
               <span className="editor-content__meta-sep" aria-hidden="true">
                 ·
               </span>
@@ -201,8 +278,20 @@ function EditorViewContent() {
                   workspaceId={workspaceId}
                   comments={isTemplateMode ? [] : comments}
                   onAddComment={isTemplateMode ? undefined : addComment}
+                  onCommentsDocumentSync={
+                    isTemplateMode ? undefined : syncCommentsFromEditor
+                  }
                   onUpdate={handleContentUpdate}
                   onAsk={() => openPanel("ask")}
+                  selectedCommentId={selectedCommentId}
+                  hoverCommentId={hoverCommentId}
+                  scrollContainerRef={canvasRef}
+                  onCommentHighlightClick={
+                    isTemplateMode ? undefined : handleCommentHighlightClick
+                  }
+                  onRegisterScrollToComment={(scrollToComment) => {
+                    scrollToCommentRef.current = scrollToComment;
+                  }}
                 />
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
@@ -212,7 +301,15 @@ function EditorViewContent() {
 
         {!panelOpen && <InsightDot />}
       </div>
-      <RightPanel />
+      <RightPanel
+        comments={isTemplateMode ? [] : comments}
+        selectedCommentId={selectedCommentId}
+        hoverCommentId={hoverCommentId}
+        onSelectComment={handleSelectCommentFromPanel}
+        onHoverComment={setHoverCommentId}
+        onAddReply={isTemplateMode ? () => {} : addReply}
+        onRemoveComment={isTemplateMode ? () => {} : handleRemoveComment}
+      />
     </div>
   );
 }

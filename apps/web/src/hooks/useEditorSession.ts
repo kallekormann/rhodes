@@ -9,7 +9,9 @@ import {
 } from "@/lib/documents/editor-commands";
 import {
   createDocumentComment,
+  getCommentIdsToRemove,
   parseDocumentComments,
+  syncCommentsWithDocument,
   withDocumentComments,
   type StoredDocumentComment,
 } from "@/lib/documents/comments";
@@ -22,6 +24,7 @@ import {
 import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
 import { useDocuments } from "@/hooks/useDocuments";
+import type { Editor } from "@tiptap/react";
 import {
   createTemplate,
   fetchTemplate,
@@ -340,7 +343,14 @@ export function useEditorSession() {
   );
 
   const addComment = useCallback(
-    (input: { from: number; to: number; anchorText: string; text: string }) => {
+    (input: {
+      blockId: string;
+      blockIndex: number;
+      from: number;
+      to: number;
+      anchorText: string;
+      text: string;
+    }) => {
       if (!document) return null;
 
       const comment = createDocumentComment({
@@ -353,6 +363,59 @@ export function useEditorSession() {
       return comment;
     },
     [comments, debouncedSaveComments, document, session.displayName],
+  );
+
+  const addReply = useCallback(
+    (parentId: string, text: string) => {
+      if (!document) return null;
+
+      const parent = comments.find((comment) => comment.id === parentId);
+      if (!parent) return null;
+
+      const reply = createDocumentComment({
+        parentId,
+        blockId: parent.blockId,
+        blockIndex: parent.blockIndex,
+        from: parent.from,
+        to: parent.to,
+        anchorText: parent.anchorText,
+        text: text.trim(),
+        author: session.displayName || "You",
+      });
+      const nextComments = [...comments, reply];
+      setComments(nextComments);
+      debouncedSaveComments(nextComments);
+      return reply;
+    },
+    [comments, debouncedSaveComments, document, session.displayName],
+  );
+
+  const removeComment = useCallback(
+    (commentId: string) => {
+      if (!document) return;
+
+      const idsToRemove = getCommentIdsToRemove(comments, commentId);
+      if (idsToRemove.size === 0) return;
+
+      const nextComments = comments.filter(
+        (comment) => !idsToRemove.has(comment.id),
+      );
+      setComments(nextComments);
+      debouncedSaveComments(nextComments);
+    },
+    [comments, debouncedSaveComments, document],
+  );
+
+  const syncCommentsFromEditor = useCallback(
+    (editor: Editor) => {
+      setComments((prev) => {
+        const next = syncCommentsWithDocument(editor, prev);
+        if (next === prev) return prev;
+        debouncedSaveComments(next);
+        return next;
+      });
+    },
+    [debouncedSaveComments],
   );
 
   const toggleFavorite = useCallback(() => {
@@ -406,6 +469,9 @@ export function useEditorSession() {
     toggleFavorite,
     comments,
     addComment,
+    addReply,
+    removeComment,
+    syncCommentsFromEditor,
     onContentUpdate: handleContentUpdate,
     onTitleChange: (title: string) => {
       setDocumentTitle(title);

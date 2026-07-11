@@ -19,14 +19,23 @@ import {
 import { TableInsertModal } from "@/components/TableInsertModal";
 import { filterSlashItems } from "@/components/editorSlash";
 import { CitationBlock } from "@/components/editor/extensions/CitationBlock";
+import { BlockId } from "@/components/editor/extensions/BlockId";
+import { ensureEditorBlockIds, resolveCommentBlock } from "@/lib/documents/block-ids";
 import { CommentHighlight } from "@/components/editor/extensions/CommentHighlight";
 import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
-import { EditorCommentsOverlay } from "@/components/editor/EditorCommentsOverlay";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
-import type { StoredDocumentComment } from "@/lib/documents/comments";
+import {
+  applyCommentHighlightsToEditor,
+  resolveHighlightCommentId,
+  type StoredDocumentComment,
+} from "@/lib/documents/comments";
+import {
+  findCommentIdAtClickTarget,
+  scrollCommentIntoView,
+} from "@/lib/documents/comment-navigation";
 import {
   imageServeUrl,
   insertParagraphAfterBlock,
@@ -45,13 +54,21 @@ type TipTapEditorProps = {
   workspaceId?: string | null;
   comments?: StoredDocumentComment[];
   onAddComment?: (input: {
+    blockId: string;
+    blockIndex: number;
     from: number;
     to: number;
     anchorText: string;
     text: string;
   }) => StoredDocumentComment | null;
+  onCommentsDocumentSync?: (editor: Editor) => void;
   onUpdate: (content: Record<string, unknown>, plainText: string) => void;
   onAsk?: () => void;
+  selectedCommentId?: string | null;
+  hoverCommentId?: string | null;
+  scrollContainerRef?: React.RefObject<HTMLElement | null>;
+  onCommentHighlightClick?: (commentId: string) => void;
+  onRegisterScrollToComment?: (scrollToComment: (commentId: string) => void) => void;
 };
 
 type SlashState = {
@@ -138,11 +155,26 @@ export function TipTapEditor({
   workspaceId,
   comments = [],
   onAddComment,
+  onCommentsDocumentSync,
   onUpdate,
   onAsk,
+  selectedCommentId = null,
+  hoverCommentId = null,
+  scrollContainerRef,
+  onCommentHighlightClick,
+  onRegisterScrollToComment,
 }: TipTapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const onCommentHighlightClickRef = useRef(onCommentHighlightClick);
+  onCommentHighlightClickRef.current = onCommentHighlightClick;
+
+  const emphasizedCommentId = resolveHighlightCommentId(
+    comments,
+    selectedCommentId ?? hoverCommentId,
+  );
+  const emphasizedCommentIdRef = useRef(emphasizedCommentId);
+  emphasizedCommentIdRef.current = emphasizedCommentId;
 
   const [slashState, setSlashState] = useState<SlashState | null>(null);
   const [tableModalOpen, setTableModalOpen] = useState(false);
@@ -156,9 +188,6 @@ export function TipTapEditor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorSurfaceRef = useRef<HTMLDivElement>(null);
   const commentsAppliedRef = useRef<string | null>(null);
-  const [emphasizedCommentId, setEmphasizedCommentId] = useState<string | null>(null);
-  const [isBlockDragging, setIsBlockDragging] = useState(false);
-  const [commentLayoutTick, setCommentLayoutTick] = useState(0);
 
   const handleCommentSave = useCallback(
     (text: string, range: { from: number; to: number }) => {
@@ -166,7 +195,13 @@ export function TipTapEditor({
       if (!editor || !onAddComment) return;
 
       const anchorText = editor.state.doc.textBetween(range.from, range.to, " ");
+      ensureEditorBlockIds(editor);
+      const block = resolveCommentBlock(editor, range.from);
+      if (!block) return;
+
       const comment = onAddComment({
+        blockId: block.blockId,
+        blockIndex: block.blockIndex,
         from: range.from,
         to: range.to,
         anchorText,
@@ -310,6 +345,7 @@ export function TipTapEditor({
       TableCell,
       DocumentImage.configure({ inline: false, allowBase64: false }),
       CitationBlock,
+      BlockId,
       CommentHighlight,
       Extension.create({
         name: "slashCommand",
@@ -415,6 +451,12 @@ export function TipTapEditor({
         void uploadImage(file);
         return true;
       },
+      handleClick: (_view, _pos, event) => {
+        const commentId = findCommentIdAtClickTarget(event.target);
+        if (!commentId) return false;
+        onCommentHighlightClickRef.current?.(commentId);
+        return true;
+      },
     },
     onUpdate: ({ editor: instance }) => {
       onUpdateRef.current(instance.getJSON(), instance.getText());
@@ -442,30 +484,39 @@ export function TipTapEditor({
   }, [slashState, syncSlashPosition]);
 
   useEffect(() => {
-    if (!editor || comments.length === 0) return;
-    const signature = comments.map((comment) => `${comment.id}:${comment.from}:${comment.to}`).join("|");
+    if (!editor || !onCommentsDocumentSync || comments.length === 0) return;
+
+    let cancelled = false;
+    const sync = () => {
+      if (cancelled) return;
+      ensureEditorBlockIds(editor);
+      onCommentsDocumentSync(editor);
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(sync);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [documentId, editor, onCommentsDocumentSync]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const signature = comments
+      .map(
+        (comment) =>
+          `${comment.id}:${comment.parentId ?? ""}:${comment.from}:${comment.to}`,
+      )
+      .join("|");
+
     if (commentsAppliedRef.current === signature) return;
 
-    const { state } = editor;
-    let tr = state.tr;
-    let changed = false;
-
-    for (const comment of comments) {
-      if (comment.from < 0 || comment.to > state.doc.content.size) continue;
-      if (comment.from >= comment.to) continue;
-
-      tr = tr.addMark(
-        comment.from,
-        comment.to,
-        state.schema.marks.commentHighlight.create({ commentId: comment.id }),
-      );
-      changed = true;
-    }
-
-    if (changed) {
-      editor.view.dispatch(tr);
-      commentsAppliedRef.current = signature;
-    }
+    applyCommentHighlightsToEditor(editor, comments);
+    commentsAppliedRef.current = signature;
   }, [comments, editor]);
 
   useEffect(() => {
@@ -476,12 +527,13 @@ export function TipTapEditor({
     if (!editor) return;
 
     const applyCommentEmphasis = () => {
+      const activeId = emphasizedCommentIdRef.current;
       const root = editor.view.dom;
       root.querySelectorAll(".editor-comment-highlight").forEach((node) => {
         const commentId = node.getAttribute("data-comment-id");
         node.classList.toggle(
           "editor-comment-highlight--emphasized",
-          Boolean(emphasizedCommentId && commentId === emphasizedCommentId),
+          Boolean(activeId && commentId === activeId),
         );
       });
     };
@@ -494,7 +546,44 @@ export function TipTapEditor({
       editor.off("update", applyCommentEmphasis);
       editor.off("selectionUpdate", applyCommentEmphasis);
     };
+  }, [editor, comments]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const activeId = emphasizedCommentIdRef.current;
+    const root = editor.view.dom;
+    root.querySelectorAll(".editor-comment-highlight").forEach((node) => {
+      const commentId = node.getAttribute("data-comment-id");
+      node.classList.toggle(
+        "editor-comment-highlight--emphasized",
+        Boolean(activeId && commentId === activeId),
+      );
+    });
   }, [editor, emphasizedCommentId, comments]);
+
+  useEffect(() => {
+    if (!editor || !onRegisterScrollToComment) return;
+
+    onRegisterScrollToComment((commentId) => {
+      const comment = comments.find((item) => item.id === commentId);
+      const container = scrollContainerRef?.current;
+      if (!comment || !container) return;
+      scrollCommentIntoView(editor, container, comment);
+      window.requestAnimationFrame(() => {
+        const activeId = emphasizedCommentIdRef.current;
+        editor.view.dom
+          .querySelectorAll(".editor-comment-highlight")
+          .forEach((node) => {
+            const id = node.getAttribute("data-comment-id");
+            node.classList.toggle(
+              "editor-comment-highlight--emphasized",
+              Boolean(activeId && id === activeId),
+            );
+          });
+      });
+    });
+  }, [comments, editor, onRegisterScrollToComment, scrollContainerRef]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>
@@ -517,21 +606,15 @@ export function TipTapEditor({
           <EditorBlockDragLayer
             editor={editor}
             containerRef={editorSurfaceRef}
-            onDragActiveChange={setIsBlockDragging}
-            onLayoutChange={() => setCommentLayoutTick((tick) => tick + 1)}
+            onBlockMoved={() => {
+              if (editor && onCommentsDocumentSync) {
+                ensureEditorBlockIds(editor);
+                onCommentsDocumentSync(editor);
+              }
+            }}
           />
         )}
 
-        {editor && onAddComment && (
-          <EditorCommentsOverlay
-            editor={editor}
-            containerRef={editorSurfaceRef}
-            comments={comments}
-            isDragging={isBlockDragging}
-            layoutTick={commentLayoutTick}
-            onEmphasizedCommentChange={setEmphasizedCommentId}
-          />
-        )}
       </div>
 
       {slashState && (
