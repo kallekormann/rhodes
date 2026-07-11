@@ -32,3 +32,17 @@
 .drop-zone--compact {
   padding: var(--space-xl);
 }
+
+.drop-zone--dragging {
+  border-color: var(--color-accent, var(--color-border));
+  background: var(--color-surface-hover);
+}
+
+.drop-zone--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.drop-zone__input {
+  display: none;
+}

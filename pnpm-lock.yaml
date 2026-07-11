@@ -68,6 +68,9 @@ importers:
       '@tiptap/suggestion':
         specifier: ^2.27.2
         version: 2.27.2(@tiptap/core@2.27.2(@tiptap/pm@2.27.2))(@tiptap/pm@2.27.2)
+      bullmq:
+        specifier: ^5.41.5
+        version: 5.80.0
       ioredis:
         specifier: ^5.6.0
         version: 5.11.1
@@ -114,6 +117,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@rhodes/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@rhodes/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -138,6 +144,10 @@ importers:
         version: 5.9.3
 
   packages/ai:
+    dependencies:
+      '@rhodes/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^22.13.10

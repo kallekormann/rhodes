@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Last updated:** July 11, 2026  
-**Current focus:** Phase 06 — Library and ingestion pipeline  
+**Current focus:** Phase 07 — AI RAG and insights  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -37,8 +37,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 05b | [05b-editor-block-drag-and-comments.md](05b-editor-block-drag-and-comments.md) | Block drag-drop, comment marks | ✅ complete |
 | 05d | [05d-sidebar-comments.md](05d-sidebar-comments.md) | Sidebar comments panel + bidirectional linking | ✅ complete |
 | 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, template fields, signed URLs | ✅ complete |
-| 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | **next** |
-| 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, insights sidebar, Ask | 7–10 days |
+| 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | ✅ complete |
+| 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, insights sidebar, Ask | **next** |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, metadata, templates | 7–10 days |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
@@ -61,6 +61,18 @@ This folder contains the **executable implementation plan** for building Rhodes:
 **Migration:** `00014_template_metadata_and_schema_seed.sql` — `templates.metadata` + default workspace metadata schemas.
 
 **Deferred to Phase 08:** metadata schema admin UI, share-with-team (needs invites), tags/number field types, metadata search/filter.
+
+### Phase 06 completion summary (July 2026)
+
+| Slice | Delivered |
+|-------|-----------|
+| **Upload + list API** | PDF/DOCX/TXT → `library-files` storage + `library_sources` row |
+| **Worker pipeline** | ingest (Tika) → embed (Ollama) + summarize in parallel |
+| **Library UI** | Functional drop zone, status pills, polling, retry on failed |
+
+**Migration:** `00015_library_files_storage.sql`
+
+**Manual QA:** Run Docker stack (Redis, Tika, Ollama, worker) and upload a PDF to verify end-to-end `pending → ready`.
 
 ---
 

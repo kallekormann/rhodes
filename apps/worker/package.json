@@ -11,6 +11,7 @@
     "lint": "echo 'no lint configured'"
   },
   "dependencies": {
+    "@rhodes/ai": "workspace:*",
     "@rhodes/db": "workspace:*",
     "@rhodes/shared": "workspace:*",
     "bullmq": "^5.41.5",

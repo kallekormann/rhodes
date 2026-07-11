@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/ollama.ts"
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@rhodes/shared": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
