@@ -6,7 +6,9 @@ import { useApp } from "@/context/AppContext";
 import { EMPTY_DOCUMENT_CONTENT } from "@/lib/documents/schemas";
 import {
   normalizeDocumentImageContent,
+  resolveDocumentImageUrls,
 } from "@/lib/documents/editor-commands";
+import { withUserMetadataField } from "@/lib/metadata/schemas";
 import {
   createDocumentComment,
   getCommentIdsToRemove,
@@ -21,6 +23,11 @@ import {
   readLastDocumentId,
   writeLastDocumentId,
 } from "@/lib/documents/last-document";
+import {
+  buildTemplateMetadata,
+  parseTemplateMetadata,
+  type TemplateMetadata,
+} from "@/lib/templates/metadata";
 import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
 import { useDocuments } from "@/hooks/useDocuments";
@@ -108,10 +115,32 @@ export function useEditorSession() {
       (document.content as Record<string, unknown> | null) ??
       EMPTY_DOCUMENT_CONTENT;
 
-    setEditorContent(normalizeDocumentImageContent(raw));
-    latestContentRef.current = normalizeDocumentImageContent(raw);
-    setContentHydratedForId(document.id);
-    setComments(parseDocumentComments(document.metadata));
+    let cancelled = false;
+
+    const docId = document.id;
+    const docMetadata = document.metadata;
+
+    async function hydrateDocumentContent() {
+      const normalized = normalizeDocumentImageContent(raw);
+      let resolved = normalized;
+      try {
+        resolved = await resolveDocumentImageUrls(normalized);
+      } catch {
+        resolved = normalized;
+      }
+      if (cancelled) return;
+
+      setEditorContent(resolved);
+      latestContentRef.current = resolved;
+      setContentHydratedForId(docId);
+      setComments(parseDocumentComments(docMetadata));
+    }
+
+    void hydrateDocumentContent();
+
+    return () => {
+      cancelled = true;
+    };
   }, [document?.id, document?.content, document?.metadata, isEditingTemplate]);
 
   useEffect(() => {
@@ -142,8 +171,18 @@ export function useEditorSession() {
           (template.structure_json as Record<string, unknown> | null) ??
             EMPTY_DOCUMENT_CONTENT,
         );
-        setEditorContent(raw);
-        latestContentRef.current = raw;
+
+        let resolved = raw;
+        try {
+          resolved = await resolveDocumentImageUrls(raw);
+        } catch {
+          resolved = raw;
+        }
+
+        if (cancelled) return;
+
+        setEditorContent(resolved);
+        latestContentRef.current = resolved;
         setContentHydratedForId(`template:${template.id}`);
       } catch (err) {
         if (cancelled) return;
@@ -332,6 +371,39 @@ export function useEditorSession() {
     void updateTemplate({ id: templateRecord.id, name: title });
   }, 400);
 
+  const debouncedSaveTemplateDescription = useDebouncedCallback(
+    (description: string) => {
+      if (!templateRecord) return;
+      void updateTemplate({ id: templateRecord.id, description });
+      setTemplateRecord((prev) =>
+        prev ? { ...prev, description } : prev,
+      );
+    },
+    400,
+  );
+
+  const debouncedSaveTemplateMetadata = useDebouncedCallback(
+    (metadata: TemplateMetadata) => {
+      if (!templateRecord) return;
+      const payload = buildTemplateMetadata(metadata);
+      void updateTemplate({ id: templateRecord.id, metadata: payload });
+      setTemplateRecord((prev) =>
+        prev ? { ...prev, metadata: payload } : prev,
+      );
+    },
+    400,
+  );
+
+  const debouncedSaveMetadataField = useDebouncedCallback(
+    (fieldKey: string, value: string | null) => {
+      if (!document) return;
+      void save({
+        metadata: withUserMetadataField(document.metadata, fieldKey, value),
+      });
+    },
+    400,
+  );
+
   const debouncedSaveComments = useDebouncedCallback(
     (nextComments: StoredDocumentComment[]) => {
       if (!document) return;
@@ -431,6 +503,17 @@ export function useEditorSession() {
     ? `template:${templateRecord.id}`
     : null;
 
+  const templateMetadata = templateRecord
+    ? parseTemplateMetadata(templateRecord.metadata)
+    : undefined;
+
+  const createdByLabel =
+    document?.created_by && session.userId
+      ? document.created_by === session.userId
+        ? session.displayName || "You"
+        : "Workspace member"
+      : null;
+
   return {
     document: document as DocumentRecord | null,
     documentId: isEditingTemplate ? null : (document?.id ?? null),
@@ -473,6 +556,13 @@ export function useEditorSession() {
     removeComment,
     syncCommentsFromEditor,
     onContentUpdate: handleContentUpdate,
+    documentMetadata: document?.metadata ?? null,
+    createdByLabel,
+    templateDescription: templateRecord?.description ?? "",
+    templateMetadata,
+    onMetadataFieldChange: debouncedSaveMetadataField,
+    onTemplateDescriptionChange: debouncedSaveTemplateDescription,
+    onTemplateMetadataChange: debouncedSaveTemplateMetadata,
     onTitleChange: (title: string) => {
       setDocumentTitle(title);
       if (isEditingTemplate) {

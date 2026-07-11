@@ -7,11 +7,8 @@ import type { StoredDocumentComment } from "@/lib/documents/comments";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { CommentsTab } from "./CommentsTab";
-import { DatePickerField } from "./DatePickerField";
-import { DateRangeField, type DateRange } from "./DateRangePicker";
-import { Dropdown } from "./Dropdown";
-import { Input } from "./Input";
-import { NavLink } from "./NavLink";
+import type { TemplateMetadata } from "@/lib/templates/metadata";
+import { PropertiesTab } from "./PropertiesTab";
 import { IconButton } from "./IconButton";
 import { TabBar } from "./TabBar";
 import "./AskComposer.css";
@@ -23,20 +20,6 @@ const tabOptions: { value: PanelTab; label: string }[] = [
   { value: "ask", label: "Ask" },
   { value: "comments", label: "Comments" },
   { value: "properties", label: "Properties" },
-];
-
-const statusOptions = [
-  { id: "draft", label: "Draft" },
-  { id: "progress", label: "In progress" },
-  { id: "done", label: "Done" },
-];
-
-const ownerOptions = [
-  { id: "kalle", label: "Kalle" },
-  { id: "team", label: "Growth team" },
-  { id: "product", label: "Product" },
-  { id: "design", label: "Design" },
-  { id: "eng", label: "Engineering" },
 ];
 
 type ChatMessage = {
@@ -68,6 +51,16 @@ type RightPanelProps = {
   onHoverComment?: (commentId: string | null) => void;
   onAddReply?: (parentId: string, text: string) => void;
   onRemoveComment?: (commentId: string) => void;
+  workspaceId?: string | null;
+  propertiesMode?: "document" | "template";
+  documentMetadata?: Record<string, unknown> | null;
+  createdAtLabel?: string | null;
+  createdByLabel?: string | null;
+  templateDescription?: string | null;
+  templateMetadata?: TemplateMetadata;
+  onMetadataFieldChange?: (fieldKey: string, value: string | null) => void;
+  onTemplateDescriptionChange?: (description: string) => void;
+  onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
 };
 
 export function RightPanel({
@@ -78,6 +71,16 @@ export function RightPanel({
   onHoverComment,
   onAddReply,
   onRemoveComment,
+  workspaceId = null,
+  propertiesMode = "document",
+  documentMetadata = null,
+  createdAtLabel = null,
+  createdByLabel = null,
+  templateDescription = null,
+  templateMetadata,
+  onMetadataFieldChange,
+  onTemplateDescriptionChange,
+  onTemplateMetadataChange,
 }: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
 
@@ -110,7 +113,20 @@ export function RightPanel({
             onRemoveComment={onRemoveComment ?? (() => {})}
           />
         )}
-        {panelTab === "properties" && <PropertiesTab />}
+        {panelTab === "properties" && (
+          <PropertiesTab
+            workspaceId={workspaceId}
+            mode={propertiesMode}
+            metadata={documentMetadata}
+            createdAtLabel={createdAtLabel}
+            createdByLabel={createdByLabel}
+            templateDescription={templateDescription}
+            templateMetadata={templateMetadata}
+            onMetadataFieldChange={onMetadataFieldChange}
+            onTemplateDescriptionChange={onTemplateDescriptionChange}
+            onTemplateMetadataChange={onTemplateMetadataChange}
+          />
+        )}
       </div>
     </aside>
   );
@@ -205,86 +221,6 @@ function AskTab() {
         status={status}
         pending={pending}
       />
-    </div>
-  );
-}
-
-function PropertiesTab() {
-  const [status, setStatus] = useState("progress");
-  const [owner, setOwner] = useState("kalle");
-  const [summary, setSummary] = useState("Q3 activation goals");
-  const [due, setDue] = useState<Date | null>(new Date(2026, 10, 10));
-  const [range, setRange] = useState<DateRange>({
-    start: new Date(2026, 9, 1),
-    end: new Date(2026, 11, 15),
-  });
-
-  return (
-    <div className="panel-tab panel-tab--properties">
-      <dl className="props-list">
-        <div className="props-list__row">
-          <dt>Status</dt>
-          <dd>
-            <Dropdown
-              variant="plain"
-              value={status}
-              options={statusOptions}
-              onChange={setStatus}
-            />
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>Owner</dt>
-          <dd>
-            <Dropdown
-              variant="plain"
-              value={owner}
-              options={ownerOptions}
-              searchable
-              searchPlaceholder="Search people…"
-              onChange={setOwner}
-            />
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>Summary</dt>
-          <dd>
-            <Input
-              variant="plain"
-              value={summary}
-              onChange={setSummary}
-              placeholder="Add summary"
-            />
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>Due</dt>
-          <dd>
-            <DatePickerField variant="plain" value={due} onChange={setDue} />
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>Timeline</dt>
-          <dd>
-            <DateRangeField variant="plain" value={range} onChange={setRange} />
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>Tags</dt>
-          <dd>
-            <span className="tag">feature</span>
-            <button type="button" className="tag tag--add">
-              +
-            </button>
-          </dd>
-        </div>
-        <div className="props-list__row">
-          <dt>History</dt>
-          <dd>
-            <NavLink size="small">View versions</NavLink>
-          </dd>
-        </div>
-      </dl>
     </div>
   );
 }

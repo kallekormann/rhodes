@@ -6,6 +6,7 @@ import { isDocumentId } from "@/lib/documents/ids";
 export type DocumentRecord = {
   id: string;
   workspace_id: string;
+  created_by?: string | null;
   title: string;
   content: Record<string, unknown> | null;
   content_plain: string | null;

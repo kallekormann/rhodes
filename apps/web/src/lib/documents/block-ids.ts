@@ -40,7 +40,7 @@ export function collectMissingTopLevelBlockIds(
   doc: ProseMirrorNode,
 ): BlockIdUpdate[] {
   const updates: BlockIdUpdate[] = [];
-  let pos = 1;
+  let pos = 0;
 
   for (let i = 0; i < doc.childCount; i++) {
     const node = doc.child(i);

@@ -51,6 +51,13 @@ function EditorViewContent() {
     syncCommentsFromEditor,
     onContentUpdate: handleContentUpdate,
     onTitleChange,
+    documentMetadata,
+    createdByLabel,
+    templateDescription,
+    templateMetadata,
+    onMetadataFieldChange,
+    onTemplateDescriptionChange,
+    onTemplateMetadataChange,
   } = useEditorSession();
 
   const [shareOpen, setShareOpen] = useState(false);
@@ -309,6 +316,16 @@ function EditorViewContent() {
         onHoverComment={setHoverCommentId}
         onAddReply={isTemplateMode ? () => {} : addReply}
         onRemoveComment={isTemplateMode ? () => {} : handleRemoveComment}
+        workspaceId={workspaceId}
+        propertiesMode={isEditingTemplate ? "template" : "document"}
+        documentMetadata={documentMetadata}
+        createdAtLabel={createdAtLabel}
+        createdByLabel={createdByLabel}
+        templateDescription={templateDescription}
+        templateMetadata={templateMetadata}
+        onMetadataFieldChange={onMetadataFieldChange}
+        onTemplateDescriptionChange={onTemplateDescriptionChange}
+        onTemplateMetadataChange={onTemplateMetadataChange}
       />
     </div>
   );

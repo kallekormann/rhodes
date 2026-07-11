@@ -8,6 +8,7 @@ export type TemplateRecord = {
   created_by: string | null;
   name: string;
   description: string | null;
+  metadata?: Record<string, unknown> | null;
   is_system: boolean;
   is_shared: boolean;
   created_at: string;
@@ -112,6 +113,7 @@ export async function updateTemplate(input: {
   name?: string;
   description?: string;
   structureJson?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }) {
   const response = await fetch(`/app/api/templates/${input.id}`, {
     method: "PATCH",
@@ -120,6 +122,7 @@ export async function updateTemplate(input: {
       name: input.name,
       description: input.description,
       structure_json: input.structureJson,
+      metadata: input.metadata,
     }),
   });
 

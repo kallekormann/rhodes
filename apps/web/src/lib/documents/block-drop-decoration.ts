@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { isNoOpDrop } from "@/lib/documents/block-drag";
+import { isNoOpDrop, getTopLevelBlockInsertPos, getDocBlockIndexForDomIndex } from "@/lib/documents/block-drag";
 
 export const blockDropPluginKey = new PluginKey<DecorationSet>("blockDrop");
 
@@ -41,14 +41,7 @@ export function createBlockDropPlugin() {
 }
 
 export function getBlockInsertPos(editor: Editor, blockIndex: number): number {
-  const { doc } = editor.state;
-  if (blockIndex >= doc.childCount) return doc.content.size;
-
-  let pos = 1;
-  for (let i = 0; i < blockIndex; i += 1) {
-    pos += doc.child(i).nodeSize;
-  }
-  return pos;
+  return getTopLevelBlockInsertPos(editor.state.doc, blockIndex);
 }
 
 export function syncDropDecoration(
@@ -63,7 +56,8 @@ export function syncDropDecoration(
     return;
   }
 
-  const pos = getBlockInsertPos(editor, dropIndex);
+  const docDropIndex = getDocBlockIndexForDomIndex(editor, dropIndex) ?? dropIndex;
+  const pos = getBlockInsertPos(editor, docDropIndex);
   const widget = Decoration.widget(pos, createDropWidget, {
     side: -1,
     key: "block-drop-widget",

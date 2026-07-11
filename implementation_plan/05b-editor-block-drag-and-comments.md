@@ -1,6 +1,6 @@
 # Phase 05b — Block Drag-and-Drop & Comment Foundation
 
-**Status:** block drag complete; comment overlay **superseded by [05d](05d-sidebar-comments.md)**  
+**Status:** complete (block drag + comment marks; overlay superseded by 05d)  
 **Depends on:** Phase 05 core editor  
 
 ---

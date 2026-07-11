@@ -22,7 +22,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const { data, error } = await supabase
     .from("documents")
     .select(
-      "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at",
+      "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -83,7 +83,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     .update(patch)
     .eq("id", id)
     .select(
-      "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at",
+      "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at",
     )
     .single();
 

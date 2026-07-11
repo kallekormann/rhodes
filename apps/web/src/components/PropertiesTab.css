@@ -1,0 +1,70 @@
+.props-list__row--stacked dd {
+  width: 100%;
+}
+
+.props-list__row--stacked dt {
+  margin-bottom: 6px;
+}
+
+.props-list__readonly {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.props-list__section {
+  margin-top: 8px;
+}
+
+.props-list__section-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+}
+
+.props-textarea .textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.props-use-cases {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.props-use-cases__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  font-size: 14px;
+}
+
+.props-use-cases__remove {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.props-use-cases__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.props-use-cases__add .input-field {
+  flex: 1;
+}

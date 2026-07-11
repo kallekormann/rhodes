@@ -4,6 +4,7 @@ import type { Editor } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BlockDragHandle } from "@/components/BlockDragHandle";
 import {
+  blockDropPluginKey,
   clearDropDecoration,
   createBlockDropPlugin,
   syncDropDecoration,
@@ -12,6 +13,7 @@ import {
   computeBlockDropIndex,
   findBlockIndexAtClientY,
   findBlockIndexFromElement,
+  getDocBlockIndexForDomIndex,
   getTopLevelBlockElements,
   isNoOpDrop,
   moveTopLevelBlock,
@@ -100,7 +102,7 @@ export function EditorBlockDragLayer({
 
     return () => {
       clearDropDecoration(editor);
-      editor.unregisterPlugin(plugin);
+      editor.unregisterPlugin(blockDropPluginKey);
       removeDropPlaceholder(editor);
     };
   }, [editor]);
@@ -258,19 +260,24 @@ export function EditorBlockDragLayer({
       const from = dragIndexRef.current;
       const to = dropIndexRef.current;
 
-      clearDropDecoration(editor);
-      clearDragLayout(getTopLevelBlockElements(editor));
-
-      if (from !== null && to !== null && !isNoOpDrop(from, to)) {
-        moveTopLevelBlock(editor, from, to);
-        onBlockMovedRef.current?.();
+      try {
+        if (from !== null && to !== null && !isNoOpDrop(from, to)) {
+          const fromDoc = getDocBlockIndexForDomIndex(editor, from);
+          const toDoc = getDocBlockIndexForDomIndex(editor, to) ?? to;
+          if (fromDoc !== null) {
+            moveTopLevelBlock(editor, fromDoc, toDoc);
+            onBlockMovedRef.current?.();
+          }
+        }
+      } finally {
+        clearDropDecoration(editor);
+        clearDragLayout(getTopLevelBlockElements(editor));
+        resetDragVisuals();
+        dragIndexRef.current = null;
+        dropIndexRef.current = null;
+        setDragIndex(null);
+        setHoverIndex(null);
       }
-
-      resetDragVisuals();
-      dragIndexRef.current = null;
-      dropIndexRef.current = null;
-      setDragIndex(null);
-      setHoverIndex(null);
     };
 
     syncDragLayout(dragIndex, dropIndexRef.current ?? dragIndex);

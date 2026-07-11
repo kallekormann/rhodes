@@ -1,6 +1,6 @@
 # Phase 05 — Documents and TipTap Editor
 
-**Status:** in progress  
+**Status:** complete  
 **Depends on:** Phase 04  
 **Blocks:** Phase 06, Phase 09  
 **Estimated duration:** 7–10 days
@@ -253,8 +253,9 @@ RLS: workspace members manage shares; grantees gain document read via extended d
 | Template edit flow (`?template=` + Edit button) | done |
 | Delete owned templates from sidebar | done |
 | Hide template drafts from documents list | done |
-| Block drag-and-drop + comment overlay | **→ [05b](05b-editor-block-drag-and-comments.md)** |
-| Metadata, properties, template fields, Created at, signed URLs | **→ [05c](05c-metadata-properties-and-polish.md)** |
+| Block drag-and-drop + comment overlay | **→ [05b](05b-editor-block-drag-and-comments.md)** done |
+| Metadata, properties, template fields, Created at, signed URLs | **→ [05c](05c-metadata-properties-and-polish.md)** done |
+| Sidebar comments | **→ [05d](05d-sidebar-comments.md)** done |
 
 **Sub-phases:** [05b](05b-editor-block-drag-and-comments.md) · [05c](05c-metadata-properties-and-polish.md)
 
@@ -268,8 +269,8 @@ RLS: workspace members manage shares; grantees gain document read via extended d
 - [x] Slash menu inserts blocks
 - [x] Bubble menu on selection
 - [x] Link popover: external URL + internal doc link
-- [ ] Table insert via slash menu
-- [ ] Image drag-drop uploads and renders
+- [x] Table insert via slash menu
+- [x] Image drag-drop uploads and renders
 - [x] Auto-save: edit → reload → content persisted
 - [x] `content_plain` updated on save
 - [x] Documents view: recent list, search, favorites toggle
@@ -285,7 +286,13 @@ RLS: workspace members manage shares; grantees gain document read via extended d
 - [x] Header auto-hide during typing
 - [x] Archive / restore document
 - [ ] Share with person or team → appears in Shared tab *(blocked: no team members on dev; needs Phase 08 teams)*
-- [x] Delete document from list (confirmation dialog)
+- [x] Block drag-and-drop reorder (no phantom blocks at top)
+- [x] Properties tab: schema-driven text / select / date fields
+- [x] Template description + use cases editable (`?template=`)
+- [x] New document from template inherits default property values
+- [x] Signed URL refresh on document/template load
+- [x] Sidebar comments: add, reply, remove, panel ↔ highlight linking
+- [x] Comments persist across reload via metadata
 
 ---
 
@@ -321,9 +328,9 @@ RLS: workspace members manage shares; grantees gain document read via extended d
 
 ## Optional sub-phases
 
-- **[05b — Block drag & comment foundation](05b-editor-block-drag-and-comments.md)** — drag done; overlay superseded
-- **[05d — Sidebar comments](05d-sidebar-comments.md)** — in progress
-- **[05c — Metadata, properties & polish](05c-metadata-properties-and-polish.md)** — planned
+- **[05b — Block drag & comment foundation](05b-editor-block-drag-and-comments.md)** — done
+- **[05d — Sidebar comments](05d-sidebar-comments.md)** — done
+- **[05c — Metadata, properties & polish](05c-metadata-properties-and-polish.md)** — done
 
 ---
 

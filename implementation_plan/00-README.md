@@ -1,7 +1,8 @@
 # Rhodes Implementation Plan — Index
 
 **Status:** accepted  
-**Last updated:** July 2026  
+**Last updated:** July 11, 2026  
+**Current focus:** Phase 06 — Library and ingestion pipeline  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -32,11 +33,11 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 02 | [02-monorepo-scaffolding-and-database.md](02-monorepo-scaffolding-and-database.md) | pnpm monorepo, Next.js, worker, migrations | 3–5 days |
 | 03 | [03-authentication-and-tenancy.md](03-authentication-and-tenancy.md) | Supabase Auth, RLS, workspace bootstrap | 4–6 days |
 | 04 | [04-ui-foundation.md](04-ui-foundation.md) | Port design system + app shell from ui-mock | 5–7 days |
-| 05 | [05-documents-and-tiptap-editor.md](05-documents-and-tiptap-editor.md) | Document CRUD, TipTap editor | 7–10 days |
-| 05b | [05b-editor-block-drag-and-comments.md](05b-editor-block-drag-and-comments.md) | Block drag-drop, comment marks | 2–3 days |
-| 05d | [05d-sidebar-comments.md](05d-sidebar-comments.md) | Sidebar comments panel + bidirectional linking | 1–2 days |
-| 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, Created at | 3–5 days |
-| 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | 5–7 days |
+| 05 | [05-documents-and-tiptap-editor.md](05-documents-and-tiptap-editor.md) | Document CRUD, TipTap editor | ✅ complete |
+| 05b | [05b-editor-block-drag-and-comments.md](05b-editor-block-drag-and-comments.md) | Block drag-drop, comment marks | ✅ complete |
+| 05d | [05d-sidebar-comments.md](05d-sidebar-comments.md) | Sidebar comments panel + bidirectional linking | ✅ complete |
+| 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, template fields, signed URLs | ✅ complete |
+| 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | **next** |
 | 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, insights sidebar, Ask | 7–10 days |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, metadata, templates | 7–10 days |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
@@ -47,6 +48,19 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 14 | [14-marketing-website.md](14-marketing-website.md) | Decoupled marketing site, demos, pricing, legal | 7–10 days |
 
 **Total estimate:** ~14–18 weeks for a solo developer; parallelize UI + backend + marketing where phases allow.
+
+### Phase 05 completion summary (July 2026)
+
+| Slice | Delivered |
+|-------|-----------|
+| **05 core** | Document CRUD, TipTap editor, bubble/slash menus, templates, share/archive |
+| **05b** | Block drag-and-drop (0-based position fix; no phantom blocks) |
+| **05d** | Sidebar comments (ADR 008), threaded replies, panel ↔ highlight linking |
+| **05c** | Schema-driven Properties tab, template description/use cases/default properties, signed URL refresh on load |
+
+**Migration:** `00014_template_metadata_and_schema_seed.sql` — `templates.metadata` + default workspace metadata schemas.
+
+**Deferred to Phase 08:** metadata schema admin UI, share-with-team (needs invites), tags/number field types, metadata search/filter.
 
 ---
 

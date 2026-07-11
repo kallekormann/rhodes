@@ -1,6 +1,6 @@
 # Phase 05c — Metadata, Properties, Template Fields & Polish
 
-**Status:** planned  
+**Status:** complete  
 **Depends on:** Phase 05b  
 **Related:** Phase 08 (full metadata admin, teams, sharing)
 
@@ -22,18 +22,18 @@
 |------|----------|-------|
 | **Created at** in Documents view list rows | done |
 | **Created at** in Editor meta row | done |
-| Signed URL refresh for document images | P1 | Expired storage URLs after TTL |
+| Signed URL refresh for document images | done | `resolveDocumentImageUrls` on editor hydration |
 | Share document with team members | P2 | **Blocked:** needs team invites + multi-user dev environment (Phase 08) |
-| Template **description** editor | P1 | Store in `templates.description` (column exists) |
-| Template **use cases** list editor | P1 | Store in `templates.metadata.use_cases[]` (JSONB column addition) |
-| Template **default properties** on create | P1 | `templates.metadata.default_properties` copied to new document |
-| Workspace **metadata schema** admin UI | P2 | `metadata_schemas` table exists; wire Properties tab |
-| Properties tab: render fields from schema | P1 | Replace static stub in `RightPanel` |
-| Document `metadata` values editor | P1 | Read/write `documents.metadata` user fields |
-| Field type: `text` (label + input) | P1 | |
-| Field type: `select` (dropdown) | P1 | Options from schema `options[]` |
+| Template **description** editor | done | Properties tab in template edit mode (`?template=`) |
+| Template **use cases** list editor | done | `templates.metadata.use_cases[]` |
+| Template **default properties** on create | done | Copied on `POST /api/documents` with `template_id` |
+| Workspace **metadata schema** admin UI | P2 | `GET /api/metadata-schemas`; admin UI deferred to Phase 08 |
+| Properties tab: render fields from schema | done | `PropertiesTab` + `useMetadataSchemas` |
+| Document `metadata` values editor | done | Debounced PATCH via `useEditorSession` |
+| Field type: `text` (label + input) | done | |
+| Field type: `select` (dropdown) | done | Options from schema `options[]` |
 | Field type: `tags` (chip input) | P2 | |
-| Field type: `date` | P1 | Date picker |
+| Field type: `date` | done | Date picker |
 | Field type: `number` | P2 | |
 | Field type: `radio` group | P2 | Single select, visible options |
 | Field type: `date_range` | P3 | Start + end date |
@@ -89,11 +89,11 @@ Reserved keys in `metadata`: `favorite`, `archived`, `template_draft`, `comments
 |-------|---------|----------|
 | Name | `templates.name` | Editor title when editing template |
 | Description | `templates.description` | Template sidebar |
-| Use cases | `templates.metadata.use_cases` (proposed) | Template sidebar |
-| Default properties | `templates.metadata.default_properties` (proposed) | Copied to `documents.metadata` on **Use** |
+| Use cases | `templates.metadata.use_cases` | Template sidebar |
+| Default properties | `templates.metadata.default_properties` | Copied to `documents.metadata` on **Use** |
 | Structure | `templates.structure_json` | Document body on **Use** |
 
-**Migration needed:** `templates.metadata jsonb default '{}'` if not present.
+**Migration:** `00014_template_metadata_and_schema_seed.sql` — `templates.metadata jsonb` + default schema seed per workspace.
 
 ### On document create from template
 
@@ -142,8 +142,8 @@ Admin defines options in **Settings → Space → Custom fields** (Phase 08) or 
 
 ## Exit criteria
 
-1. Created at visible in Documents view and Editor.
-2. Template description + use cases editable for owned templates.
-3. Properties tab renders at least `text`, `select`, `date` from workspace schema.
-4. New document from template inherits default property values.
-5. Signed URL refresh implemented for images.
+1. Created at visible in Documents view and Editor. ✅
+2. Template description + use cases editable for owned templates. ✅
+3. Properties tab renders at least `text`, `select`, `date` from workspace schema. ✅
+4. New document from template inherits default property values. ✅
+5. Signed URL refresh implemented for images. ✅

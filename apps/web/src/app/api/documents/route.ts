@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripLeadingTitleHeading } from "@/lib/templates/content";
 
 const DOCUMENT_FIELDS =
-  "id, workspace_id, title, content, content_plain, metadata, updated_at, created_at";
+  "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -157,17 +157,31 @@ export async function POST(request: Request) {
   }
 
   let content: Record<string, unknown> = { ...EMPTY_DOCUMENT_CONTENT };
+  let metadata: Record<string, unknown> = parsed.data.metadata ?? {};
 
   if (parsed.data.template_id) {
     const template = await supabase
       .from("templates")
-      .select("structure_json")
+      .select("structure_json, metadata")
       .eq("id", parsed.data.template_id)
       .maybeSingle();
 
     if (template.data?.structure_json) {
       content = template.data.structure_json as Record<string, unknown>;
     }
+
+    const templateMetadata =
+      (template.data?.metadata as Record<string, unknown> | null) ?? {};
+    const defaultProperties =
+      templateMetadata.default_properties &&
+      typeof templateMetadata.default_properties === "object"
+        ? (templateMetadata.default_properties as Record<string, unknown>)
+        : {};
+
+    metadata = {
+      ...defaultProperties,
+      ...metadata,
+    };
   }
 
   const title = parsed.data.title ?? "Untitled Document";
@@ -186,7 +200,7 @@ export async function POST(request: Request) {
       title,
       content,
       content_plain,
-      metadata: parsed.data.metadata ?? {},
+      metadata,
     })
     .select(DOCUMENT_FIELDS)
     .single();

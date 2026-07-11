@@ -6,12 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 type RouteContext = { params: Promise<{ id: string }> };
 
 const TEMPLATE_FIELDS =
-  "id, workspace_id, created_by, name, description, structure_json, is_system, is_shared, created_at";
+  "id, workspace_id, created_by, name, description, metadata, structure_json, is_system, is_shared, created_at";
 
 const updateTemplateSchema = z.object({
   name: z.string().min(1).max(500).optional(),
   description: z.string().max(2000).optional(),
   structure_json: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -116,6 +117,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   if (parsed.data.structure_json !== undefined) {
     patch.structure_json = parsed.data.structure_json;
+  }
+  if (parsed.data.metadata !== undefined) {
+    patch.metadata = parsed.data.metadata;
   }
 
   const { data, error } = await supabase

@@ -52,7 +52,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("templates")
-    .select("id, workspace_id, created_by, name, description, is_system, is_shared, created_at")
+    .select("id, workspace_id, created_by, name, description, metadata, is_system, is_shared, created_at")
     .order("is_system", { ascending: false })
     .order("name", { ascending: true });
 

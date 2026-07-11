@@ -16,8 +16,8 @@ export function getTopLevelBlockAtPos(
   const { doc } = editor.state;
   if (doc.childCount === 0) return null;
 
-  const safePos = Math.max(1, Math.min(pos, doc.content.size));
-  let blockPos = 1;
+  const safePos = Math.max(0, Math.min(pos, doc.content.size));
+  let blockPos = 0;
 
   for (let i = 0; i < doc.childCount; i++) {
     const node = doc.child(i);
@@ -28,7 +28,7 @@ export function getTopLevelBlockAtPos(
     blockPos = end;
   }
 
-  let lastPos = 1;
+  let lastPos = 0;
   for (let i = 0; i < doc.childCount - 1; i++) {
     lastPos += doc.child(i).nodeSize;
   }
@@ -54,7 +54,7 @@ export function getEditorBlockAnchors(editor: Editor): EditorBlockAnchor[] {
   const anchors: EditorBlockAnchor[] = [];
 
   if (rootBlocks.length === doc.childCount) {
-    let pos = 1;
+    let pos = 0;
     for (let docIndex = 0; docIndex < doc.childCount; docIndex += 1) {
       anchors.push({
         docIndex,
@@ -263,6 +263,38 @@ export function isNoOpDrop(fromIndex: number, toIndex: number): boolean {
   return toIndex === fromIndex || toIndex === fromIndex + 1;
 }
 
+export function getTopLevelBlockInsertPos(
+  doc: import("@tiptap/pm/model").Node,
+  blockIndex: number,
+): number {
+  if (blockIndex >= doc.childCount) return doc.content.size;
+
+  let pos = 0;
+  for (let i = 0; i < blockIndex; i += 1) {
+    pos += doc.child(i).nodeSize;
+  }
+  return pos;
+}
+
+export function getDocBlockIndexForDomIndex(
+  editor: Editor,
+  domIndex: number,
+): number | null {
+  const element = getTopLevelBlockElements(editor)[domIndex];
+  if (!element) return null;
+
+  if (getTopLevelBlockElements(editor).length === editor.state.doc.childCount) {
+    return domIndex;
+  }
+
+  try {
+    const pos = editor.view.posAtDOM(element, 0);
+    return editor.state.doc.resolve(pos).index(0);
+  } catch {
+    return domIndex;
+  }
+}
+
 export function moveTopLevelBlock(
   editor: Editor,
   fromIndex: number,
@@ -276,21 +308,17 @@ export function moveTopLevelBlock(
   if (fromIndex < 0 || fromIndex >= doc.childCount) return;
   if (toIndex < 0 || toIndex > doc.childCount) return;
 
-  let fromPos = 1;
-  for (let i = 0; i < fromIndex; i++) fromPos += doc.child(i).nodeSize;
-
+  const fromPos = getTopLevelBlockInsertPos(doc, fromIndex);
   const node = doc.child(fromIndex);
-  const tr = state.tr.delete(fromPos, fromPos + node.nodeSize);
+  const deleteTo = fromPos + node.nodeSize;
+
+  if (deleteTo > doc.content.size) return;
+
+  const tr = state.tr.delete(fromPos, deleteTo);
 
   const mappedIndex = toIndex > fromIndex ? toIndex - 1 : toIndex;
   const mappedDoc = tr.doc;
-
-  let insertPos = 1;
-  if (mappedIndex >= mappedDoc.childCount) {
-    insertPos = mappedDoc.content.size;
-  } else {
-    for (let i = 0; i < mappedIndex; i++) insertPos += mappedDoc.child(i).nodeSize;
-  }
+  const insertPos = getTopLevelBlockInsertPos(mappedDoc, mappedIndex);
 
   tr.insert(insertPos, node);
   editor.view.dispatch(tr.scrollIntoView());

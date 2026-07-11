@@ -1,6 +1,6 @@
 # Phase 05d — Sidebar Document Comments
 
-**Status:** in progress (core sidebar UX implemented)  
+**Status:** complete  
 **Depends on:** Phase 05b (comment marks + persistence)  
 **Supersedes:** Comment overlay / block gutter markers from 05b  
 
@@ -77,7 +77,7 @@ docs/adr/008-sidebar-document-comments.md
 | Highlight click → open panel | done |
 | Panel hover/click → highlight + scroll | done |
 | Remove `EditorCommentsOverlay` | done |
-| Comment decorations survive save/reload | todo |
+| Comment decorations survive save/reload | done |
 
 ---
 
