@@ -49,6 +49,7 @@ export async function POST(request: Request) {
 
     const insights = matches.slice(0, 4).map((match) => ({
       ...match,
+      source_ref_id: match.source_ref_id ?? match.item_id,
       relevance_percent: Math.round(match.similarity * 100),
     }));
 

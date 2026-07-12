@@ -77,28 +77,60 @@
 }
 
 .insight-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   gap: var(--space-sm);
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-normal) ease;
-}
-
-.insight-card:hover {
-  background: var(--color-surface-hover);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-float);
+  transition:
+    border-color var(--duration-normal) ease,
+    box-shadow var(--duration-normal) ease;
 }
 
 .insight-card__score {
   font-size: 13px;
   font-weight: 600;
   color: var(--color-accent);
-  min-width: 36px;
+  line-height: 1.2;
+}
+
+.insight-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insight-card__origin {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .insight-card__title {
-  margin: 0 0 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
   font-size: 14px;
   font-weight: 500;
+  min-width: 0;
+  text-align: left;
+  color: var(--color-text);
+}
+
+.insight-card__title--link {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.insight-card__title--link:hover {
+  text-decoration: underline;
 }
 
 .insight-card__reason {
@@ -111,36 +143,55 @@
 
 .insight-card__why {
   margin: var(--space-xs) 0 0;
-  font-size: 12px;
-  color: var(--color-accent);
-  line-height: 1.4;
-  font-style: italic;
+  padding-top: var(--space-xs);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.insight-card__actions {
+.insight-card__footer {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-xs);
-  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
-.insight-card__quote-btn,
-.insight-card__why-btn {
-  padding-inline: 0;
+.insight-card__action-btn {
+  align-self: flex-start;
 }
 
 .panel-tab--insights {
   position: relative;
+  gap: 0;
+  height: 100%;
+  min-height: 0;
+  margin: calc(-1 * var(--space-md));
+  margin-top: 0;
+  width: calc(100% + 2 * var(--space-md));
+}
+
+.panel-tab__insights-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  padding-bottom: var(--space-sm);
 }
 
 .insight-quote-bar {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-sm);
-  margin-top: var(--space-md);
+  margin: 0 var(--space-md) var(--space-md);
   padding: var(--space-sm);
   border-radius: var(--radius-sm);
   background: var(--color-surface-elevated);

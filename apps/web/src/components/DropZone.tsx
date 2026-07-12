@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type DragEvent, type ReactNode } from "react";
+import { LIBRARY_FILE_ACCEPT, LIBRARY_FILE_LABEL } from "@/lib/library/schemas";
 import { Upload } from "lucide-react";
 import "./DropZone.css";
 
@@ -16,11 +17,11 @@ type DropZoneProps = {
 
 export function DropZone({
   icon,
-  children = "Drop PDF, DOCX, TXT, or Markdown — or click to browse",
+  children = `Drop ${LIBRARY_FILE_LABEL} — or click to browse`,
   className = "",
   disabled = false,
   uploading = false,
-  accept = ".pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/x-markdown",
+  accept = LIBRARY_FILE_ACCEPT,
   onFilesSelected,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);

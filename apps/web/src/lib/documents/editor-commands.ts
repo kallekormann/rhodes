@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/react";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
+import { findRelatedBlockInsertPosition } from "@/lib/insights/place-citation";
 
 /** Match ui-mock: insert a new empty paragraph directly below the current doc block. */
 export function insertParagraphAfterBlock(editor: Editor) {
@@ -53,27 +54,51 @@ export function imageServeUrl(storagePath: string) {
   return `/app/api/documents/images/serve?path=${encodeURIComponent(storagePath)}`;
 }
 
+export type CitationPlacement = "cursor" | "related-block";
+
 export type CitationInsertInput = {
   sourceId: string;
+  sourceRefId?: string;
+  originType?: string;
   sourceTitle: string;
   page: number | null;
   excerpt: string;
+  placement?: CitationPlacement;
+  /** Recent writing context — used to pick a related block when placement is related-block. */
+  queryContext?: string;
 };
 
 export function insertCitation(editor: Editor, input: CitationInsertInput) {
-  editor
-    .chain()
-    .focus()
-    .insertContent({
-      type: "citation",
-      attrs: {
-        sourceId: input.sourceId,
-        sourceTitle: input.sourceTitle,
-        page: input.page,
-        excerpt: input.excerpt,
-      },
-    })
-    .run();
+  const sourceRefId = input.sourceRefId ?? input.sourceId;
+  const citation = {
+    type: "citation",
+    attrs: {
+      sourceId: sourceRefId,
+      sourceRefId,
+      originType: input.originType ?? "source_chunk",
+      sourceTitle: input.sourceTitle,
+      page: input.page,
+      excerpt: input.excerpt,
+    },
+  };
+
+  if (input.placement === "related-block") {
+    const pos = findRelatedBlockInsertPosition(editor, {
+      insightText: input.excerpt,
+      queryText: input.queryContext ?? "",
+    });
+
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(pos, citation)
+      .setTextSelection(pos + 1)
+      .scrollIntoView()
+      .run();
+    return;
+  }
+
+  editor.chain().focus().insertContent(citation).scrollIntoView().run();
 }
 
 export async function resolveDocumentImageUrls(

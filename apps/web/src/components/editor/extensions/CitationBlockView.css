@@ -32,6 +32,15 @@
   color: var(--color-accent);
 }
 
+.editor-citation__chip--link {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.editor-citation__chip--link:hover {
+  text-decoration: underline;
+}
+
 .editor-citation__excerpt {
   display: block;
   width: 100%;

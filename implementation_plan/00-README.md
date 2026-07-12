@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Last updated:** July 11, 2026  
-**Current focus:** Phase 08 — Settings, teams, metadata templates  
+**Current focus:** Phase 07b — Properties, scope intelligence, and views  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -40,7 +40,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, template fields, signed URLs | ✅ complete |
 | 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | ✅ complete |
 | 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, Ask, Properties Manage + AI auto-fill | ✅ complete |
-| 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, metadata, templates | **next** |
+| 07b | [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md) | Properties tab UX, builder, scope views, metadata intelligence | **next** |
+| 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | planned |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
@@ -62,7 +63,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 
 **Migration:** `00014_template_metadata_and_schema_seed.sql` — `templates.metadata` + default workspace metadata schemas.
 
-**Deferred to Phase 08:** metadata schema admin UI, share-with-team (needs invites), tags/number field types, metadata search/filter.
+**Deferred to Phase 07b:** Properties Manage UX redesign (slide-over builder, radio/toggle types, scope snapshot, saved views).  
+**Deferred to Phase 08:** metadata admin in Settings, share-with-team (needs invites), full saved-views polish.
 
 ### Phase 06 completion summary (July 2026)
 
@@ -88,7 +90,8 @@ flowchart LR
   P04 --> P05[Phase05_Editor]
   P05 --> P06[Phase06_Library]
   P06 --> P07[Phase07_RAG]
-  P07 --> P08[Phase08_Settings]
+  P07 --> P07b[Phase07b_Properties]
+  P07b --> P08[Phase08_Settings]
   P05 --> P09[Phase09_Offline]
   P08 --> P10[Phase10_i18n]
   P08 --> P11[Phase11_Billing]

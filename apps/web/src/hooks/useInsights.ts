@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type InsightMatch = {
   origin_type: string;
   item_id: string;
+  source_ref_id: string;
   title: string;
   matched_text: string;
   page_ref: number | null;

@@ -7,7 +7,7 @@ import {
   retrieveWorkspaceKnowledge,
   type KnowledgeMatch,
 } from "@rhodes/ai";
-import { OLLAMA_CHAT_MODEL } from "@rhodes/shared/constants";
+import { OLLAMA_CHAT_MODEL, OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,8 +124,35 @@ export async function POST(request: Request) {
           matches,
         })}`;
 
-        for await (const token of ollama.streamGenerate(prompt, OLLAMA_CHAT_MODEL)) {
-          send({ type: "token", token });
+        let streamed = false;
+        let lastError: Error | null = null;
+
+        for (const model of [OLLAMA_CHAT_MODEL, OLLAMA_FAST_MODEL]) {
+          try {
+            for await (const token of ollama.streamGenerate(prompt, model)) {
+              streamed = true;
+              send({ type: "token", token });
+            }
+            lastError = null;
+            break;
+          } catch (error) {
+            lastError =
+              error instanceof Error ? error : new Error("Ask generation failed");
+            const missingModel =
+              lastError.message.includes("404") ||
+              lastError.message.toLowerCase().includes("not found");
+            if (!missingModel || model === OLLAMA_FAST_MODEL) {
+              throw lastError;
+            }
+          }
+        }
+
+        if (lastError) {
+          throw lastError;
+        }
+
+        if (!streamed) {
+          throw new Error("Ask generation returned no tokens");
         }
 
         send({ type: "done" });

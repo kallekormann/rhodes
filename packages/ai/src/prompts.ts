@@ -80,8 +80,8 @@ Answer with citations:`;
 }
 
 export function whyRelevantPrompt(match: KnowledgeMatch, queryText: string): string {
-  return `Explain in one short sentence (max 120 characters) why this source is relevant to the user's writing.
-Only reference the excerpt below. No preamble.
+  return `Explain clearly in 2–4 sentences why this source is relevant to the user's writing.
+Only reference the excerpt below. No preamble or bullet points.
 
 User writing excerpt:
 ${queryText.slice(-400)}

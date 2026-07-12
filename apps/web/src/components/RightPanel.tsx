@@ -1,10 +1,15 @@
 "use client";
 
-import { PanelRightClose } from "lucide-react";
+import { Link2, PanelRightClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp, type PanelTab } from "@/context/AppContext";
 import type { StoredDocumentComment } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
+import {
+  formatInsightExcerpt,
+  insightOriginLabel,
+} from "@/lib/insights/format";
+import { openKnowledgeSourcePreview } from "@/lib/library/preview";
 import { useAskChat } from "@/hooks/useAskChat";
 import type { InsightMatch } from "@/hooks/useInsights";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
@@ -178,18 +183,6 @@ function InsightsTab({
     setQuoteSelection({ insight, excerpt });
   };
 
-  const handleInsertQuote = () => {
-    if (!quoteSelection || !onInsertCitation) return;
-    onInsertCitation({
-      sourceId: quoteSelection.insight.item_id,
-      sourceTitle: quoteSelection.insight.title,
-      page: quoteSelection.insight.page_ref,
-      excerpt: quoteSelection.excerpt,
-    });
-    setQuoteSelection(null);
-    window.getSelection()?.removeAllRanges();
-  };
-
   const handleWhyRelevant = async (insight: InsightMatch) => {
     if (!workspaceId || queryText.trim().length < 20) return;
 
@@ -213,7 +206,7 @@ function InsightsTab({
       setWhyByKey((current) => ({
         ...current,
         [key]: {
-          text: insight.matched_text.slice(0, 120),
+          text: formatInsightExcerpt(insight.matched_text, queryText, 320),
           loading: false,
           expanded: true,
         },
@@ -248,7 +241,7 @@ function InsightsTab({
           text += payload.token;
           setWhyByKey((current) => ({
             ...current,
-            [key]: { text: text.slice(0, 120), loading: true, expanded: true },
+            [key]: { text, loading: true, expanded: true },
           }));
         }
 
@@ -261,11 +254,34 @@ function InsightsTab({
     setWhyByKey((current) => ({
       ...current,
       [key]: {
-        text: (text || insight.matched_text).slice(0, 120),
+        text: text.trim() || formatInsightExcerpt(insight.matched_text, queryText, 320),
         loading: false,
         expanded: true,
       },
     }));
+  };
+
+  const buildCitation = (
+    insight: InsightMatch,
+    excerpt: string,
+    placement: CitationInsertInput["placement"],
+  ): CitationInsertInput => ({
+    sourceId: insight.source_ref_id ?? insight.item_id,
+    sourceRefId: insight.source_ref_id ?? insight.item_id,
+    originType: insight.origin_type,
+    sourceTitle: insight.title,
+    page: insight.page_ref,
+    excerpt,
+    placement,
+    queryContext: queryText,
+  });
+
+  const openInsightPreview = (insight: InsightMatch) => {
+    openKnowledgeSourcePreview({
+      originType: insight.origin_type,
+      sourceRefId: insight.source_ref_id ?? insight.item_id,
+      page: insight.page_ref,
+    });
   };
 
   if (loading && insights.length === 0) {
@@ -297,63 +313,93 @@ function InsightsTab({
 
   return (
     <div className="panel-tab panel-tab--insights">
-      {insights.map((insight, index) => {
-        const whyKey = `${insight.item_id}-${insight.origin_type}`;
-        const whyState = whyByKey[whyKey];
+      <div className="panel-tab__insights-scroll overlay-scrollbar">
+        {insights.map((insight, index) => {
+          const whyKey = `${insight.item_id}-${insight.origin_type}`;
+          const whyState = whyByKey[whyKey];
+          const excerpt = formatInsightExcerpt(insight.matched_text, queryText);
 
-        return (
-        <div key={`${insight.item_id}-${index}`}>
-          {index > 0 && <hr className="divider" />}
-          <article
-            className="insight-card"
-            onMouseUp={() => handleTextSelection(insight)}
-          >
-            <div className="insight-card__score">{insight.relevance_percent}%</div>
-            <div>
-              <h4 className="insight-card__title">{insight.title}</h4>
-              <p className="insight-card__reason">{insight.matched_text}</p>
-              {whyState?.expanded && (
-                <p className="insight-card__why">
-                  {whyState.loading ? "Thinking…" : whyState.text}
-                </p>
-              )}
-              <div className="insight-card__actions">
-                <Button
-                  variant="ghost"
-                  className="insight-card__why-btn"
-                  disabled={!workspaceId || whyState?.loading}
-                  onClick={() => void handleWhyRelevant(insight)}
-                >
-                  Why relevant?
-                </Button>
-                {onInsertCitation && (
-                  <Button
-                    variant="ghost"
-                    className="insight-card__quote-btn"
-                    onClick={() => {
-                      onInsertCitation({
-                        sourceId: insight.item_id,
-                        sourceTitle: insight.title,
-                        page: insight.page_ref,
-                        excerpt: insight.matched_text.slice(0, 400),
-                      });
-                    }}
+          return (
+            <article
+              key={`${insight.item_id}-${index}`}
+              className="insight-card"
+              onMouseUp={() => handleTextSelection(insight)}
+            >
+                <div className="insight-card__meta">
+                  <span className="insight-card__score">{insight.relevance_percent}%</span>
+                  <button
+                    type="button"
+                    className="insight-card__title insight-card__title--link"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={() => openInsightPreview(insight)}
                   >
-                    Insert quote
+                    {insight.title}
+                  </button>
+                  <span className="insight-card__origin">
+                    {insightOriginLabel(insight.origin_type)}
+                    {insight.page_ref != null ? ` · p.${insight.page_ref}` : ""}
+                  </span>
+                </div>
+                <p className="insight-card__reason">{excerpt}</p>
+                <div className="insight-card__footer">
+                  <Button
+                    type="button"
+                    size="small"
+                    variant="ghost"
+                    className="insight-card__action-btn"
+                    disabled={!workspaceId || whyState?.loading}
+                    onClick={() => void handleWhyRelevant(insight)}
+                  >
+                    Why relevant?
                   </Button>
+                  {onInsertCitation && (
+                    <Button
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      icon={Link2}
+                      className="insight-card__action-btn"
+                      onClick={() => {
+                        onInsertCitation(
+                          buildCitation(
+                            insight,
+                            formatInsightExcerpt(insight.matched_text, queryText, 240),
+                            "related-block",
+                          ),
+                        );
+                      }}
+                    >
+                      Add reference
+                    </Button>
+                  )}
+                </div>
+                {whyState?.expanded && (
+                  <p className="insight-card__why">
+                    {whyState.loading ? "Thinking…" : whyState.text}
+                  </p>
                 )}
-              </div>
-            </div>
-          </article>
-        </div>
-      );
-      })}
+            </article>
+          );
+        })}
+      </div>
 
       {quoteSelection && onInsertCitation && (
         <div className="insight-quote-bar">
-          <span className="caption">Selected excerpt ready</span>
-          <Button variant="secondary" onClick={handleInsertQuote}>
-            Insert quote
+          <span className="caption">Selected excerpt</span>
+          <Button
+            type="button"
+            size="small"
+            variant="ghost"
+            icon={Link2}
+            onClick={() => {
+              onInsertCitation(
+                buildCitation(quoteSelection.insight, quoteSelection.excerpt, "related-block"),
+              );
+              setQuoteSelection(null);
+              window.getSelection()?.removeAllRanges();
+            }}
+          >
+            Add reference
           </Button>
         </div>
       )}

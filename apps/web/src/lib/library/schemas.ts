@@ -17,15 +17,30 @@ export const listLibraryQuerySchema = z.object({
 const EXTENSION_MIME: Record<string, string> = {
   pdf: "application/pdf",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  rtf: "application/rtf",
   txt: "text/plain",
   md: "text/markdown",
   markdown: "text/markdown",
 };
 
+export { EXTENSION_MIME };
+
 const ALLOWED_MIME_TYPES = new Set([
   ...Object.values(EXTENSION_MIME),
   "text/x-markdown",
+  "text/rtf",
 ]);
+
+export const LIBRARY_FILE_ACCEPT =
+  ".pdf,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.txt,.md,.markdown," +
+  Object.values(EXTENSION_MIME).join(",");
+
+export const LIBRARY_FILE_LABEL =
+  "PDF, DOCX, PPT, XLS, RTF, TXT, or Markdown";
 
 export function resolveLibraryMimeType(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase();

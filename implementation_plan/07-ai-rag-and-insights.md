@@ -313,16 +313,28 @@ Hook into existing debounced document PATCH (after Phase 05c metadata write path
 
 **UX:** subtle "AI suggested" hint on auto-filled fields; user can clear or override.
 
+#### Relationship to Phase 07b
+
+| Concern | Phase 07 (shipped) | Phase 07b (next) | Phase 08 |
+|---------|-------------------|-----------------|----------|
+| Edit property values | Properties tab | Polish renderers | — |
+| Add/delete definitions | Manage modal (baseline) | **Properties Studio** (expanded sidebar) | Settings duplicate |
+| Field types | select, checkbox, … | **radio, toggle**, chip options | — |
+| Scope / views | — | **Summary + saved views V1** | Share views, admin |
+| AI auto-fill | On save | Unchanged | — |
+
+Phase 07 delivered API + baseline UI. **Phase 07b** owns the usable Manage experience and making properties valuable via scope intelligence and views. Phase 08 should not re-implement the builder.
+
 #### Relationship to Phase 08
 
-| Concern | Phase 07 (editor) | Phase 08 (settings) |
+| Concern | Phase 07b (editor) | Phase 08 (settings) |
 |---------|-------------------|---------------------|
 | Edit property values | Properties tab | — |
-| Add/delete property definitions | Properties → **Manage** | Settings → Space → Custom fields (same API) |
+| Add/delete property definitions | Properties → **Manage** (builder) | Settings → Space → Custom fields (same API) |
 | Team-wide schema admin | Owner/admin via Manage | Full settings UI + audit |
-| Saved views / filter by metadata | — | Documents view filters |
+| Saved views / filter by metadata | Documents view V1 | Share views, Cmd+K polish |
 
-Phase 07 delivers the **in-context Manage** flow; Phase 08 duplicates entry point in Settings for admins who prefer space configuration there.
+Phase 07b delivers the **usable in-context** flow; Phase 08 adds settings entry points and team admin surfaces.
 
 ---
 

@@ -135,9 +135,8 @@ async function main() {
           whyRelevantPrompt(matches[0], "writing about experiments and knowledge"),
           OLLAMA_FAST_MODEL,
         )
-      ).slice(0, 120);
-      assert(why.trim().length > 0, "Why relevant generate returned empty");
-      assert(why.length <= 120, "Why relevant should be capped at 120 chars");
+      ).trim();
+      assert(why.length > 0, "Why relevant generate returned empty");
       console.log(`✓ Why relevant generate (${why.length} chars)`);
     }
   }

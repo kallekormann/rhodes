@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { libraryFilesDataDir } from "@rhodes/shared";
 
 const LOCAL_ROOT = libraryFilesDataDir();
@@ -20,6 +20,17 @@ export async function saveLocalLibraryFile(
   const full = resolvePath(storagePath);
   await mkdir(path.dirname(full), { recursive: true });
   await writeFile(full, bytes);
+}
+
+export async function readLocalLibraryFile(
+  storagePath: string,
+): Promise<Uint8Array | null> {
+  try {
+    const full = resolvePath(storagePath);
+    return new Uint8Array(await readFile(full));
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteLocalLibraryFile(storagePath: string): Promise<void> {

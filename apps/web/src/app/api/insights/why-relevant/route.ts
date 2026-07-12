@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   const match = parsed.data.match as KnowledgeMatch;
-  const fallback = match.matched_text.slice(0, 120);
+  const fallback = match.matched_text.trim();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -76,12 +76,10 @@ export async function POST(request: Request) {
 
         for await (const token of ollama.streamGenerate(prompt, OLLAMA_FAST_MODEL)) {
           streamed += token;
-          if (streamed.length <= 120) {
-            send({ type: "token", token });
-          }
+          send({ type: "token", token });
         }
 
-        const text = streamed.trim().slice(0, 120) || fallback;
+        const text = streamed.trim() || fallback;
         send({ type: "done", text });
         controller.close();
       } catch (error) {

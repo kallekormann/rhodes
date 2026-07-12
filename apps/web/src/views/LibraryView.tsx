@@ -14,7 +14,7 @@ import {
   formatLibraryDate,
   formatLibraryFileSize,
 } from "@/lib/library/format";
-import { isLibraryFileAllowed } from "@/lib/library/schemas";
+import { isLibraryFileAllowed, LIBRARY_FILE_ACCEPT, LIBRARY_FILE_LABEL } from "@/lib/library/schemas";
 import "./LibraryView.css";
 
 export function LibraryView() {
@@ -31,7 +31,7 @@ export function LibraryView() {
     const rejected = files.length - allowed.length;
 
     if (allowed.length === 0) {
-      showToast("Only PDF, DOCX, TXT, and Markdown files are supported", "error");
+      showToast(`Only ${LIBRARY_FILE_LABEL} files are supported`, "error");
       return;
     }
 
@@ -94,7 +94,7 @@ export function LibraryView() {
 
           {!loading && sources.length === 0 && !error && (
             <p className="caption library-view__empty">
-              No sources yet. Upload a PDF, DOCX, TXT, or Markdown file to get started.
+              No sources yet. Upload a {LIBRARY_FILE_LABEL} file to get started.
             </p>
           )}
 

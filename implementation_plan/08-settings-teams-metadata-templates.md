@@ -1,7 +1,7 @@
 # Phase 08 — Settings, Teams, Metadata, and Templates
 
 **Status:** planned  
-**Depends on:** Phase 07  
+**Depends on:** Phase 07b  
 **Blocks:** Phases 09–12  
 **Estimated duration:** 7–10 days
 
@@ -19,8 +19,8 @@
 
 ## Prerequisites
 
-- Phase 07 exit criteria met.
-- Right Panel shell exists with Properties stub.
+- Phase 07b exit criteria met (Properties UX, scope summary, saved views V1).
+- Right Panel shell exists with Properties tab functional.
 
 ---
 
@@ -136,11 +136,13 @@ Invite email: stub with Mailpit; real templates in Phase 12.
 
 ### 8. Properties tab (Right Panel)
 
-**Phase 05c (done):** schema-driven value editing (`text`, `select`, `date`) from seeded workspace fields.
+**Phase 05c (done):** schema-driven value editing from seeded workspace fields.
 
-**Phase 07 (this phase):** bottom **Manage** action bar (like `TemplateDetailPanel`), add/delete property definitions, extended types (`date_range`, `tags`, `textarea`, …), AI auto-fill on save. See [07-ai-rag-and-insights.md §13](07-ai-rag-and-insights.md#13-document-properties--manage-ui-sidebar).
+**Phase 07 (done):** Manage API, extended types, AI auto-fill on save. UX gaps documented — see Phase 07b.
 
-**Phase 08 (settings):** duplicate Manage entry in Settings → Space → Custom fields; saved views / document filters by metadata.
+**Phase 07b (this phase's prerequisite):** slide-over Manage + property builder, radio/toggle types, scope metadata snapshot, saved views V1. See [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md).
+
+**Phase 08 (settings):** duplicate Manage entry in Settings → Space → Custom fields; team-wide schema audit; version history link from Properties tab.
 
 ### 9. Document version history
 
@@ -159,10 +161,15 @@ Throttle: max 1 version per 5 min per document (avoid spam).
 - `TemplatesView` + `TemplateDetailPanel` from mock
 - `+` menu → "From template" → inject `structure_json` → new document
 
-### 11. Saved views (V1.5 stub)
+### 11. Saved views (V1.5 polish)
 
-- Table exists; UI shows "Coming soon" in Documents view
-- Or basic filter save if time allows
+Phase 07b delivers saved views V1 (filter by metadata in Documents view). Phase 08 adds:
+
+- Share views with team members
+- Cmd+K quick open (stub if Phase 10 not started)
+- View management in Settings → Space
+
+If 07b slips, keep "Coming soon" stub here.
 
 ### 12. Editor comments (if deferred)
 

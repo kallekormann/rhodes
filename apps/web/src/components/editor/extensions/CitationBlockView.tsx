@@ -1,25 +1,28 @@
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { useEffect, useRef } from "react";
+import {
+  citationPreviewInput,
+  knowledgeSourcePreviewUrl,
+  openKnowledgeSourcePreview,
+} from "@/lib/library/preview";
 import "./CitationBlockView.css";
 
 export function CitationBlockView({
   node,
   updateAttributes,
 }: NodeViewProps) {
-  const titleRef = useRef<HTMLDivElement>(null);
   const excerptRef = useRef<HTMLDivElement>(null);
+  const preview = citationPreviewInput(node.attrs);
+  const sourceTitle = String(node.attrs.sourceTitle ?? "").trim() || "Source";
+  const previewUrl = preview ? knowledgeSourcePreviewUrl(preview) : null;
 
   useEffect(() => {
-    const title = titleRef.current;
     const excerpt = excerptRef.current;
-    if (!title || !excerpt) return;
+    if (!excerpt) return;
 
-    const titleText = String(node.attrs.sourceTitle ?? "");
     const excerptText = String(node.attrs.excerpt ?? "");
-
-    if (title.textContent !== titleText) title.textContent = titleText;
     if (excerpt.textContent !== excerptText) excerpt.textContent = excerptText;
-  }, [node.attrs.sourceTitle, node.attrs.excerpt]);
+  }, [node.attrs.excerpt]);
 
   return (
     <NodeViewWrapper
@@ -28,19 +31,23 @@ export function CitationBlockView({
       data-type="citation"
       contentEditable={false}
     >
-      <div
-        ref={titleRef}
-        className="editor-citation__chip"
-        contentEditable
-        suppressContentEditableWarning
-        data-placeholder="Library source"
-        onMouseDown={(event) => event.stopPropagation()}
-        onInput={(event) =>
-          updateAttributes({
-            sourceTitle: event.currentTarget.textContent ?? "",
-          })
-        }
-      />
+      {previewUrl ? (
+        <a
+          href={previewUrl}
+          className="editor-citation__chip editor-citation__chip--link"
+          target="_blank"
+          rel="noopener noreferrer"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            if (preview) openKnowledgeSourcePreview(preview);
+          }}
+        >
+          {sourceTitle}
+        </a>
+      ) : (
+        <div className="editor-citation__chip">{sourceTitle}</div>
+      )}
       <div
         ref={excerptRef}
         className="editor-citation__excerpt"

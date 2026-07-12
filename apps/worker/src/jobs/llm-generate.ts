@@ -73,7 +73,7 @@ async function processWhyRelevant(job: Job<WhyRelevantJobData>) {
     whyRelevantPrompt(job.data.match, job.data.queryText),
     OLLAMA_FAST_MODEL,
   );
-  return text.slice(0, 120);
+  return text.trim();
 }
 
 async function processExtractDocumentMetadata(

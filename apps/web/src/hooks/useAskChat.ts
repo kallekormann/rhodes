@@ -14,6 +14,31 @@ type AskContextMatch = {
   origin_type: string;
 };
 
+function toApiMessages(messages: AskMessage[]) {
+  return messages
+    .filter((message) => message.content.trim().length > 0)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim(),
+    }));
+}
+
+function parseAskError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return "Ask failed";
+
+  const record = error as {
+    formErrors?: string[];
+    fieldErrors?: Record<string, string[] | undefined>;
+  };
+
+  const fieldMessage = Object.values(record.fieldErrors ?? {})
+    .flat()
+    .find((value) => typeof value === "string" && value.length > 0);
+
+  return record.formErrors?.[0] ?? fieldMessage ?? "Ask failed";
+}
+
 export function useAskChat(workspaceId: string | null) {
   const [messages, setMessages] = useState<AskMessage[]>([]);
   const [pending, setPending] = useState(false);
@@ -62,17 +87,14 @@ export function useAskChat(workspaceId: string | null) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspace_id: workspaceId,
-          messages: nextMessages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
+          messages: toApiMessages(nextMessages),
         }),
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        setError(typeof data.error === "string" ? data.error : "Ask failed");
+        setError(parseAskError(data.error));
         setPending(false);
         return;
       }
@@ -91,6 +113,7 @@ export function useAskChat(workspaceId: string | null) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let streamError: string | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -126,9 +149,19 @@ export function useAskChat(workspaceId: string | null) {
           }
 
           if (payload.type === "error") {
-            setError(payload.message ?? "Ask generation failed");
+            streamError = payload.message ?? "Ask generation failed";
+            setError(streamError);
           }
         }
+      }
+
+      if (streamError) {
+        setMessages((prev) =>
+          prev.filter(
+            (message) =>
+              message.id !== assistantId || message.content.trim().length > 0,
+          ),
+        );
       }
 
       setPending(false);

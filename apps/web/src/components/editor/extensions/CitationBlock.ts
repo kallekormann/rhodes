@@ -12,6 +12,8 @@ export const CitationBlock = Node.create({
   addAttributes() {
     return {
       sourceId: { default: null },
+      sourceRefId: { default: null },
+      originType: { default: "source_chunk" },
       sourceTitle: { default: "" },
       page: { default: null },
       excerpt: { default: "" },
