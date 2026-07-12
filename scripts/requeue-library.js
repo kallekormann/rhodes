@@ -46,8 +46,17 @@ async function addOrReplaceJob(queue, name, data, jobId, options = {}) {
 async function clearOrphanedActiveJobs(queue) {
   const active = await queue.getJobs(["active"], 0, 100);
   for (const job of active) {
-    await job.remove();
-    console.log("removed orphaned active job", queue.name, job.id);
+    try {
+      await job.remove();
+      console.log("removed orphaned active job", queue.name, job.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("locked")) {
+        console.warn("skip locked active job", queue.name, job.id);
+        continue;
+      }
+      throw error;
+    }
   }
 }
 

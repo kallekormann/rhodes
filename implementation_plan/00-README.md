@@ -21,7 +21,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 1. **Local Docker first** — full stack on developer machine; same service topology as VPS.
 2. **Feature phases 01–10** — build core product locally against specs and ui-mock.
 3. **Integration phases 11–12** — billing and email/privacy built locally with test/stub modes.
-4. **Phase 13 (VPS)** — deploy to Hetzner + Coolify when mature; validate auth, billing, email relay, and full backend hand-in-hand.
+4. **Phase 12b** — distributed Docker topology (optional 3-server prod: app / data / storage); monolith remains default for dev.
+5. **Phase 13 (VPS)** — deploy to Hetzner + Coolify when mature; choose monolith or distributed topology from 12b.
 
 ---
 
@@ -44,6 +45,7 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
 | 12 | [12-email-privacy-and-security.md](12-email-privacy-and-security.md) | Email relay, GDPR, hardening | 4–6 days |
+| 12b | [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md) | App / Data / Storage Compose profiles; monolith or 3-server prod | 4–6 days |
 | 13 | [13-vps-production-and-integration.md](13-vps-production-and-integration.md) | Coolify deploy, integration testing | 5–7 days |
 | 14 | [14-marketing-website.md](14-marketing-website.md) | Decoupled marketing site, demos, pricing, legal | 7–10 days |
 
@@ -91,8 +93,9 @@ flowchart LR
   P08 --> P10[Phase10_i18n]
   P08 --> P11[Phase11_Billing]
   P08 --> P12[Phase12_EmailPrivacy]
-  P11 --> P13[Phase13_VPS]
-  P12 --> P13
+  P12 --> P12b[Phase12b_Topology]
+  P12b --> P13[Phase13_VPS]
+  P11 --> P13
   P10 --> P13
   P09 --> P13
   P04 --> P14[Phase14_Marketing]
@@ -100,7 +103,7 @@ flowchart LR
   P14 --> P13
 ```
 
-Phases 09, 10, 11, 12, 14 can run in parallel after Phase 08 (Phase 14 can start after Phase 04 using ui-mock tokens). Phase 14 deploys with Phase 13.
+Phases 09, 10, 11, 12, 14 can run in parallel after Phase 08 (Phase 14 can start after Phase 04 using ui-mock tokens). **Phase 12b runs after Phase 12 and before Phase 13.** Phase 14 deploys with Phase 13.
 
 ---
 
@@ -151,6 +154,7 @@ rhodes/
 
 | Concern | Local dev | VPS (Phase 13) |
 |---------|-----------|----------------|
+| Topology | Monolith (all Compose services on one host) | Monolith **or** distributed (app + data + storage servers) — see [12b](12b-distributed-docker-topology.md) |
 | TLS | `http://localhost` | Caddy + Let's Encrypt on `rhodes.quinsy.app` (or `rhodes.app` if O-018 resolves) |
 | Email | Mailpit (capture) | Resend or AWS SES EU |
 | Billing webhooks | ngrok / cloudflared tunnel | Live `https://rhodes.quinsy.app/app/api/webhooks/lemonsqueezy` |
@@ -158,7 +162,7 @@ rhodes/
 | Supabase | Official Docker stack | Same stack via Coolify |
 | Secrets | `.env` (gitignored) | Coolify env vars |
 
-**Portability rule:** `docker compose -f docker-compose.yml -f docker-compose.dev.yml up` locally; `-f docker-compose.prod.yml` on VPS. Same images, different overlays.
+**Portability rule:** `docker compose -f docker-compose.yml -f docker-compose.dev.yml up` locally (monolith); production uses `docker-compose.prod.yml` plus optional profile overlays from Phase 12b (`app` / `data` / `storage`). Same images, different placement and env.
 
 ---
 

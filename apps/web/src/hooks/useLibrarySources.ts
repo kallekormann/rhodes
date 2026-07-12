@@ -11,7 +11,18 @@ export function useLibrarySources(workspaceId: string | null) {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [live, setLive] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const fallbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const markDeleting = useCallback((sourceId: string) => {
+    setDeletingIds((current) =>
+      current.includes(sourceId) ? current : [...current, sourceId],
+    );
+  }, []);
+
+  const unmarkDeleting = useCallback((sourceId: string) => {
+    setDeletingIds((current) => current.filter((id) => id !== sourceId));
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) {
@@ -181,14 +192,40 @@ export function useLibrarySources(workspaceId: string | null) {
     [refresh],
   );
 
+  const deleteSource = useCallback(
+    async (sourceId: string) => {
+      markDeleting(sourceId);
+
+      const response = await fetch(`/app/api/library/${sourceId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        unmarkDeleting(sourceId);
+        const data = await response.json().catch(() => ({}));
+        const message =
+          typeof data.error === "string" ? data.error : "Failed to remove source";
+        setError(message);
+        return { ok: false as const, error: message };
+      }
+
+      unmarkDeleting(sourceId);
+      setSources((current) => current.filter((source) => source.id !== sourceId));
+      return { ok: true as const };
+    },
+    [markDeleting, unmarkDeleting],
+  );
+
   return {
     sources,
     loading,
     error,
     uploading,
     live,
+    deletingIds,
     refresh,
     uploadFiles,
     retrySource,
+    deleteSource,
   };
 }

@@ -39,61 +39,69 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
   const { sourceId } = job.data;
   const admin = createAdminClient();
 
-  const { data: chunks, error: loadError } = await admin
-    .from("library_source_chunks")
-    .select("id, content_chunk")
-    .eq("source_id", sourceId)
-    .is("embedding", null)
-    .order("chunk_index", { ascending: true });
+  try {
+    const { data: chunks, error: loadError } = await admin
+      .from("library_source_chunks")
+      .select("id, content_chunk")
+      .eq("source_id", sourceId)
+      .is("embedding", null)
+      .order("chunk_index", { ascending: true });
 
-  if (loadError) {
-    throw new Error(loadError.message);
-  }
+    if (loadError) {
+      throw new Error(loadError.message);
+    }
 
-  const pending = chunks ?? [];
-  for (let i = 0; i < pending.length; i += BATCH_SIZE) {
-    const batch = pending.slice(i, i + BATCH_SIZE);
-    const vectors = await embedWithRetry(batch.map((chunk) => chunk.content_chunk));
+    const pending = chunks ?? [];
+    for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+      const batch = pending.slice(i, i + BATCH_SIZE);
+      const vectors = await embedWithRetry(batch.map((chunk) => chunk.content_chunk));
 
-    await Promise.all(
-      batch.map(async (chunk, index) => {
-        const vector = vectors[index];
-        if (!vector) {
-          throw new Error(`Missing embedding vector for chunk ${chunk.id}`);
-        }
+      await Promise.all(
+        batch.map(async (chunk, index) => {
+          const vector = vectors[index];
+          if (!vector) {
+            throw new Error(`Missing embedding vector for chunk ${chunk.id}`);
+          }
 
-        const { error: updateError } = await admin
-          .from("library_source_chunks")
-          .update({ embedding: toVectorLiteral(vector) })
-          .eq("id", chunk.id);
+          const { error: updateError } = await admin
+            .from("library_source_chunks")
+            .update({ embedding: toVectorLiteral(vector) })
+            .eq("id", chunk.id);
 
-        if (updateError) {
-          throw new Error(updateError.message);
-        }
-      }),
-    );
-  }
+          if (updateError) {
+            throw new Error(updateError.message);
+          }
+        }),
+      );
+    }
 
-  const { count, error: countError } = await admin
-    .from("library_source_chunks")
-    .select("id", { count: "exact", head: true })
-    .eq("source_id", sourceId)
-    .is("embedding", null);
+    const { count, error: countError } = await admin
+      .from("library_source_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("source_id", sourceId)
+      .is("embedding", null);
 
-  if (countError) {
-    throw new Error(countError.message);
-  }
+    if (countError) {
+      throw new Error(countError.message);
+    }
 
-  if ((count ?? 0) === 0) {
+    if ((count ?? 0) === 0) {
+      await admin
+        .from("library_sources")
+        .update({ embedding_status: "ready" })
+        .eq("id", sourceId);
+    }
+
+    console.log("[embed] done", {
+      sourceId,
+      chunks: pending.length,
+      ms: Date.now() - started,
+    });
+  } catch (error) {
     await admin
       .from("library_sources")
-      .update({ embedding_status: "ready" })
+      .update({ embedding_status: "failed" })
       .eq("id", sourceId);
+    throw error;
   }
-
-  console.log("[embed] done", {
-    sourceId,
-    chunks: pending.length,
-    ms: Date.now() - started,
-  });
 }

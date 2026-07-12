@@ -43,6 +43,10 @@ services:
     ports:
       - "${DEV_REDIS_PORT:-6379}:6379"
 
+  tika:
+    ports:
+      - "9998:9998"
+
   mailpit:
     container_name: rhodes-mailpit
     image: axllent/mailpit:latest

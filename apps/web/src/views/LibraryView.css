@@ -27,7 +27,7 @@
 
 .source-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto auto;
   align-items: start;
   gap: var(--space-md);
   width: 100%;
@@ -38,6 +38,11 @@
 
 .source-row:last-child {
   border-bottom: none;
+}
+
+.source-row--deleting {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .source-row__main {
@@ -66,7 +71,8 @@
   color: var(--color-text-tertiary);
 }
 
-.source-row__retry {
+.source-row__retry,
+.source-row__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -81,6 +87,11 @@
 .source-row__retry:hover {
   background: var(--color-surface-hover);
   color: var(--color-text-primary);
+}
+
+.source-row__remove:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-danger, #c0392b);
 }
 
 .library-view__empty,

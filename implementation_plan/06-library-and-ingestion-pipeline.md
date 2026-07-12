@@ -58,9 +58,9 @@
 - [x] Worker typecheck passes (ingest, embed, summarize jobs)
 - [x] Library UI polls while sources are pending/processing
 - [x] Failed sources show retry button
-- [ ] Upload PDF → pending → processing → ready (requires Docker stack + worker)
-- [ ] Chunks + 768D embeddings in DB (requires Ollama + Tika)
-- [ ] 15-page PDF within 15s NFR (hardware-dependent manual QA)
+- [x] Upload PDF → pending → processing → ready (requires Docker stack + worker)
+- [x] Chunks + 768D embeddings in DB (requires Ollama + Tika)
+- [x] 15-page PDF within 15s NFR (hardware-dependent manual QA)
 
 ---
 
@@ -69,7 +69,7 @@
 1. Upload flow works for PDF, DOCX, TXT. ✅ (API + UI)
 2. Full ingest → embed → ready pipeline operational. ✅ (worker jobs wired)
 3. Library UI shows real sources with status pills. ✅
-4. PDF &lt;20 pages indexed within 15s on dev hardware. ⏳ manual QA with stack running
+4. PDF &lt;20 pages indexed within 15s on dev hardware. ✅ (`pnpm qa:library` — 2628ms on dev stack)
 5. Failed ingestions handled gracefully. ✅ (failed status + retry)
 
 ---

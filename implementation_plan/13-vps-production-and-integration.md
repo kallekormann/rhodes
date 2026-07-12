@@ -1,7 +1,7 @@
 # Phase 13 — VPS Production and Integration Testing
 
 **Status:** planned  
-**Depends on:** Phases 09–12 (all feature phases complete)  
+**Depends on:** Phases 09–12 **and Phase 12b** (topology profiles)  
 **Blocks:** — (V1 release)  
 **Estimated duration:** 5–7 days
 
@@ -10,7 +10,8 @@
 ## Objectives
 
 1. Deploy Rhodes to **Hetzner VPS** via **Coolify** using the same Docker images as local dev.
-2. Configure **production overlays**: TLS, Resend/SES, LemonSqueezy live webhooks, secrets.
+2. Choose **deployment topology** from Phase 12b: monolith (one server) or distributed (app + data + storage).
+3. Configure **production overlays**: TLS, Resend/SES, LemonSqueezy live webhooks, secrets.
 3. Run **full integration test checklist**: auth, billing, email, backend hand-in-hand.
 4. Establish **backups, monitoring, and runbooks**.
 5. Tag `main` as **v1.0.0-rc1** when staging passes.
@@ -20,6 +21,7 @@
 ## Prerequisites
 
 - Phases 01–12 exit criteria met on `dev` branch.
+- **Phase 12b exit criteria met** — Compose profiles and `RHODES_TOPOLOGY` documented; distributed smoke test passed (or consciously deferred with monolith-only V1 deploy documented in runbook).
 - `main` merged with all features.
 - Domain: **`rhodes.quinsy.app`** (D-012, validated launch). Optional **`rhodes.app`** if acquired later (O-018) — env-driven URLs, no code change required.
 - LemonSqueezy live store configured.
@@ -31,6 +33,7 @@
 ## Canonical spec references
 
 - [13-infrastructure-vps.md](../docs/13-infrastructure-vps.md)
+- [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md)
 - [18-non-functional-requirements.md](../docs/18-non-functional-requirements.md)
 - [14-email-delivery.md](../docs/14-email-delivery.md)
 - [15-security-and-privacy.md](../docs/15-security-and-privacy.md)
@@ -86,17 +89,20 @@ scripts/
 
 ### 2. Coolify project setup
 
+**First decision:** `RHODES_TOPOLOGY=monolith` (single CPX41) or `distributed` (see [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md)).
+
 Create Coolify project `rhodes` with services:
 
 | Service | Source | Notes |
 |---------|--------|-------|
 | `marketing` | GitHub `kallekormann/rhodes` branch `main`, `apps/marketing` Dockerfile | `https://rhodes.quinsy.app/` — see [14-marketing-website.md](14-marketing-website.md) |
-| `web` | Same repo, `apps/web` Dockerfile | `https://rhodes.quinsy.app/app` (`basePath: '/app'`) |
-| `worker` | Same repo, `apps/worker` Dockerfile | Internal only |
-| `supabase` | Docker compose stack from repo `docker/` | Internal network |
-| `redis` | Redis 7 | Internal |
-| `ollama` | `ollama/ollama` | Internal; pull models on first deploy |
-| `tika` | `apache/tika:latest-full` | Internal |
+| `web` | Same repo, `apps/web` Dockerfile | `https://rhodes.quinsy.app/app` (`basePath: '/app'`) — **app role** |
+| `worker` | Same repo, `apps/worker` Dockerfile | Internal only — **app role** |
+| `supabase` | Docker compose stack from repo `docker/` — **data role** (Postgres, Auth, Kong, …) | Private network; or separate Coolify host in distributed mode |
+| `ollama` | `ollama/ollama` | **data role** (with Supabase); `OLLAMA_HOST` points here from app/worker |
+| `storage` | Compose profile `storage` from Phase 12b | Private network; dedicated host when library &gt;100 GB |
+| `redis` | Redis 7 | **app role** (with web/worker) |
+| `tika` | `apache/tika:latest-full` | **app role** |
 
 **Network:** All services on `rhodes-network`. Only Caddy exposes 443.
 
@@ -146,8 +152,8 @@ LEMONSQUEEZY_WEBHOOK_SECRET=...
 LEMONSQUEEZY_VARIANT_PRO_MONTHLY=...
 LEMONSQUEEZY_VARIANT_TEAM_SEAT_MONTHLY=...
 
-# Ollama
-OLLAMA_HOST=http://ollama:11434
+# Ollama (on Data server in distributed mode)
+OLLAMA_HOST=http://data.internal:11434
 ```
 
 ### 5. DNS configuration

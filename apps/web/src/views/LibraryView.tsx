@@ -1,8 +1,10 @@
 "use client";
 
-import { FileText, Loader, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { FileText, Loader, RotateCcw, Trash2 } from "lucide-react";
 import { normalizeLibrarySummary } from "@rhodes/ai";
 import { useApp } from "@/context/AppContext";
+import { Dialog } from "@/components/Dialog";
 import { DropZone } from "@/components/DropZone";
 import { GroupLabel } from "@/components/SectionHeader";
 import { StatusPill } from "@/components/StatusPill";
@@ -17,8 +19,12 @@ import "./LibraryView.css";
 
 export function LibraryView() {
   const { workspaceId, showToast } = useApp();
-  const { sources, loading, error, uploading, uploadFiles, retrySource } =
+  const { sources, loading, error, uploading, uploadFiles, retrySource, deleteSource, deletingIds } =
     useLibrarySources(workspaceId);
+  const [removeTarget, setRemoveTarget] = useState<{
+    id: string;
+    fileName: string;
+  } | null>(null);
 
   const handleFilesSelected = async (files: File[]) => {
     const allowed = files.filter(isLibraryFileAllowed);
@@ -55,6 +61,18 @@ export function LibraryView() {
     }
   };
 
+  const handleRemove = async () => {
+    if (!removeTarget) return;
+    const { id, fileName } = removeTarget;
+    setRemoveTarget(null);
+    const result = await deleteSource(id);
+    if (result.ok) {
+      showToast(`Removed ${fileName}`, "success");
+    } else if ("error" in result) {
+      showToast(result.error ?? "Remove failed", "error");
+    }
+  };
+
   return (
     <div className="canvas-view library-view">
       <div className="library-view__scroll overlay-scrollbar">
@@ -82,11 +100,17 @@ export function LibraryView() {
 
           <ul className="source-list">
             {sources.map((source) => {
-              const pill = embeddingStatusToPill(source.embedding_status);
+              const isDeleting = deletingIds.includes(source.id);
+              const pill = isDeleting
+                ? { variant: "progress" as const, label: "Deleting" }
+                : embeddingStatusToPill(source.embedding_status);
 
               return (
                 <li key={source.id}>
-                  <div className="source-row">
+                  <div
+                    className={`source-row${isDeleting ? " source-row--deleting" : ""}`}
+                    aria-busy={isDeleting}
+                  >
                     <FileText size={20} strokeWidth={1.75} className="source-row__icon" />
                     <div className="source-row__main">
                       <span className="source-row__name">{source.file_name}</span>
@@ -103,6 +127,7 @@ export function LibraryView() {
                       variant={pill.variant}
                       label={pill.label}
                       icon={
+                        isDeleting ||
                         source.embedding_status === "pending" ||
                         source.embedding_status === "processing"
                           ? Loader
@@ -112,7 +137,7 @@ export function LibraryView() {
                     <span className="source-row__date">
                       {formatLibraryDate(source.created_at)}
                     </span>
-                    {source.embedding_status === "failed" && (
+                    {!isDeleting && source.embedding_status === "failed" && (
                       <button
                         type="button"
                         className="source-row__retry"
@@ -122,7 +147,7 @@ export function LibraryView() {
                         <RotateCcw size={16} strokeWidth={1.75} />
                       </button>
                     )}
-                    {source.embedding_status === "pending" && (
+                    {!isDeleting && source.embedding_status === "pending" && (
                       <button
                         type="button"
                         className="source-row__retry"
@@ -133,6 +158,19 @@ export function LibraryView() {
                         <RotateCcw size={16} strokeWidth={1.75} />
                       </button>
                     )}
+                    {!isDeleting && (
+                      <button
+                        type="button"
+                        className="source-row__remove"
+                        aria-label={`Remove ${source.file_name}`}
+                        title="Remove from library"
+                        onClick={() =>
+                          setRemoveTarget({ id: source.id, fileName: source.file_name })
+                        }
+                      >
+                        <Trash2 size={16} strokeWidth={1.75} />
+                      </button>
+                    )}
                   </div>
                 </li>
               );
@@ -140,6 +178,21 @@ export function LibraryView() {
           </ul>
         </div>
       </div>
+
+      <Dialog
+        open={removeTarget != null}
+        title="Remove source?"
+        description={
+          removeTarget
+            ? `“${removeTarget.fileName}” will be removed from the library, including its file, embeddings, and summary. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => void handleRemove()}
+        onClose={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }

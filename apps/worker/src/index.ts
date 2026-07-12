@@ -1,4 +1,6 @@
+import "./bootstrap-env.js";
 import { Queue, Worker } from "bullmq";
+import { createAdminClient } from "@rhodes/db";
 import {
   DOCUMENT_EMBED_QUEUE,
   LIBRARY_EMBED_QUEUE,
@@ -72,8 +74,30 @@ for (const worker of [
   worker.on("active", (job) => {
     console.log(`[worker] ${worker.name} job active`, job.id);
   });
-  worker.on("failed", (job, error) => {
+  worker.on("failed", async (job, error) => {
     console.error(`[worker] ${worker.name} job failed`, job?.id, error);
+
+    const sourceId =
+      job?.data && typeof job.data === "object" && "sourceId" in job.data
+        ? String((job.data as { sourceId: string }).sourceId)
+        : null;
+
+    if (
+      !sourceId ||
+      (worker.name !== LIBRARY_INGEST_QUEUE && worker.name !== LIBRARY_EMBED_QUEUE)
+    ) {
+      return;
+    }
+
+    try {
+      const admin = createAdminClient();
+      await admin
+        .from("library_sources")
+        .update({ embedding_status: "failed" })
+        .eq("id", sourceId);
+    } catch (markError) {
+      console.error(`[worker] could not mark source failed`, sourceId, markError);
+    }
   });
   worker.on("completed", (job) => {
     console.log(`[worker] ${worker.name} job completed`, job.id);

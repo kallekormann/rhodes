@@ -115,6 +115,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !source) {
+    await admin.storage.from(LIBRARY_BUCKET).remove([filePath]).catch(() => {});
     return withSecurityHeaders(
       NextResponse.json(
         { error: insertError?.message ?? "Failed to create library source" },
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
       mimeType,
     });
   } catch (queueError) {
-    await supabase
+    await admin
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", source.id);

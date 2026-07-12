@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { libraryFilesDataDir } from "@rhodes/shared";
 
 const LOCAL_ROOT = libraryFilesDataDir();
@@ -20,4 +20,12 @@ export async function saveLocalLibraryFile(
   const full = resolvePath(storagePath);
   await mkdir(path.dirname(full), { recursive: true });
   await writeFile(full, bytes);
+}
+
+export async function deleteLocalLibraryFile(storagePath: string): Promise<void> {
+  try {
+    await unlink(resolvePath(storagePath));
+  } catch {
+    // File may only exist in Supabase storage.
+  }
 }
