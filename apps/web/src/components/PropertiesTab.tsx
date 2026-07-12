@@ -120,17 +120,25 @@ function SchemaFieldRow({
   field,
   value,
   onChange,
+  aiSuggested = false,
 }: {
   field: MetadataSchemaField;
   value: MetadataFieldValue;
   onChange: (value: MetadataFieldValue) => void;
+  aiSuggested?: boolean;
 }) {
   const options = parseSchemaOptions(field.options);
+  const label = (
+    <>
+      {field.field_label}
+      {aiSuggested && <span className="props-list__ai-hint">AI suggested</span>}
+    </>
+  );
 
   if (field.field_type === "select" && options) {
     return (
       <div className="props-list__row">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <Dropdown
             variant="plain"
@@ -150,7 +158,7 @@ function SchemaFieldRow({
     const selected = Array.isArray(value) ? value : [];
     return (
       <div className="props-list__row props-list__row--stacked">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <div className="props-multi-select">
             {options.map((option) => {
@@ -180,7 +188,7 @@ function SchemaFieldRow({
   if (field.field_type === "date") {
     return (
       <div className="props-list__row">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <DatePickerField
             variant="plain"
@@ -200,7 +208,7 @@ function SchemaFieldRow({
 
     return (
       <div className="props-list__row">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <DateRangeField
             variant="plain"
@@ -215,7 +223,7 @@ function SchemaFieldRow({
   if (field.field_type === "textarea") {
     return (
       <div className="props-list__row props-list__row--stacked">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <TextArea
             className="props-textarea"
@@ -233,7 +241,7 @@ function SchemaFieldRow({
     const tags = Array.isArray(value) ? value : [];
     return (
       <div className="props-list__row props-list__row--stacked">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <TagsEditor tags={tags} onChange={(next) => onChange(next.length ? next : null)} />
         </dd>
@@ -244,7 +252,7 @@ function SchemaFieldRow({
   if (field.field_type === "checkbox") {
     return (
       <div className="props-list__row">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <label className="props-checkbox">
             <input
@@ -262,7 +270,7 @@ function SchemaFieldRow({
   if (field.field_type === "number") {
     return (
       <div className="props-list__row">
-        <dt>{field.field_label}</dt>
+        <dt>{label}</dt>
         <dd>
           <Input
             variant="plain"
@@ -367,6 +375,17 @@ export function PropertiesTab({
   } = useMetadataSchemas(workspaceId);
   const [manageOpen, setManageOpen] = useState(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const aiFilledKeys = new Set(
+    metadata && Array.isArray(metadata._ai_filled_keys)
+      ? metadata._ai_filled_keys.filter(
+          (key): key is string => typeof key === "string",
+        )
+      : [],
+  );
+  const wordCount =
+    metadata && typeof metadata.word_count === "number"
+      ? metadata.word_count
+      : null;
 
   useEffect(() => {
     return () => {
@@ -478,12 +497,19 @@ export function PropertiesTab({
                   <dd className="props-list__readonly">{createdByLabel}</dd>
                 </div>
               )}
+              {wordCount !== null && (
+                <div className="props-list__row">
+                  <dt>Word count</dt>
+                  <dd className="props-list__readonly">{wordCount}</dd>
+                </div>
+              )}
               {schemas.map((field) => (
                 <SchemaFieldRow
                   key={field.id}
                   field={field}
                   value={readMetadataFieldValue(metadata, field)}
                   onChange={(value) => debouncedMetadataChange(field.field_key, value)}
+                  aiSuggested={aiFilledKeys.has(field.field_key)}
                 />
               ))}
               {schemas.length === 0 && (

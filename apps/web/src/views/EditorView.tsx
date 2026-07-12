@@ -357,6 +357,7 @@ function EditorViewContent() {
         insights={insights}
         insightsLoading={insightsLoading}
         insightsError={insightsError}
+        insightsQueryText={contentPlain}
         askPrefill={askPrefill}
         onConsumeAskPrefill={() => setAskPrefill("")}
         onInsertCitation={isTemplateMode ? undefined : handleInsertCitation}

@@ -1,6 +1,6 @@
 # Phase 07 — AI, RAG, and Insights
 
-**Status:** in progress  
+**Status:** complete  
 **Depends on:** Phase 06  
 **Blocks:** Phase 08  
 **Estimated duration:** 7–10 days
@@ -339,37 +339,37 @@ Phase 07 delivers the **in-context Manage** flow; Phase 08 duplicates entry poin
 
 ## Testing checklist
 
-- [ ] Writing in doc with related library content → insights appear after 3s debounce
-- [ ] Insight dot visible when matches exist
-- [ ] Top matches show relevance %, source title, excerpt
-- [ ] "Why relevant?" streams a short explanation
-- [ ] Ask chat responds with citations from workspace only
-- [ ] Ask refuses to hallucinate sources not in retrieval
-- [ ] Quote insert creates CitationBlock with backlink
-- [ ] Document re-embeds when content changes significantly
-- [ ] Editor never blocks during insight fetch
-- [ ] LLM queue limits concurrent jobs to 2
-- [ ] 30s timeout returns graceful fallback
-- [ ] Insights only from active workspace (RLS + RPC param)
-- [ ] Properties tab shows pinned **Manage** action bar (template-sidebar pattern)
-- [ ] Add property: pick type (text, select, date, date_range, tags, …) → appears in tab
-- [ ] Delete property: confirm + removed from schema (optional value purge)
-- [ ] `date_range` stores `{ start, end }` and renders with `DateRangeField`
-- [ ] AI auto-fill on save populates empty Summary/Tags/Document type without overwriting user edits
-- [ ] System fields (Created, Owner, Word count) read-only in Properties tab
+- [x] Writing in doc with related library content → insights appear after 3s debounce
+- [x] Insight dot visible when matches exist
+- [x] Top matches show relevance %, source title, excerpt
+- [x] "Why relevant?" streams a short explanation
+- [x] Ask chat responds with citations from workspace only
+- [x] Ask refuses to hallucinate sources not in retrieval
+- [x] Quote insert creates CitationBlock with backlink
+- [x] Document re-embeds when content changes significantly
+- [x] Editor never blocks during insight fetch
+- [x] LLM queue limits concurrent jobs to 2
+- [x] 30s timeout returns graceful fallback
+- [x] Insights only from active workspace (RLS + RPC param)
+- [x] Properties tab shows pinned **Manage** action bar (template-sidebar pattern)
+- [x] Add property: pick type (text, select, date, date_range, tags, …) → appears in tab
+- [x] Delete property: confirm + removed from schema (optional value purge)
+- [x] `date_range` stores `{ start, end }` and renders with `DateRangeField`
+- [x] AI auto-fill on save populates empty Summary/Tags/Document type without overwriting user edits
+- [x] System fields (Created, Owner, Word count) read-only in Properties tab
 
 ---
 
 ## Exit criteria
 
-1. Debounced insights work while writing.
-2. Ask chat streams with workspace-scoped citations.
-3. Quote insertion flow complete.
-4. Document embeddings update on substantial edits.
-5. Right Panel Insights + Ask + Properties (**Manage** flow) fully functional.
-6. Document property definitions editable in-editor (add/delete types).
-7. AI auto-fill for eligible metadata fields on save.
-8. Meets latency budgets where CPU allows (stream on slow responses).
+1. Debounced insights work while writing. ✅
+2. Ask chat streams with workspace-scoped citations. ✅
+3. Quote insertion flow complete. ✅
+4. Document embeddings update on substantial edits. ✅
+5. Right Panel Insights + Ask + Properties (**Manage** flow) fully functional. ✅
+6. Document property definitions editable in-editor (add/delete types). ✅
+7. AI auto-fill for eligible metadata fields on save. ✅
+8. Meets latency budgets where CPU allows (stream on slow responses). ✅ (`pnpm qa:phase07`)
 
 ---
 

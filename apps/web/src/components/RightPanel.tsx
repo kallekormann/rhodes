@@ -48,6 +48,7 @@ type RightPanelProps = {
   insights?: InsightMatch[];
   insightsLoading?: boolean;
   insightsError?: string | null;
+  insightsQueryText?: string;
   askPrefill?: string;
   onConsumeAskPrefill?: () => void;
   onInsertCitation?: (input: CitationInsertInput) => void;
@@ -74,6 +75,7 @@ export function RightPanel({
   insights = [],
   insightsLoading = false,
   insightsError = null,
+  insightsQueryText = "",
   askPrefill = "",
   onConsumeAskPrefill,
   onInsertCitation,
@@ -98,9 +100,11 @@ export function RightPanel({
       <div className="right-panel__content overlay-scrollbar" key={panelTab}>
         {panelTab === "insights" && (
           <InsightsTab
+            workspaceId={workspaceId}
             insights={insights}
             loading={insightsLoading}
             error={insightsError}
+            queryText={insightsQueryText}
             onInsertCitation={onInsertCitation}
           />
         )}
@@ -142,20 +146,27 @@ export function RightPanel({
 }
 
 function InsightsTab({
+  workspaceId,
   insights,
   loading,
   error,
+  queryText,
   onInsertCitation,
 }: {
+  workspaceId: string | null;
   insights: InsightMatch[];
   loading: boolean;
   error: string | null;
+  queryText: string;
   onInsertCitation?: (input: CitationInsertInput) => void;
 }) {
   const [quoteSelection, setQuoteSelection] = useState<{
     insight: InsightMatch;
     excerpt: string;
   } | null>(null);
+  const [whyByKey, setWhyByKey] = useState<
+    Record<string, { text: string; loading: boolean; expanded: boolean }>
+  >({});
 
   const handleTextSelection = (insight: InsightMatch) => {
     const selection = window.getSelection();
@@ -178,6 +189,85 @@ function InsightsTab({
     setQuoteSelection(null);
     window.getSelection()?.removeAllRanges();
   };
+
+  const handleWhyRelevant = async (insight: InsightMatch) => {
+    if (!workspaceId || queryText.trim().length < 20) return;
+
+    const key = `${insight.item_id}-${insight.origin_type}`;
+    setWhyByKey((current) => ({
+      ...current,
+      [key]: { text: "", loading: true, expanded: true },
+    }));
+
+    const response = await fetch("/app/api/insights/why-relevant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        query_text: queryText.slice(-500),
+        match: insight,
+      }),
+    });
+
+    if (!response.ok || !response.body) {
+      setWhyByKey((current) => ({
+        ...current,
+        [key]: {
+          text: insight.matched_text.slice(0, 120),
+          loading: false,
+          expanded: true,
+        },
+      }));
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith("data:")) continue;
+
+        const payload = JSON.parse(line.slice(5).trim()) as {
+          type?: string;
+          token?: string;
+          text?: string;
+        };
+
+        if (payload.type === "token" && payload.token) {
+          text += payload.token;
+          setWhyByKey((current) => ({
+            ...current,
+            [key]: { text: text.slice(0, 120), loading: true, expanded: true },
+          }));
+        }
+
+        if (payload.type === "done" && payload.text) {
+          text = payload.text;
+        }
+      }
+    }
+
+    setWhyByKey((current) => ({
+      ...current,
+      [key]: {
+        text: (text || insight.matched_text).slice(0, 120),
+        loading: false,
+        expanded: true,
+      },
+    }));
+  };
+
   if (loading && insights.length === 0) {
     return (
       <div className="panel-tab">
@@ -207,7 +297,11 @@ function InsightsTab({
 
   return (
     <div className="panel-tab panel-tab--insights">
-      {insights.map((insight, index) => (
+      {insights.map((insight, index) => {
+        const whyKey = `${insight.item_id}-${insight.origin_type}`;
+        const whyState = whyByKey[whyKey];
+
+        return (
         <div key={`${insight.item_id}-${index}`}>
           {index > 0 && <hr className="divider" />}
           <article
@@ -218,26 +312,42 @@ function InsightsTab({
             <div>
               <h4 className="insight-card__title">{insight.title}</h4>
               <p className="insight-card__reason">{insight.matched_text}</p>
-              {onInsertCitation && (
+              {whyState?.expanded && (
+                <p className="insight-card__why">
+                  {whyState.loading ? "Thinking…" : whyState.text}
+                </p>
+              )}
+              <div className="insight-card__actions">
                 <Button
                   variant="ghost"
-                  className="insight-card__quote-btn"
-                  onClick={() => {
-                    onInsertCitation({
-                      sourceId: insight.item_id,
-                      sourceTitle: insight.title,
-                      page: insight.page_ref,
-                      excerpt: insight.matched_text.slice(0, 400),
-                    });
-                  }}
+                  className="insight-card__why-btn"
+                  disabled={!workspaceId || whyState?.loading}
+                  onClick={() => void handleWhyRelevant(insight)}
                 >
-                  Insert quote
+                  Why relevant?
                 </Button>
-              )}
+                {onInsertCitation && (
+                  <Button
+                    variant="ghost"
+                    className="insight-card__quote-btn"
+                    onClick={() => {
+                      onInsertCitation({
+                        sourceId: insight.item_id,
+                        sourceTitle: insight.title,
+                        page: insight.page_ref,
+                        excerpt: insight.matched_text.slice(0, 400),
+                      });
+                    }}
+                  >
+                    Insert quote
+                  </Button>
+                )}
+              </div>
             </div>
           </article>
         </div>
-      ))}
+      );
+      })}
 
       {quoteSelection && onInsertCitation && (
         <div className="insight-quote-bar">

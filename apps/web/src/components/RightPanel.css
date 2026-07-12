@@ -109,8 +109,24 @@
   user-select: text;
 }
 
-.insight-card__quote-btn {
+.insight-card__why {
+  margin: var(--space-xs) 0 0;
+  font-size: 12px;
+  color: var(--color-accent);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.insight-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
   margin-top: var(--space-xs);
+}
+
+.insight-card__quote-btn,
+.insight-card__why-btn {
+  padding-inline: 0;
 }
 
 .panel-tab--insights {
