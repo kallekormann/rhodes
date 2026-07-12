@@ -39,7 +39,9 @@ function remapDockerHostnames() {
     process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SERVICE_ROLE_KEY;
   }
 
+  process.env.RHODES_DATA_DIR ??= path.join(rootDir, ".data");
   process.env.RHODES_LIBRARY_DATA_DIR ??= path.join(rootDir, ".data/library-files");
+  process.env.RHODES_DOCUMENT_IMAGES_DATA_DIR ??= path.join(rootDir, ".data/document-images");
 }
 
 loadEnvFile(path.join(rootDir, "docker/.env"));

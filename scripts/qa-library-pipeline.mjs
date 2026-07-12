@@ -127,8 +127,9 @@ async function main() {
   const fileName = `qa-phase06-${pageCount}p.pdf`;
   const filePath = `${workspaceId}/library/${sourceId}/${fileName}`;
   const pdfBytes = buildTestPdf(pageCount);
-  const dataDir = path.join(rootDir, ".data/library-files");
-  process.env.RHODES_LIBRARY_DATA_DIR = dataDir;
+  const dataDir = path.join(rootDir, ".data");
+  process.env.RHODES_DATA_DIR = dataDir;
+  process.env.RHODES_LIBRARY_DATA_DIR = path.join(dataDir, "library-files");
 
   const { LIBRARY_BUCKET } = await import(
     pathToFileURL(path.join(rootDir, "packages/shared/src/constants.ts")).href

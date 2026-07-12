@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { documentImagesDataDir } from "@rhodes/shared";
 
-const LOCAL_ROOT = path.join(process.cwd(), ".data", "document-images");
+const LOCAL_ROOT = documentImagesDataDir();
 
 const EXTENSION_MIME: Record<string, string> = {
   jpg: "image/jpeg",

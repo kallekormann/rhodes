@@ -31,7 +31,9 @@ SUPABASE_URL=http://localhost:8000
 SUPABASE_ANON_KEY=${anon}
 SUPABASE_SERVICE_ROLE_KEY=${service_role}
 REDIS_URL=redis://localhost:6379
+RHODES_DATA_DIR=${ROOT}/.data
 RHODES_LIBRARY_DATA_DIR=${ROOT}/.data/library-files
+RHODES_DOCUMENT_IMAGES_DATA_DIR=${ROOT}/.data/document-images
 EOF
 
 echo "Wrote $DEST"

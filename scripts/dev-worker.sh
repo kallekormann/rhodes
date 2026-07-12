@@ -53,7 +53,9 @@ if [[ "${OLLAMA_HOST:-}" == *"://ollama:"* ]]; then
   export OLLAMA_HOST="http://localhost:11434"
 fi
 
+export RHODES_DATA_DIR="$ROOT/.data"
 export RHODES_LIBRARY_DATA_DIR="$ROOT/.data/library-files"
+export RHODES_DOCUMENT_IMAGES_DATA_DIR="$ROOT/.data/document-images"
 
 if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
   echo "Missing SUPABASE_SERVICE_ROLE_KEY in docker/.env"
