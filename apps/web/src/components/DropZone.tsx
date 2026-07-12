@@ -16,11 +16,11 @@ type DropZoneProps = {
 
 export function DropZone({
   icon,
-  children = "Drop PDF, DOCX, or TXT — or click to browse",
+  children = "Drop PDF, DOCX, TXT, or Markdown — or click to browse",
   className = "",
   disabled = false,
   uploading = false,
-  accept = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain",
+  accept = ".pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/x-markdown",
   onFilesSelected,
 }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);

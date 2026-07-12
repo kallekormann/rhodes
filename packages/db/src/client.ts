@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 export function createAdminClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL;
@@ -12,6 +13,12 @@ export function createAdminClient(): SupabaseClient {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+    },
+    realtime: {
+      // Node 20 has no global WebSocket — use `ws` for storage/realtime clients.
+      transport: WebSocket as unknown as NonNullable<
+        NonNullable<Parameters<typeof createClient>[2]>["realtime"]
+      >["transport"],
     },
   });
 }

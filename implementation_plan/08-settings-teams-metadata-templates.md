@@ -136,17 +136,11 @@ Invite email: stub with Mailpit; real templates in Phase 12.
 
 ### 8. Properties tab (Right Panel)
 
-Wire plain-variant fields from mock:
-- Status (`Dropdown` with options from metadata schema)
-- Owner (read-only, `created_by` display name)
-- Summary (`TextArea`)
-- Due date (`DatePickerField`)
-- Date range (`DateRangePicker`)
+**Phase 05c (done):** schema-driven value editing (`text`, `select`, `date`) from seeded workspace fields.
 
-**Metadata system:**
-- Load `metadata_schemas` for workspace
-- Read/write `documents.metadata` JSONB keys
-- Default schema seeded: `status`, `owner`, `summary`, `due_date`
+**Phase 07 (this phase):** bottom **Manage** action bar (like `TemplateDetailPanel`), add/delete property definitions, extended types (`date_range`, `tags`, `textarea`, …), AI auto-fill on save. See [07-ai-rag-and-insights.md §13](07-ai-rag-and-insights.md#13-document-properties--manage-ui-sidebar).
+
+**Phase 08 (settings):** duplicate Manage entry in Settings → Space → Custom fields; saved views / document filters by metadata.
 
 ### 9. Document version history
 

@@ -13,11 +13,13 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
+    "library:requeue": "node scripts/requeue-library.js",
     "db:test:rls": "node packages/db/tests/rls.test.js",
     "db:types": "node -e \"console.log('Configure supabase CLI against local stack, then: supabase gen types typescript --local > packages/db/src/types.ts')\""
   },
   "dependencies": {
     "@supabase/supabase-js": "2.49.8",
+    "bullmq": "^5.41.5",
     "pg": "^8.14.1"
   }
 }

@@ -4,11 +4,16 @@ import { PanelRightClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp, type PanelTab } from "@/context/AppContext";
 import type { StoredDocumentComment } from "@/lib/documents/comments";
+import type { CitationInsertInput } from "@/lib/documents/editor-commands";
+import { useAskChat } from "@/hooks/useAskChat";
+import type { InsightMatch } from "@/hooks/useInsights";
+import type { TemplateMetadata } from "@/lib/templates/metadata";
+import type { MetadataFieldValue } from "@/lib/metadata/schemas";
+import { PropertiesTab } from "./PropertiesTab";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
+import { Button } from "./Button";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { CommentsTab } from "./CommentsTab";
-import type { TemplateMetadata } from "@/lib/templates/metadata";
-import { PropertiesTab } from "./PropertiesTab";
 import { IconButton } from "./IconButton";
 import { TabBar } from "./TabBar";
 import "./AskComposer.css";
@@ -20,27 +25,6 @@ const tabOptions: { value: PanelTab; label: string }[] = [
   { value: "ask", label: "Ask" },
   { value: "comments", label: "Comments" },
   { value: "properties", label: "Properties" },
-];
-
-type ChatMessage = {
-  id: string;
-  role: "user" | "rhodes";
-  text: string;
-  rich?: boolean;
-};
-
-const initialMessages: ChatMessage[] = [
-  {
-    id: "m1",
-    role: "user",
-    text: "Summarize connections between my Q3 spec and library sources.",
-  },
-  {
-    id: "m2",
-    role: "rhodes",
-    text: "Based on Reforge Growth.pdf, your ARR targets align with the activation experiments in Post-Experiment Q2.",
-    rich: true,
-  },
 ];
 
 type RightPanelProps = {
@@ -58,9 +42,15 @@ type RightPanelProps = {
   createdByLabel?: string | null;
   templateDescription?: string | null;
   templateMetadata?: TemplateMetadata;
-  onMetadataFieldChange?: (fieldKey: string, value: string | null) => void;
+  onMetadataFieldChange?: (fieldKey: string, value: MetadataFieldValue) => void;
   onTemplateDescriptionChange?: (description: string) => void;
   onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
+  insights?: InsightMatch[];
+  insightsLoading?: boolean;
+  insightsError?: string | null;
+  askPrefill?: string;
+  onConsumeAskPrefill?: () => void;
+  onInsertCitation?: (input: CitationInsertInput) => void;
 };
 
 export function RightPanel({
@@ -81,6 +71,12 @@ export function RightPanel({
   onMetadataFieldChange,
   onTemplateDescriptionChange,
   onTemplateMetadataChange,
+  insights = [],
+  insightsLoading = false,
+  insightsError = null,
+  askPrefill = "",
+  onConsumeAskPrefill,
+  onInsertCitation,
 }: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
 
@@ -100,8 +96,21 @@ export function RightPanel({
       </div>
 
       <div className="right-panel__content overlay-scrollbar" key={panelTab}>
-        {panelTab === "insights" && <InsightsTab />}
-        {panelTab === "ask" && <AskTab />}
+        {panelTab === "insights" && (
+          <InsightsTab
+            insights={insights}
+            loading={insightsLoading}
+            error={insightsError}
+            onInsertCitation={onInsertCitation}
+          />
+        )}
+        {panelTab === "ask" && (
+          <AskTab
+            workspaceId={workspaceId}
+            askPrefill={askPrefill}
+            onConsumeAskPrefill={onConsumeAskPrefill}
+          />
+        )}
         {panelTab === "comments" && (
           <CommentsTab
             comments={comments}
@@ -132,86 +141,166 @@ export function RightPanel({
   );
 }
 
-function InsightsTab() {
+function InsightsTab({
+  insights,
+  loading,
+  error,
+  onInsertCitation,
+}: {
+  insights: InsightMatch[];
+  loading: boolean;
+  error: string | null;
+  onInsertCitation?: (input: CitationInsertInput) => void;
+}) {
+  const [quoteSelection, setQuoteSelection] = useState<{
+    insight: InsightMatch;
+    excerpt: string;
+  } | null>(null);
+
+  const handleTextSelection = (insight: InsightMatch) => {
+    const selection = window.getSelection();
+    const excerpt = selection?.toString().trim() ?? "";
+    if (!excerpt) {
+      setQuoteSelection(null);
+      return;
+    }
+    setQuoteSelection({ insight, excerpt });
+  };
+
+  const handleInsertQuote = () => {
+    if (!quoteSelection || !onInsertCitation) return;
+    onInsertCitation({
+      sourceId: quoteSelection.insight.item_id,
+      sourceTitle: quoteSelection.insight.title,
+      page: quoteSelection.insight.page_ref,
+      excerpt: quoteSelection.excerpt,
+    });
+    setQuoteSelection(null);
+    window.getSelection()?.removeAllRanges();
+  };
+  if (loading && insights.length === 0) {
+    return (
+      <div className="panel-tab">
+        <p className="caption">Finding related sources…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="panel-tab">
+        <p className="caption">{error}</p>
+      </div>
+    );
+  }
+
+  if (insights.length === 0) {
+    return (
+      <div className="panel-tab">
+        <p className="caption">
+          Keep writing — Rhodes will surface related library sources and documents
+          here.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="panel-tab">
-      <article className="insight-card">
-        <div className="insight-card__score">94%</div>
-        <div>
-          <h4 className="insight-card__title">Reforge Growth.pdf</h4>
-          <p className="insight-card__reason">
-            Why: matches your ARR growth framework and Q3 objectives.
-          </p>
+    <div className="panel-tab panel-tab--insights">
+      {insights.map((insight, index) => (
+        <div key={`${insight.item_id}-${index}`}>
+          {index > 0 && <hr className="divider" />}
+          <article
+            className="insight-card"
+            onMouseUp={() => handleTextSelection(insight)}
+          >
+            <div className="insight-card__score">{insight.relevance_percent}%</div>
+            <div>
+              <h4 className="insight-card__title">{insight.title}</h4>
+              <p className="insight-card__reason">{insight.matched_text}</p>
+              {onInsertCitation && (
+                <Button
+                  variant="ghost"
+                  className="insight-card__quote-btn"
+                  onClick={() => {
+                    onInsertCitation({
+                      sourceId: insight.item_id,
+                      sourceTitle: insight.title,
+                      page: insight.page_ref,
+                      excerpt: insight.matched_text.slice(0, 400),
+                    });
+                  }}
+                >
+                  Insert quote
+                </Button>
+              )}
+            </div>
+          </article>
         </div>
-      </article>
-      <hr className="divider" />
-      <article className="insight-card">
-        <div className="insight-card__score">87%</div>
-        <div>
-          <h4 className="insight-card__title">Post-Experiment Q2</h4>
-          <p className="insight-card__reason">
-            Why: references the same activation metrics you discuss here.
-          </p>
+      ))}
+
+      {quoteSelection && onInsertCitation && (
+        <div className="insight-quote-bar">
+          <span className="caption">Selected excerpt ready</span>
+          <Button variant="secondary" onClick={handleInsertQuote}>
+            Insert quote
+          </Button>
         </div>
-      </article>
+      )}
     </div>
   );
 }
 
-function AskTab() {
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+function AskTab({
+  workspaceId,
+  askPrefill,
+  onConsumeAskPrefill,
+}: {
+  workspaceId: string | null;
+  askPrefill?: string;
+  onConsumeAskPrefill?: () => void;
+}) {
+  const { messages, pending, error, sendMessage } = useAskChat(workspaceId);
   const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(false);
-  const [status, setStatus] = useState<AskComposerStatus>("idle");
-  const timersRef = useRef<number[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    return () => {
-      timersRef.current.forEach((timer) => window.clearTimeout(timer));
-    };
-  }, []);
+    if (!askPrefill) return;
+    setDraft(askPrefill);
+    onConsumeAskPrefill?.();
+  }, [askPrefill, onConsumeAskPrefill]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, pending]);
 
   const handleSend = () => {
     const text = draft.trim();
     if (!text || pending) return;
-
-    setMessages((prev) => [...prev, { id: `m-${Date.now()}`, role: "user", text }]);
+    void sendMessage(text);
     setDraft("");
-    setPending(true);
-    setStatus("thinking");
-
-    timersRef.current.push(
-      window.setTimeout(() => setStatus("searching"), 1200),
-      window.setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `m-${Date.now()}-ai`,
-            role: "rhodes",
-            text: "I found three relevant sources in your library. The strongest match is your Q2 experiment write-up.",
-          },
-        ]);
-        setPending(false);
-        setStatus("idle");
-      }, 2800),
-    );
   };
+
+  const status: AskComposerStatus = pending ? "thinking" : "idle";
 
   return (
     <div className="panel-tab panel-tab--ask">
       <div className="panel-tab__messages">
+        {messages.length === 0 && (
+          <p className="caption">
+            Ask questions about your workspace. Answers cite library sources and documents only.
+          </p>
+        )}
         {messages.map((message) => (
-          <ChatMessageBubble key={message.id} role={message.role}>
-            {message.rich ? (
-              <p>
-                Based on <a href="#">Reforge Growth.pdf</a>, your ARR targets align with the
-                activation experiments in Post-Experiment Q2.
-              </p>
-            ) : (
-              <p>{message.text}</p>
-            )}
+          <ChatMessageBubble
+            key={message.id}
+            role={message.role === "assistant" ? "rhodes" : "user"}
+          >
+            <p>{message.content}</p>
           </ChatMessageBubble>
         ))}
+        {error && <p className="caption">{error}</p>}
+        <div ref={messagesEndRef} />
       </div>
       <AskComposer
         className="panel-tab__composer"

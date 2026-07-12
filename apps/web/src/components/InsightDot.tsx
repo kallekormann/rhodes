@@ -2,8 +2,15 @@ import { Lightbulb } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import "./InsightDot.css";
 
-export function InsightDot() {
-  const { insightCount, openPanel } = useApp();
+type InsightDotProps = {
+  count?: number;
+};
+
+export function InsightDot({ count }: InsightDotProps) {
+  const { insightCount: contextCount, openPanel } = useApp();
+  const insightCount = count ?? contextCount;
+
+  if (insightCount <= 0) return null;
 
   return (
     <button

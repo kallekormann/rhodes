@@ -53,6 +53,29 @@ export function imageServeUrl(storagePath: string) {
   return `/app/api/documents/images/serve?path=${encodeURIComponent(storagePath)}`;
 }
 
+export type CitationInsertInput = {
+  sourceId: string;
+  sourceTitle: string;
+  page: number | null;
+  excerpt: string;
+};
+
+export function insertCitation(editor: Editor, input: CitationInsertInput) {
+  editor
+    .chain()
+    .focus()
+    .insertContent({
+      type: "citation",
+      attrs: {
+        sourceId: input.sourceId,
+        sourceTitle: input.sourceTitle,
+        page: input.page,
+        excerpt: input.excerpt,
+      },
+    })
+    .run();
+}
+
 export async function resolveDocumentImageUrls(
   content: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {

@@ -7,8 +7,9 @@ import {
   LIBRARY_SUMMARIZE_QUEUE,
 } from "@rhodes/shared/constants";
 import { chunkText } from "../lib/chunker";
+import { addOrReplaceJob } from "../lib/queue-job";
 import { downloadLibraryFile } from "../lib/storage";
-import { extractTextWithTika } from "../lib/tika";
+import { extractLibraryText } from "../lib/extract";
 import { connection } from "../connection";
 
 export type IngestJobData = {
@@ -22,8 +23,11 @@ const embedQueue = new Queue(LIBRARY_EMBED_QUEUE, { connection });
 const summarizeQueue = new Queue(LIBRARY_SUMMARIZE_QUEUE, { connection });
 
 export async function processIngestJob(job: Job<IngestJobData>) {
+  const started = Date.now();
   const { sourceId, workspaceId, filePath, mimeType } = job.data;
   const admin = createAdminClient();
+
+  console.log("[ingest] start", { sourceId, filePath, mimeType });
 
   await admin
     .from("library_sources")
@@ -32,7 +36,7 @@ export async function processIngestJob(job: Job<IngestJobData>) {
 
   try {
     const bytes = await downloadLibraryFile(filePath);
-    const extractedText = await extractTextWithTika(bytes, mimeType);
+    const extractedText = await extractLibraryText(bytes, mimeType);
 
     if (!extractedText) {
       throw new Error("No text extracted from file");
@@ -71,17 +75,27 @@ export async function processIngestJob(job: Job<IngestJobData>) {
       })
       .eq("id", sourceId);
 
-    await embedQueue.add(
+    await addOrReplaceJob(
+      embedQueue,
       "embed-chunks",
       { sourceId, workspaceId },
-      { jobId: `embed-${sourceId}`, removeOnComplete: 100, removeOnFail: 50 },
+      `embed-${sourceId}`,
+      { removeOnComplete: 100, removeOnFail: 50 },
     );
 
-    await summarizeQueue.add(
+    await addOrReplaceJob(
+      summarizeQueue,
       "summarize-source",
       { sourceId, workspaceId, excerpt },
-      { jobId: `summarize-${sourceId}`, removeOnComplete: 100, removeOnFail: 50 },
+      `summarize-${sourceId}`,
+      { removeOnComplete: 100, removeOnFail: 50 },
     );
+
+    console.log("[ingest] done", {
+      sourceId,
+      chunks: chunks.length,
+      ms: Date.now() - started,
+    });
   } catch (error) {
     await admin
       .from("library_sources")

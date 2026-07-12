@@ -38,6 +38,7 @@ import {
 } from "@/lib/documents/comment-navigation";
 import {
   imageServeUrl,
+  insertCitation,
   insertParagraphAfterBlock,
 } from "@/lib/documents/editor-commands";
 import {
@@ -63,12 +64,15 @@ type TipTapEditorProps = {
   }) => StoredDocumentComment | null;
   onCommentsDocumentSync?: (editor: Editor) => void;
   onUpdate: (content: Record<string, unknown>, plainText: string) => void;
-  onAsk?: () => void;
+  onAsk?: (selectedText?: string) => void;
   selectedCommentId?: string | null;
   hoverCommentId?: string | null;
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
   onCommentHighlightClick?: (commentId: string) => void;
   onRegisterScrollToComment?: (scrollToComment: (commentId: string) => void) => void;
+  onRegisterInsertCitation?: (
+    insertCitation: (input: import("@/lib/documents/editor-commands").CitationInsertInput) => void,
+  ) => void;
 };
 
 type SlashState = {
@@ -163,6 +167,7 @@ export function TipTapEditor({
   scrollContainerRef,
   onCommentHighlightClick,
   onRegisterScrollToComment,
+  onRegisterInsertCitation,
 }: TipTapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
@@ -584,6 +589,11 @@ export function TipTapEditor({
       });
     });
   }, [comments, editor, onRegisterScrollToComment, scrollContainerRef]);
+
+  useEffect(() => {
+    if (!editor || !onRegisterInsertCitation) return;
+    onRegisterInsertCitation((input) => insertCitation(editor, input));
+  }, [editor, onRegisterInsertCitation]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>

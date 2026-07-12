@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   if (!mimeType || !isLibraryFileAllowed(file)) {
     return withSecurityHeaders(
       NextResponse.json(
-        { error: "Only PDF, DOCX, and TXT files are supported" },
+        { error: "Only PDF, DOCX, TXT, and Markdown files are supported" },
         { status: 400 },
       ),
     );

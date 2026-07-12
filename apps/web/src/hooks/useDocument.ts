@@ -20,7 +20,7 @@ export function useDocument(documentId: string | null) {
   const [loading, setLoading] = useState(Boolean(documentId));
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
     if (!documentId || !isDocumentId(documentId)) {
       setDocument(null);
       setLoading(false);
@@ -28,15 +28,21 @@ export function useDocument(documentId: string | null) {
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     const response = await fetch(`/app/api/documents/${documentId}`);
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      setError(typeof data.error === "string" ? data.error : "Failed to load document");
-      setDocument(null);
+      const message =
+        typeof data.error === "string" ? data.error : "Failed to load document";
+      if (!options?.silent) {
+        setError(message);
+        setDocument(null);
+      }
       setLoading(false);
       return;
     }
@@ -66,7 +72,6 @@ export function useDocument(documentId: string | null) {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(typeof data.error === "string" ? data.error : "Failed to save");
         return null;
       }
 

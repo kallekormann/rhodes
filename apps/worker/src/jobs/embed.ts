@@ -35,6 +35,7 @@ async function embedWithRetry(texts: string[]): Promise<number[][]> {
 }
 
 export async function processEmbedJob(job: Job<EmbedJobData>) {
+  const started = Date.now();
   const { sourceId } = job.data;
   const admin = createAdminClient();
 
@@ -54,22 +55,23 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
     const batch = pending.slice(i, i + BATCH_SIZE);
     const vectors = await embedWithRetry(batch.map((chunk) => chunk.content_chunk));
 
-    for (let j = 0; j < batch.length; j += 1) {
-      const chunk = batch[j]!;
-      const vector = vectors[j];
-      if (!vector) {
-        throw new Error(`Missing embedding vector for chunk ${chunk.id}`);
-      }
+    await Promise.all(
+      batch.map(async (chunk, index) => {
+        const vector = vectors[index];
+        if (!vector) {
+          throw new Error(`Missing embedding vector for chunk ${chunk.id}`);
+        }
 
-      const { error: updateError } = await admin
-        .from("library_source_chunks")
-        .update({ embedding: toVectorLiteral(vector) })
-        .eq("id", chunk.id);
+        const { error: updateError } = await admin
+          .from("library_source_chunks")
+          .update({ embedding: toVectorLiteral(vector) })
+          .eq("id", chunk.id);
 
-      if (updateError) {
-        throw new Error(updateError.message);
-      }
-    }
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+      }),
+    );
   }
 
   const { count, error: countError } = await admin
@@ -88,4 +90,10 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
       .update({ embedding_status: "ready" })
       .eq("id", sourceId);
   }
+
+  console.log("[embed] done", {
+    sourceId,
+    chunks: pending.length,
+    ms: Date.now() - started,
+  });
 }

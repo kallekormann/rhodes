@@ -68,3 +68,60 @@
 .props-use-cases__add .input-field {
   flex: 1;
 }
+
+.panel-tab--properties {
+  height: 100%;
+  min-height: 0;
+}
+
+.panel-tab--properties__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.properties-tab__actionbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding-top: var(--space-sm);
+  margin-top: var(--space-sm);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.props-tags__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.props-tags__remove {
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.props-tags__add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.props-multi-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag--active {
+  background: var(--color-accent-soft, var(--surface-secondary));
+}
+
+.props-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}

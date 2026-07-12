@@ -8,7 +8,7 @@ import {
   normalizeDocumentImageContent,
   resolveDocumentImageUrls,
 } from "@/lib/documents/editor-commands";
-import { withUserMetadataField } from "@/lib/metadata/schemas";
+import { withUserMetadataValue, type MetadataFieldValue } from "@/lib/metadata/schemas";
 import {
   createDocumentComment,
   getCommentIdsToRemove,
@@ -85,7 +85,7 @@ export function useEditorSession() {
         : null,
   );
   const { createDocument } = useDocuments(resolvedWorkspaceId, "recent");
-  const { document, loading, error, save } = useDocument(
+  const { document, loading, error, save, refresh } = useDocument(
     isEditingTemplate ? null : resolvedId,
   );
   const [templateRecord, setTemplateRecord] = useState<TemplateDetail | null>(
@@ -97,6 +97,7 @@ export function useEditorSession() {
   const [editorContent, setEditorContent] = useState<Record<string, unknown>>(
     EMPTY_DOCUMENT_CONTENT,
   );
+  const [contentPlain, setContentPlain] = useState("");
   const [contentHydratedForId, setContentHydratedForId] = useState<string | null>(
     null,
   );
@@ -119,6 +120,7 @@ export function useEditorSession() {
 
     const docId = document.id;
     const docMetadata = document.metadata;
+    const docContentPlain = document.content_plain;
 
     async function hydrateDocumentContent() {
       const normalized = normalizeDocumentImageContent(raw);
@@ -132,6 +134,7 @@ export function useEditorSession() {
 
       setEditorContent(resolved);
       latestContentRef.current = resolved;
+      setContentPlain(docContentPlain?.trim() ?? "");
       setContentHydratedForId(docId);
       setComments(parseDocumentComments(docMetadata));
     }
@@ -142,6 +145,16 @@ export function useEditorSession() {
       cancelled = true;
     };
   }, [document?.id, document?.content, document?.metadata, isEditingTemplate]);
+
+  useEffect(() => {
+    if (isEditingTemplate || !document?.id) return;
+
+    const timer = setInterval(() => {
+      void refresh({ silent: true });
+    }, 8000);
+
+    return () => clearInterval(timer);
+  }, [document?.id, isEditingTemplate, refresh]);
 
   useEffect(() => {
     if (!isEditingTemplate || !requestedTemplateId) {
@@ -260,9 +273,20 @@ export function useEditorSession() {
     writeLastDocumentId(document.workspace_id, document.id);
   }, [document, isEditingTemplate, setDocumentId, setDocumentTitle]);
 
+  const persistDocument = useCallback(
+    async (patch: Parameters<typeof save>[0]) => {
+      const result = await save(patch);
+      if (!result) {
+        showToast("Couldn't save document", "error");
+      }
+      return result;
+    },
+    [save, showToast],
+  );
+
   const debouncedSaveContent = useDebouncedCallback(
     (content: Record<string, unknown>, content_plain: string) => {
-      void save({
+      void persistDocument({
         content: normalizeDocumentImageContent(content),
         content_plain,
       });
@@ -285,6 +309,7 @@ export function useEditorSession() {
     (content: Record<string, unknown>, content_plain: string) => {
       latestContentRef.current = content;
       setEditorContent(content);
+      setContentPlain(content_plain);
       if (isEditingTemplate && templateRecord) {
         debouncedSaveTemplateContent(content);
       } else {
@@ -363,7 +388,7 @@ export function useEditorSession() {
   ]);
 
   const debouncedSaveTitle = useDebouncedCallback((title: string) => {
-    void save({ title });
+    void persistDocument({ title });
   }, 400);
 
   const debouncedSaveTemplateTitle = useDebouncedCallback((title: string) => {
@@ -395,10 +420,10 @@ export function useEditorSession() {
   );
 
   const debouncedSaveMetadataField = useDebouncedCallback(
-    (fieldKey: string, value: string | null) => {
+    (fieldKey: string, value: MetadataFieldValue) => {
       if (!document) return;
-      void save({
-        metadata: withUserMetadataField(document.metadata, fieldKey, value),
+      void persistDocument({
+        metadata: withUserMetadataValue(document.metadata, fieldKey, value),
       });
     },
     400,
@@ -407,7 +432,7 @@ export function useEditorSession() {
   const debouncedSaveComments = useDebouncedCallback(
     (nextComments: StoredDocumentComment[]) => {
       if (!document) return;
-      void save({
+      void persistDocument({
         metadata: withDocumentComments(document.metadata, nextComments),
       });
     },
@@ -495,8 +520,17 @@ export function useEditorSession() {
     const metadata = { ...(document.metadata ?? {}) };
     const nextFavorite = metadata.favorite !== true;
     metadata.favorite = nextFavorite;
-    void save({ metadata });
-  }, [document, save]);
+    void persistDocument({ metadata });
+  }, [document, persistDocument]);
+
+  const loadErrorToastRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!error || isEditingTemplate) return;
+    if (loadErrorToastRef.current === error) return;
+    loadErrorToastRef.current = error;
+    showToast(error, "error");
+  }, [error, isEditingTemplate, showToast]);
 
   const content = editorContent;
   const templateHydrationKey = templateRecord
@@ -525,12 +559,13 @@ export function useEditorSession() {
         !templateRecord ||
         contentHydratedForId !== templateHydrationKey
       : scopesLoading ||
-        loading ||
         !resolvedId ||
         !resolvedWorkspaceId ||
+        (!document && loading) ||
         (document != null && contentHydratedForId !== document.id),
     error: isEditingTemplate ? templateError : error,
     content,
+    contentPlain,
     createdAtLabel: isEditingTemplate
       ? null
       : document

@@ -38,7 +38,7 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 05d | [05d-sidebar-comments.md](05d-sidebar-comments.md) | Sidebar comments panel + bidirectional linking | ✅ complete |
 | 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, template fields, signed URLs | ✅ complete |
 | 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | ✅ complete |
-| 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, insights sidebar, Ask | **next** |
+| 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, Ask, Properties Manage + AI auto-fill | **next** |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, metadata, templates | 7–10 days |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |

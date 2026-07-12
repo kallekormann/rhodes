@@ -1,3 +1,16 @@
+.library-view__scroll {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+}
+
+.library-view__inner {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+}
+
 .library-view__drop {
   margin-bottom: var(--space-xl);
 }
@@ -15,7 +28,7 @@
 .source-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
-  align-items: center;
+  align-items: start;
   gap: var(--space-md);
   width: 100%;
   padding: var(--space-md);
@@ -44,11 +57,7 @@
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--color-text-secondary);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.5;
 }
 
 .source-row__size,

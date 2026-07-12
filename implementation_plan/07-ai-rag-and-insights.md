@@ -1,6 +1,6 @@
 # Phase 07 — AI, RAG, and Insights
 
-**Status:** planned  
+**Status:** in progress  
 **Depends on:** Phase 06  
 **Blocks:** Phase 08  
 **Estimated duration:** 7–10 days
@@ -10,10 +10,11 @@
 ## Objectives
 
 1. Implement **semantic insights** while writing (debounced RAG).
-2. Build **Right Panel** tabs: Insights, Ask, Properties (properties content in Phase 08).
+2. Build **Right Panel** tabs: Insights, Ask, Properties (with **Manage properties** toolbar).
 3. **Ask chat** scoped to workspace with streaming responses.
 4. **Quote insertion** flow: select insight → CitationBlock in editor.
 5. Document **re-embedding** on save when content changes &gt;15%.
+6. **Document properties management** in the Properties tab: bottom action bar, add/delete workspace fields, extended field types, AI auto-fill on save.
 
 ---
 
@@ -32,7 +33,7 @@
 - [06-ai-chat.md](../docs/06-ai-chat.md)
 - [26-ui-mock-reference.md](../docs/26-ui-mock-reference.md) — RightPanel, AskComposer
 - [11-editor-tiptap.md](../docs/11-editor-tiptap.md) — CitationBlock
-- [18-non-functional-requirements.md](../docs/18-non-functional-requirements.md) — debounce, latency budgets
+- [08-metadata-system.md](../docs/08-metadata-system.md) — property layers, field types, AI metadata
 
 ---
 
@@ -70,7 +71,14 @@ apps/web/src/
 │       └── WhyRelevant.tsx
 ├── hooks/
 │   ├── useInsights.ts              # Debounced fetch
-│   └── useAskChat.ts
+│   ├── useAskChat.ts
+│   └── useMetadataSchemas.ts       # extend: create/delete schema fields
+├── components/
+│   ├── PropertiesTab.tsx           # + bottom action bar + Manage flow
+│   ├── PropertiesManageSheet.tsx   # add/delete property definitions
+│   └── properties/
+│       ├── AddPropertyDialog.tsx
+│       └── PropertyTypePicker.tsx
 └── lib/documents/embed-on-save.ts
 
 apps/worker/src/jobs/
@@ -186,17 +194,135 @@ Port `InsightDot.tsx`:
 
 **`llm-generate.ts`:**
 - BullMQ queue `llm` with concurrency **2**
-- Jobs: `why-relevant`, `ask-turn`, `summarize` (from Phase 06)
+- Jobs: `why-relevant`, `ask-turn`, `summarize` (Phase 06), `extract-document-metadata` (§13)
 - 30s hard timeout → fallback to retrieval-only text
 
 ### 12. Right Panel wiring
 
-Port `RightPanel.tsx` fully:
 | Tab | Phase 07 content |
 |-----|------------------|
 | Insights | Ranked matches, relevance %, Why relevant?, quote flow |
 | Ask | Chat thread + composer |
-| Properties | Stub → Phase 08 |
+| Properties | Schema-driven values + **Manage** action bar (see §13) |
+
+### 13. Document properties — Manage UI (sidebar)
+
+**Goal:** While editing a document, users can define which properties exist for *all documents in the workspace* without leaving the editor — same affordance pattern as `TemplateDetailPanel` bottom action bar.
+
+#### UI pattern (reference)
+
+Mirror [`TemplateDetailPanel.tsx`](../apps/web/src/components/TemplateDetailPanel.tsx) `.template-detail__actionbar`:
+- Properties tab body scrolls (`panel-tab--properties`)
+- **Pinned bottom toolbar** inside the tab: primary **Manage** button (secondary: optional "View history" later)
+- Click **Manage** → slide-over sheet or nested panel listing workspace property definitions
+
+```
+┌─ Properties tab ─────────────────┐
+│ Created · Created by             │
+│ Status        [ Draft ▾ ]        │
+│ Summary       [ …………… ]          │
+│ Due           [ Nov 10 ]           │
+│ …scroll…                         │
+├──────────────────────────────────┤
+│              [ Manage ]          │  ← action bar (like template sidebar)
+└──────────────────────────────────┘
+```
+
+**Manage sheet:**
+| Action | Behavior |
+|--------|----------|
+| List fields | All `metadata_schemas` rows for workspace (label, type, option count) |
+| Add property | Opens add flow (type picker → label → options if needed) |
+| Delete property | Confirm if any documents have values; remove schema row; optional: purge key from `documents.metadata` |
+| Reorder | P2 — drag order in sheet (display order in Properties tab) |
+
+**Add property flow:**
+1. User enters **Label** (e.g. "Review date") → auto-generate `field_key` (`review_date`)
+2. User picks **Data type** (see table below)
+3. If `select` / `multi_select`: define options (chip input, one per line)
+4. Save → `POST /api/metadata-schemas` → field appears immediately in Properties tab
+
+**Permissions (V1):**
+- Any workspace **member** can edit property **values** on documents they can edit
+- **Owner / admin** can add/delete schema fields via Manage (match Phase 08 settings later)
+
+#### Field types — Phase 07 scope
+
+| `field_type` | UI control | Value shape in `documents.metadata` | Notes |
+|--------------|------------|-------------------------------------|-------|
+| `text` | Single-line `Input` | `"string"` | Default for freeform labels |
+| `textarea` | `TextArea` | `"string"` | Longer summary / notes |
+| `select` | `Dropdown` | `"option_id"` | Label + predefined options |
+| `multi_select` | Tag chips + dropdown | `["a","b"]` | Multiple options |
+| `date` | `DatePickerField` | `"YYYY-MM-DD"` | Single date |
+| `date_range` | `DateRangeField` | `{ "start": "…", "end": "…" }` | Timelines, sprints |
+| `number` | Number input | `number` | Estimates, scores |
+| `tags` | Chip input | `["tag1","tag2"]` | Freeform tags |
+| `url` | `Input` + link validation | `"https://…"` | External refs |
+| `checkbox` | Toggle | `boolean` | Flags (e.g. "Needs review") |
+
+**Migration:** extend `metadata_schemas.field_type` check constraint for `textarea`, `multi_select`, `date_range`, `url`, `checkbox` (or map `date_range` to jsonb options in schema).
+
+#### Recommended property catalog (sensible defaults)
+
+Users can add any custom field via Manage. Ship **suggestions** in the add flow ("Common properties") so teams don't start from a blank slate:
+
+| Label | Type | Example options | Auto-fill source | Layer |
+|-------|------|-----------------|------------------|-------|
+| **Status** | `select` | draft, in progress, review, done, archived | AI infers from tone/structure on save (optional) | user + AI |
+| **Priority** | `select` | low, medium, high, urgent | — | user |
+| **Document type** | `select` | spec, meeting notes, research, experiment, plan, decision, weekly review | AI classifies from title + first § | AI |
+| **Summary** | `textarea` | — | LLM 2–3 sentences on save (debounced) | AI |
+| **Tags** | `tags` | — | LLM topics[] from content; user can edit | AI + user |
+| **Due date** | `date` | — | AI extracts explicit dates from body ("by Nov 10") | AI + user |
+| **Timeline** | `date_range` | — | — | user |
+| **Review date** | `date` | — | — | user |
+| **Project** | `text` or `select` | workspace-specific list | — | user |
+| **Owner** | read-only row | — | `documents.created_by` → profile display name | system |
+| **Created** | read-only row | — | `documents.created_at` | system |
+| **Word count** | `number` (read-only) | — | `content_plain` split length on save | system |
+| **Language** | `select` | en, de, fr, es, … | `detected_language` column / franc | system + AI |
+| **Source** | `select` | blank, template, library, import | Set on create from `template_id` / library link | system |
+| **Stakeholders** | `tags` | — | AI NER people/orgs from content (optional) | AI |
+| **Decision status** | `select` | proposed, agreed, rejected, superseded | AI for decision-type docs | AI + user |
+| **Experiment outcome** | `select` | pending, success, failed, inconclusive | — | user |
+| **Confidence** | `select` | low, medium, high | AI self-assessed completeness (optional) | AI |
+| **Related doc** | `text` (V1) → doc link (V1.5) | — | AI suggests from RAG similarity (Insights tab) | AI |
+
+**Reserved keys** (never offered in Manage): `favorite`, `archived`, `archived_at`, `template_draft`, `comments`, `template_description`.
+
+#### API additions
+
+```
+POST   /api/metadata-schemas          # { workspace_id, field_label, field_type, options? }
+DELETE /api/metadata-schemas/[id]     # owner/admin; optional ?purge_values=true
+PATCH  /api/metadata-schemas/[id]     # relabel, update options (P2)
+```
+
+Validate: max **20 custom fields** per workspace; `field_key` unique; no reserved keys.
+
+#### AI auto-fill on document save (Phase 07)
+
+Hook into existing debounced document PATCH (after Phase 05c metadata write path):
+
+1. On save, if AI metadata enabled (workspace default on): enqueue `extract-document-metadata` job or inline fast model call
+2. Model: `llama3.2:3b-instruct-q4_K_M` with structured JSON output schema
+3. Only fill keys that are **empty** or user has not manually edited since last AI run (track `metadata._ai_filled_keys` or per-field `metadata._ai.{key}_at`)
+4. Fields eligible for auto-fill: `summary`, `tags`, `document_type`, `due_date` (if parseable), `stakeholders`, `decision_status`, `confidence`
+5. Never overwrite user-edited values
+
+**UX:** subtle "AI suggested" hint on auto-filled fields; user can clear or override.
+
+#### Relationship to Phase 08
+
+| Concern | Phase 07 (editor) | Phase 08 (settings) |
+|---------|-------------------|---------------------|
+| Edit property values | Properties tab | — |
+| Add/delete property definitions | Properties → **Manage** | Settings → Space → Custom fields (same API) |
+| Team-wide schema admin | Owner/admin via Manage | Full settings UI + audit |
+| Saved views / filter by metadata | — | Documents view filters |
+
+Phase 07 delivers the **in-context Manage** flow; Phase 08 duplicates entry point in Settings for admins who prefer space configuration there.
 
 ---
 
@@ -225,6 +351,12 @@ Port `RightPanel.tsx` fully:
 - [ ] LLM queue limits concurrent jobs to 2
 - [ ] 30s timeout returns graceful fallback
 - [ ] Insights only from active workspace (RLS + RPC param)
+- [ ] Properties tab shows pinned **Manage** action bar (template-sidebar pattern)
+- [ ] Add property: pick type (text, select, date, date_range, tags, …) → appears in tab
+- [ ] Delete property: confirm + removed from schema (optional value purge)
+- [ ] `date_range` stores `{ start, end }` and renders with `DateRangeField`
+- [ ] AI auto-fill on save populates empty Summary/Tags/Document type without overwriting user edits
+- [ ] System fields (Created, Owner, Word count) read-only in Properties tab
 
 ---
 
@@ -234,8 +366,10 @@ Port `RightPanel.tsx` fully:
 2. Ask chat streams with workspace-scoped citations.
 3. Quote insertion flow complete.
 4. Document embeddings update on substantial edits.
-5. Right Panel Insights + Ask tabs fully functional.
-6. Meets latency budgets where CPU allows (stream on slow responses).
+5. Right Panel Insights + Ask + Properties (**Manage** flow) fully functional.
+6. Document property definitions editable in-editor (add/delete types).
+7. AI auto-fill for eligible metadata fields on save.
+8. Meets latency budgets where CPU allows (stream on slow responses).
 
 ---
 
@@ -254,7 +388,9 @@ Port `RightPanel.tsx` fully:
 
 - `packages/ai` Ollama + RAG module
 - Insights + Ask API routes (streaming)
-- Right Panel Insights + Ask tabs
+- Right Panel Insights + Ask + Properties (Manage toolbar)
+- `PropertiesManageSheet` + metadata schema CRUD API
+- AI document metadata extraction job
 - InsightDot affordance
 - Document embed-on-save job
 - LLM BullMQ queue

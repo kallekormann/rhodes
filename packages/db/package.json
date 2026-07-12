@@ -12,10 +12,12 @@
     "lint": "echo 'no lint configured'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1"
+    "@supabase/supabase-js": "^2.110.2",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.8.2"
   }
 }

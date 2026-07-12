@@ -11,7 +11,9 @@ import { InsightDot } from "@/components/InsightDot";
 import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { useInsights } from "@/hooks/useInsights";
 import { getCommentIdsToRemove } from "@/lib/documents/comments";
+import type { CitationInsertInput } from "@/lib/documents/editor-commands";
 import "./EditorView.css";
 
 const SCROLL_TOP_THRESHOLD = 16;
@@ -31,8 +33,8 @@ function EditorViewContent() {
 
   const {
     loading,
-    error,
     content,
+    contentPlain,
     documentId,
     workspaceId,
     createdAtLabel,
@@ -60,10 +62,33 @@ function EditorViewContent() {
     onTemplateMetadataChange,
   } = useEditorSession();
 
+  const {
+    insights,
+    loading: insightsLoading,
+    error: insightsError,
+  } = useInsights(
+    isTemplateMode ? null : workspaceId,
+    contentPlain,
+  );
+
   const [shareOpen, setShareOpen] = useState(false);
+  const [askPrefill, setAskPrefill] = useState("");
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
   const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
+  const insertCitationRef = useRef<(input: CitationInsertInput) => void>(() => {});
+
+  const handleOpenAsk = useCallback(
+    (selectedText?: string) => {
+      if (selectedText) setAskPrefill(selectedText);
+      openPanel("ask");
+    },
+    [openPanel],
+  );
+
+  const handleInsertCitation = useCallback((input: CitationInsertInput) => {
+    insertCitationRef.current(input);
+  }, []);
 
   const selectComment = useCallback(
     (
@@ -272,8 +297,6 @@ function EditorViewContent() {
 
           {loading ? (
             <p className="caption editor-content__loading">Loading document…</p>
-          ) : error ? (
-            <p className="caption editor-content__loading">{error}</p>
           ) : (
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
@@ -289,7 +312,7 @@ function EditorViewContent() {
                     isTemplateMode ? undefined : syncCommentsFromEditor
                   }
                   onUpdate={handleContentUpdate}
-                  onAsk={() => openPanel("ask")}
+                  onAsk={handleOpenAsk}
                   selectedCommentId={selectedCommentId}
                   hoverCommentId={hoverCommentId}
                   scrollContainerRef={canvasRef}
@@ -299,6 +322,9 @@ function EditorViewContent() {
                   onRegisterScrollToComment={(scrollToComment) => {
                     scrollToCommentRef.current = scrollToComment;
                   }}
+                  onRegisterInsertCitation={(insertCitation) => {
+                    insertCitationRef.current = insertCitation;
+                  }}
                 />
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
@@ -306,7 +332,9 @@ function EditorViewContent() {
           )}
         </article>
 
-        {!panelOpen && <InsightDot />}
+        {!panelOpen && !isTemplateMode && (
+          <InsightDot count={insights.length} />
+        )}
       </div>
       <RightPanel
         comments={isTemplateMode ? [] : comments}
@@ -326,6 +354,12 @@ function EditorViewContent() {
         onMetadataFieldChange={onMetadataFieldChange}
         onTemplateDescriptionChange={onTemplateDescriptionChange}
         onTemplateMetadataChange={onTemplateMetadataChange}
+        insights={insights}
+        insightsLoading={insightsLoading}
+        insightsError={insightsError}
+        askPrefill={askPrefill}
+        onConsumeAskPrefill={() => setAskPrefill("")}
+        onInsertCitation={isTemplateMode ? undefined : handleInsertCitation}
       />
     </div>
   );

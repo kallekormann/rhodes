@@ -20,6 +20,8 @@ export function embeddingStatusToPill(status: string): {
       return { variant: "success", label: "Ready" };
     case "processing":
       return { variant: "progress", label: "Indexing…" };
+    case "pending":
+      return { variant: "progress", label: "Queued" };
     case "failed":
       return { variant: "error", label: "Failed" };
     default:

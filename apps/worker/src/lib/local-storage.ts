@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { libraryFilesDataDir } from "@rhodes/shared";
 
-const LOCAL_ROOT = path.join(process.cwd(), ".data", "library-files");
+const LOCAL_ROOT = libraryFilesDataDir();
 
 function resolvePath(storagePath: string): string {
   const normalized = path.normalize(storagePath).replace(/^(\.\.(\/|\\|$))+/, "");

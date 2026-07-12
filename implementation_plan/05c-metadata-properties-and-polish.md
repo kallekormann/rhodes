@@ -41,7 +41,8 @@
 | Metadata-powered **saved views** | P3 | Deferred to V1.5 per `docs/10-templates-and-views.md` |
 | Metadata **search/filter** in Documents view | P2 | Filter chips from active metadata |
 | Document **relationships** from metadata | P3 | e.g. `related_document_ids[]` in metadata |
-| AI metadata extraction on save | P3 | Phase 07/08 |
+| AI metadata extraction on save | moved → Phase 07 |
+| Properties **Manage** toolbar (add/delete fields) | moved → Phase 07 |
 
 ---
 

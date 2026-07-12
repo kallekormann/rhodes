@@ -20,6 +20,7 @@ dist/
 .next/
 out/
 apps/web/.data/
+.data/
 *.tsbuildinfo
 ui-mock/dist/
 

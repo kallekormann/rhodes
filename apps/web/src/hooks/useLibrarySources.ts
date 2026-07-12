@@ -1,14 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import type { LibrarySourceRecord } from "@/lib/library/schemas";
+import { toLibrarySourceRecord, upsertLibrarySource } from "@/lib/library/realtime";
 
 export function useLibrarySources(workspaceId: string | null) {
   const [sources, setSources] = useState<LibrarySourceRecord[]>([]);
   const [loading, setLoading] = useState(Boolean(workspaceId));
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [live, setLive] = useState(false);
+  const fallbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
     if (!workspaceId) {
@@ -42,30 +45,74 @@ export function useLibrarySources(workspaceId: string | null) {
   }, [refresh, workspaceId]);
 
   useEffect(() => {
-    const needsPoll = sources.some(
+    if (!workspaceId) {
+      setLive(false);
+      return;
+    }
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`library-sources:${workspaceId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "library_sources",
+          filter: `workspace_id=eq.${workspaceId}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const id =
+              typeof payload.old.id === "string" ? payload.old.id : null;
+            if (!id) return;
+            setSources((current) => current.filter((source) => source.id !== id));
+            return;
+          }
+
+          const record = toLibrarySourceRecord(
+            payload.new as Record<string, unknown>,
+          );
+          if (!record) return;
+          setSources((current) => upsertLibrarySource(current, record));
+        },
+      )
+      .subscribe((status) => {
+        setLive(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      setLive(false);
+      void supabase.removeChannel(channel);
+    };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    const indexing = sources.some(
       (source) =>
         source.embedding_status === "pending" ||
         source.embedding_status === "processing",
     );
 
-    if (!needsPoll) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+    if (!indexing) {
+      if (fallbackPollRef.current) {
+        clearInterval(fallbackPollRef.current);
+        fallbackPollRef.current = null;
       }
       return;
     }
 
-    if (pollRef.current) return;
+    if (fallbackPollRef.current) return;
 
-    pollRef.current = setInterval(() => {
+    // Poll while indexing — Realtime may not deliver in local Docker setups.
+    fallbackPollRef.current = setInterval(() => {
       void refresh();
     }, 3000);
 
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (fallbackPollRef.current) {
+        clearInterval(fallbackPollRef.current);
+        fallbackPollRef.current = null;
       }
     };
   }, [refresh, sources]);
@@ -120,7 +167,15 @@ export function useLibrarySources(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      const record = toLibrarySourceRecord(
+        (data.source as Record<string, unknown>) ?? {},
+      );
+      if (record) {
+        setSources((current) => upsertLibrarySource(current, record));
+      } else {
+        await refresh();
+      }
+
       return { ok: true as const };
     },
     [refresh],
@@ -131,6 +186,7 @@ export function useLibrarySources(workspaceId: string | null) {
     loading,
     error,
     uploading,
+    live,
     refresh,
     uploadFiles,
     retrySource,

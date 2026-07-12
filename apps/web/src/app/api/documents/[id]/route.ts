@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { extractPlainText } from "@/lib/documents/plain-text";
+import {
+  shouldEnqueueDocumentEmbed,
+  shouldEnqueueMetadataExtraction,
+} from "@/lib/documents/embed-on-save";
+import {
+  enqueueDocumentEmbed,
+  enqueueDocumentMetadataExtraction,
+} from "@/lib/documents/queue";
 import { updateDocumentSchema } from "@/lib/documents/schemas";
 import { createClient } from "@/lib/supabase/server";
 
@@ -64,6 +72,21 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: existing, error: existingError } = await supabase
+    .from("documents")
+    .select("id, workspace_id, content_plain")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError || !existing) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: existingError?.message ?? "Not found" },
+        { status: existingError ? 400 : 404 },
+      ),
+    );
+  }
+
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -91,6 +114,40 @@ export async function PATCH(request: Request, context: RouteContext) {
     return withSecurityHeaders(
       NextResponse.json({ error: error?.message ?? "Update failed" }, { status: 400 }),
     );
+  }
+
+  const previousPlain = existing.content_plain;
+  const nextPlain =
+    typeof patch.content_plain === "string"
+      ? patch.content_plain
+      : (data.content_plain as string | null);
+
+  if (
+    shouldEnqueueDocumentEmbed(previousPlain, nextPlain) &&
+    data.workspace_id
+  ) {
+    try {
+      await enqueueDocumentEmbed({
+        documentId: data.id,
+        workspaceId: data.workspace_id,
+      });
+    } catch (enqueueError) {
+      console.error("document embed enqueue failed", enqueueError);
+    }
+  }
+
+  if (
+    shouldEnqueueMetadataExtraction(previousPlain, nextPlain) &&
+    data.workspace_id
+  ) {
+    try {
+      await enqueueDocumentMetadataExtraction({
+        documentId: data.id,
+        workspaceId: data.workspace_id,
+      });
+    } catch (enqueueError) {
+      console.error("metadata extraction enqueue failed", enqueueError);
+    }
   }
 
   return withSecurityHeaders(NextResponse.json({ document: data }));

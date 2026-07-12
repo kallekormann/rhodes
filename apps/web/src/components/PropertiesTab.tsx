@@ -1,15 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/Button";
 import { DatePickerField } from "@/components/DatePickerField";
+import { DateRangeField, type DateRange } from "@/components/DateRangePicker";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
+import { PropertiesManageSheet } from "@/components/PropertiesManageSheet";
 import { TextArea } from "@/components/TextArea";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
-import type { MetadataSchemaField } from "@/lib/metadata/schemas";
+import type {
+  MetadataDateRange,
+  MetadataFieldValue,
+  MetadataSchemaField,
+} from "@/lib/metadata/schemas";
 import {
   parseSchemaOptions,
-  readUserMetadataValue,
+  readMetadataFieldValue,
 } from "@/lib/metadata/schemas";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
 import "./PropertiesTab.css";
@@ -22,12 +29,12 @@ type PropertiesTabProps = {
   createdByLabel?: string | null;
   templateDescription?: string | null;
   templateMetadata?: TemplateMetadata;
-  onMetadataFieldChange?: (fieldKey: string, value: string | null) => void;
+  onMetadataFieldChange?: (fieldKey: string, value: MetadataFieldValue) => void;
   onTemplateDescriptionChange?: (description: string) => void;
   onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
 };
 
-function parseDateValue(value: string | null): Date | null {
+function parseDateValue(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -41,14 +48,82 @@ function formatDateValue(date: Date | null): string | null {
   return `${year}-${month}-${day}`;
 }
 
+function dateRangeFromMetadata(range: MetadataDateRange | null): DateRange {
+  return {
+    start: parseDateValue(range?.start),
+    end: parseDateValue(range?.end),
+  };
+}
+
+function metadataFromDateRange(range: DateRange): MetadataDateRange | null {
+  const start = formatDateValue(range.start);
+  const end = formatDateValue(range.end);
+  if (!start && !end) return null;
+  return { start, end };
+}
+
+function TagsEditor({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const addTag = () => {
+    const next = draft.trim();
+    if (!next || tags.includes(next)) return;
+    onChange([...tags, next]);
+    setDraft("");
+  };
+
+  return (
+    <div className="props-tags">
+      <div className="props-tags__list">
+        {tags.map((tag) => (
+          <span key={tag} className="tag">
+            {tag}
+            <button
+              type="button"
+              className="props-tags__remove"
+              onClick={() => onChange(tags.filter((item) => item !== tag))}
+              aria-label={`Remove ${tag}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="props-tags__add">
+        <Input
+          variant="plain"
+          value={draft}
+          onChange={setDraft}
+          placeholder="Add tag"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addTag();
+            }
+          }}
+        />
+        <button type="button" className="tag tag--add" onClick={addTag}>
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SchemaFieldRow({
   field,
   value,
   onChange,
 }: {
   field: MetadataSchemaField;
-  value: string | null;
-  onChange: (value: string | null) => void;
+  value: MetadataFieldValue;
+  onChange: (value: MetadataFieldValue) => void;
 }) {
   const options = parseSchemaOptions(field.options);
 
@@ -59,13 +134,44 @@ function SchemaFieldRow({
         <dd>
           <Dropdown
             variant="plain"
-            value={value ?? ""}
+            value={typeof value === "string" ? value : ""}
             options={options.map((option) => ({
               id: option,
               label: option.replace(/_/g, " "),
             }))}
             onChange={(next) => onChange(next || null)}
           />
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "multi_select" && options) {
+    const selected = Array.isArray(value) ? value : [];
+    return (
+      <div className="props-list__row props-list__row--stacked">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <div className="props-multi-select">
+            {options.map((option) => {
+              const active = selected.includes(option);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  className={`tag ${active ? "tag--active" : ""}`}
+                  onClick={() => {
+                    const next = active
+                      ? selected.filter((item) => item !== option)
+                      : [...selected, option];
+                    onChange(next.length > 0 ? next : null);
+                  }}
+                >
+                  {option.replace(/_/g, " ")}
+                </button>
+              );
+            })}
+          </div>
         </dd>
       </div>
     );
@@ -78,8 +184,91 @@ function SchemaFieldRow({
         <dd>
           <DatePickerField
             variant="plain"
-            value={parseDateValue(value)}
+            value={parseDateValue(typeof value === "string" ? value : null)}
             onChange={(next) => onChange(formatDateValue(next))}
+          />
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "date_range") {
+    const range =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? dateRangeFromMetadata(value as MetadataDateRange)
+        : { start: null, end: null };
+
+    return (
+      <div className="props-list__row">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <DateRangeField
+            variant="plain"
+            value={range}
+            onChange={(next) => onChange(metadataFromDateRange(next))}
+          />
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "textarea") {
+    return (
+      <div className="props-list__row props-list__row--stacked">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <TextArea
+            className="props-textarea"
+            value={typeof value === "string" ? value : ""}
+            onChange={(event) => onChange(event.target.value || null)}
+            rows={4}
+            placeholder={`Add ${field.field_label.toLowerCase()}`}
+          />
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "tags" || field.field_type === "multi_select") {
+    const tags = Array.isArray(value) ? value : [];
+    return (
+      <div className="props-list__row props-list__row--stacked">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <TagsEditor tags={tags} onChange={(next) => onChange(next.length ? next : null)} />
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "checkbox") {
+    return (
+      <div className="props-list__row">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <label className="props-checkbox">
+            <input
+              type="checkbox"
+              checked={value === true}
+              onChange={(event) => onChange(event.target.checked)}
+            />
+            <span>{value === true ? "Yes" : "No"}</span>
+          </label>
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "number") {
+    return (
+      <div className="props-list__row">
+        <dt>{field.field_label}</dt>
+        <dd>
+          <Input
+            variant="plain"
+            value={typeof value === "number" ? String(value) : ""}
+            onChange={(next) => onChange(next ? Number(next) : null)}
+            placeholder="0"
           />
         </dd>
       </div>
@@ -92,7 +281,7 @@ function SchemaFieldRow({
       <dd>
         <Input
           variant="plain"
-          value={value ?? ""}
+          value={typeof value === "string" ? value : ""}
           onChange={(next) => onChange(next || null)}
           placeholder={`Add ${field.field_label.toLowerCase()}`}
         />
@@ -170,7 +359,13 @@ export function PropertiesTab({
   onTemplateDescriptionChange,
   onTemplateMetadataChange,
 }: PropertiesTabProps) {
-  const { schemas, loading } = useMetadataSchemas(workspaceId);
+  const {
+    schemas,
+    loading,
+    createSchema,
+    deleteSchema,
+  } = useMetadataSchemas(workspaceId);
+  const [manageOpen, setManageOpen] = useState(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
@@ -180,7 +375,7 @@ export function PropertiesTab({
   }, []);
 
   const debouncedMetadataChange = useCallback(
-    (fieldKey: string, value: string | null) => {
+    (fieldKey: string, value: MetadataFieldValue) => {
       if (!onMetadataFieldChange) return;
       if (debounceTimers.current[fieldKey]) {
         clearTimeout(debounceTimers.current[fieldKey]);
@@ -194,13 +389,19 @@ export function PropertiesTab({
 
   const defaultProperties = templateMetadata?.default_properties ?? {};
 
-  const handleDefaultPropertyChange = (fieldKey: string, value: string | null) => {
+  const handleDefaultPropertyChange = (fieldKey: string, value: MetadataFieldValue) => {
     if (!onTemplateMetadataChange) return;
     const next = { ...defaultProperties };
-    if (!value) {
+    if (value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
       delete next[fieldKey];
-    } else {
+    } else if (typeof value === "string") {
       next[fieldKey] = value;
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      next[fieldKey] = String(value);
+    } else if (Array.isArray(value)) {
+      next[fieldKey] = value.join(", ");
+    } else if (value.start || value.end) {
+      next[fieldKey] = [value.start, value.end].filter(Boolean).join(" → ");
     }
     onTemplateMetadataChange({
       use_cases: templateMetadata?.use_cases ?? [],
@@ -218,76 +419,98 @@ export function PropertiesTab({
 
   return (
     <div className="panel-tab panel-tab--properties">
-      <dl className="props-list">
-        {mode === "template" && (
-          <>
-            <div className="props-list__row props-list__row--stacked">
-              <dt>Description</dt>
-              <dd>
-                <TextArea
-                  className="props-textarea"
-                  value={templateDescription ?? ""}
-                  onChange={(event) =>
-                    onTemplateDescriptionChange?.(event.target.value)
-                  }
-                  rows={4}
-                  placeholder="Describe when to use this template"
-                />
-              </dd>
-            </div>
-            <UseCasesEditor
-              useCases={templateMetadata?.use_cases ?? []}
-              onChange={(useCases) =>
-                onTemplateMetadataChange?.({
-                  use_cases: useCases,
-                  default_properties: defaultProperties,
-                })
-              }
-            />
-            {schemas.length > 0 && (
-              <div className="props-list__section">
-                <h4 className="props-list__section-title">Default properties</h4>
-                {schemas.map((field) => (
-                  <SchemaFieldRow
-                    key={`default-${field.id}`}
-                    field={field}
-                    value={defaultProperties[field.field_key] ?? null}
-                    onChange={(value) => handleDefaultPropertyChange(field.field_key, value)}
+      <div className="panel-tab--properties__scroll overlay-scrollbar">
+        <dl className="props-list">
+          {mode === "template" && (
+            <>
+              <div className="props-list__row props-list__row--stacked">
+                <dt>Description</dt>
+                <dd>
+                  <TextArea
+                    className="props-textarea"
+                    value={templateDescription ?? ""}
+                    onChange={(event) =>
+                      onTemplateDescriptionChange?.(event.target.value)
+                    }
+                    rows={4}
+                    placeholder="Describe when to use this template"
                   />
-                ))}
+                </dd>
               </div>
-            )}
-          </>
-        )}
-
-        {mode === "document" && (
-          <>
-            {createdAtLabel && (
-              <div className="props-list__row">
-                <dt>Created</dt>
-                <dd className="props-list__readonly">{createdAtLabel}</dd>
-              </div>
-            )}
-            {createdByLabel && (
-              <div className="props-list__row">
-                <dt>Created by</dt>
-                <dd className="props-list__readonly">{createdByLabel}</dd>
-              </div>
-            )}
-            {schemas.map((field) => (
-              <SchemaFieldRow
-                key={field.id}
-                field={field}
-                value={readUserMetadataValue(metadata, field.field_key)}
-                onChange={(value) => debouncedMetadataChange(field.field_key, value)}
+              <UseCasesEditor
+                useCases={templateMetadata?.use_cases ?? []}
+                onChange={(useCases) =>
+                  onTemplateMetadataChange?.({
+                    use_cases: useCases,
+                    default_properties: defaultProperties,
+                  })
+                }
               />
-            ))}
-            {schemas.length === 0 && (
-              <p className="caption">No custom properties defined for this workspace.</p>
-            )}
-          </>
-        )}
-      </dl>
+              {schemas.length > 0 && (
+                <div className="props-list__section">
+                  <h4 className="props-list__section-title">Default properties</h4>
+                  {schemas.map((field) => (
+                    <SchemaFieldRow
+                      key={`default-${field.id}`}
+                      field={field}
+                      value={defaultProperties[field.field_key] ?? null}
+                      onChange={(value) =>
+                        handleDefaultPropertyChange(field.field_key, value)
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {mode === "document" && (
+            <>
+              {createdAtLabel && (
+                <div className="props-list__row">
+                  <dt>Created</dt>
+                  <dd className="props-list__readonly">{createdAtLabel}</dd>
+                </div>
+              )}
+              {createdByLabel && (
+                <div className="props-list__row">
+                  <dt>Created by</dt>
+                  <dd className="props-list__readonly">{createdByLabel}</dd>
+                </div>
+              )}
+              {schemas.map((field) => (
+                <SchemaFieldRow
+                  key={field.id}
+                  field={field}
+                  value={readMetadataFieldValue(metadata, field)}
+                  onChange={(value) => debouncedMetadataChange(field.field_key, value)}
+                />
+              ))}
+              {schemas.length === 0 && (
+                <p className="caption">
+                  No custom properties yet. Use Manage to add fields for this workspace.
+                </p>
+              )}
+            </>
+          )}
+        </dl>
+      </div>
+
+      {mode === "document" && (
+        <div className="properties-tab__actionbar">
+          <Button variant="secondary" onClick={() => setManageOpen(true)}>
+            Manage
+          </Button>
+        </div>
+      )}
+
+      <PropertiesManageSheet
+        open={manageOpen}
+        schemas={schemas}
+        onClose={() => setManageOpen(false)}
+        onCreate={createSchema}
+        onDelete={deleteSchema}
+      />
     </div>
   );
 }

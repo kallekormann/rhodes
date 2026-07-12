@@ -18,7 +18,7 @@ import "./EditorBubbleMenu.css";
 
 type EditorBubbleMenuProps = {
   editor: Editor;
-  onAsk?: () => void;
+  onAsk?: (selectedText?: string) => void;
   workspaceId?: string | null;
   documentId?: string | null;
   onCommentSave?: (text: string, range: { from: number; to: number }) => void;
@@ -268,8 +268,11 @@ export function EditorBubbleMenu({
   };
 
   const handleAsk = () => {
+    const { from, to } = lastSelectionRef.current;
+    const selectedText =
+      from < to ? editor.state.doc.textBetween(from, to, " ").trim() : "";
     dismissBubble();
-    onAsk?.();
+    onAsk?.(selectedText || undefined);
   };
 
   if (!bubbleState) return null;

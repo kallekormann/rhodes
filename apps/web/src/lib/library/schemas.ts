@@ -18,15 +18,28 @@ const EXTENSION_MIME: Record<string, string> = {
   pdf: "application/pdf",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   txt: "text/plain",
+  md: "text/markdown",
+  markdown: "text/markdown",
 };
 
+const ALLOWED_MIME_TYPES = new Set([
+  ...Object.values(EXTENSION_MIME),
+  "text/x-markdown",
+]);
+
 export function resolveLibraryMimeType(file: File): string | null {
-  const allowed = new Set(Object.values(EXTENSION_MIME));
-  if (file.type && allowed.has(file.type)) {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext && EXTENSION_MIME[ext]) {
+    if (!file.type || !ALLOWED_MIME_TYPES.has(file.type)) {
+      return EXTENSION_MIME[ext];
+    }
+  }
+
+  if (file.type && ALLOWED_MIME_TYPES.has(file.type)) {
     return file.type;
   }
 
-  const ext = file.name.split(".").pop()?.toLowerCase();
   if (!ext) return null;
   return EXTENSION_MIME[ext] ?? null;
 }
