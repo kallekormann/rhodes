@@ -13,11 +13,28 @@ const AUTH_PATHS = new Set([
 
 const PUBLIC_API_PREFIXES = ["/api/health", "/api/auth/"];
 
+function stripBasePath(pathname: string) {
+  if (pathname === "/app") return "/";
+  if (pathname.startsWith("/app/")) return pathname.slice(4);
+  return pathname;
+}
+
 function isPublicPath(pathname: string) {
-  if (AUTH_PATHS.has(pathname) || pathname.startsWith("/auth/")) {
+  const path = stripBasePath(pathname);
+
+  if (AUTH_PATHS.has(path) || path.startsWith("/auth/")) {
     return true;
   }
-  return PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+  if (path.startsWith("/invite/")) {
+    return true;
+  }
+
+  if (path.startsWith("/api/invites/") && !path.endsWith("/accept")) {
+    return true;
+  }
+
+  return PUBLIC_API_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
 export async function middleware(request: NextRequest) {
@@ -36,11 +53,12 @@ export async function middleware(request: NextRequest) {
   if (!isPublicPath(pathname) && !user) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
-    loginUrl.searchParams.set("next", pathname);
+    loginUrl.searchParams.set("next", stripBasePath(pathname));
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && AUTH_PATHS.has(pathname) && pathname !== "/auth/callback") {
+  const authPath = stripBasePath(pathname);
+  if (user && AUTH_PATHS.has(authPath) && authPath !== "/auth/callback") {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/";
     homeUrl.search = "";

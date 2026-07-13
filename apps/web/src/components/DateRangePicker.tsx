@@ -165,7 +165,8 @@ export function DateRangeField({
   variant = "field",
   className = "",
 }: DateRangeFieldProps) {
-  const { open, setOpen, rootRef, panelRef, align } = useFieldPanel();
+  const { open, setOpen, rootRef, panelRef, align, placement, panelCoords } =
+    useFieldPanel();
   const isPlain = variant === "plain";
   const display = value ? formatDateRange(value) : "";
 
@@ -188,7 +189,13 @@ export function DateRangeField({
       </button>
 
       {open && (
-        <FieldPanel ref={panelRef} align={align} calendar>
+        <FieldPanel
+          ref={panelRef}
+          align={align}
+          placement={placement}
+          coords={panelCoords}
+          calendar
+        >
           <DateRangePicker embedded value={value} onChange={handleChange} />
         </FieldPanel>
       )}

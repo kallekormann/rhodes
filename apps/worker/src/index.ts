@@ -34,13 +34,13 @@ const ingestWorker = new Worker(
 const embedWorker = new Worker(
   LIBRARY_EMBED_QUEUE,
   async (job) => processEmbedJob(job),
-  { ...LONG_JOB_WORKER_OPTS, concurrency: 2 },
+  { ...LONG_JOB_WORKER_OPTS, concurrency: 1 },
 );
 
 const summarizeWorker = new Worker(
   LIBRARY_SUMMARIZE_QUEUE,
   async (job) => processSummarizeJob(job),
-  { ...LONG_JOB_WORKER_OPTS, concurrency: 2 },
+  { ...LONG_JOB_WORKER_OPTS, concurrency: 1 },
 );
 
 const documentEmbedWorker = new Worker(

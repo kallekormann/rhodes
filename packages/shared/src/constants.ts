@@ -19,6 +19,9 @@ export const LIBRARY_BUCKET = "library-files" as const;
 export const LIBRARY_INGEST_QUEUE = "library-ingest" as const;
 export const LIBRARY_EMBED_QUEUE = "library-embed" as const;
 export const LIBRARY_SUMMARIZE_QUEUE = "library-summarize" as const;
+
+/** Future: split Tika extraction from chunking so JVM-heavy work scales independently. */
+export const LIBRARY_EXTRACT_QUEUE = "library-extract" as const;
 export const DOCUMENT_EMBED_QUEUE = "document-embed" as const;
 export const LLM_QUEUE = "llm" as const;
 
@@ -26,4 +29,5 @@ export const CONTENT_REEMBED_THRESHOLD = 0.15 as const;
 
 export const LIBRARY_CHUNK_CHARS = 2000 as const;
 export const LIBRARY_CHUNK_OVERLAP_CHARS = 256 as const;
+export const LIBRARY_SUMMARY_EXCERPT_CHARS = 2000 as const;
 export const LIBRARY_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;

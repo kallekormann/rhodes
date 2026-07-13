@@ -88,8 +88,8 @@
 
 .sticker-props-demo .props-list__row {
   display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: var(--space-sm);
+  grid-template-columns: 1fr;
+  gap: 6px;
   padding: var(--space-sm) 0;
   border-bottom: 1px solid var(--color-border-subtle);
 }
@@ -100,7 +100,9 @@
 
 .sticker-props-demo .props-list__row dt {
   font-size: 13px;
+  line-height: 1.4;
   color: var(--color-text-tertiary);
+  white-space: normal;
 }
 
 .sticker-props-demo .props-list__row dd {

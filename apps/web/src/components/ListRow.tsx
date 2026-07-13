@@ -3,8 +3,8 @@ import "./ListRow.css";
 
 type ListRowProps = {
   title: string;
-  meta?: string;
-  metaSecondary?: string;
+  meta?: ReactNode;
+  metaSecondary?: ReactNode;
   trailing?: ReactNode;
   actions?: ReactNode;
   footer?: ReactNode;

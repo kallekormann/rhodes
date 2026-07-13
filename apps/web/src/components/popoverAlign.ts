@@ -1,6 +1,23 @@
 export type HorizontalAlign = "left" | "right";
 
-const VIEWPORT_PADDING = 8;
+export const VIEWPORT_PADDING = 8;
+
+export type VerticalPlacement = "above" | "below";
+
+export const FIELD_PANEL_ESTIMATED_HEIGHT = 248;
+
+export function computeVerticalPlacement(
+  triggerRect: DOMRect,
+  panelHeight = FIELD_PANEL_ESTIMATED_HEIGHT,
+  viewportHeight = window.innerHeight,
+): VerticalPlacement {
+  const spaceBelow = viewportHeight - VIEWPORT_PADDING - triggerRect.bottom;
+  const spaceAbove = triggerRect.top - VIEWPORT_PADDING;
+
+  if (spaceBelow >= panelHeight) return "below";
+  if (spaceAbove >= panelHeight) return "above";
+  return spaceBelow >= spaceAbove ? "below" : "above";
+}
 
 export function computeHorizontalAlign(
   triggerRect: DOMRect,

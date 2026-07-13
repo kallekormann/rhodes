@@ -23,9 +23,10 @@ export type DocumentShareRecord = {
 type SharePopoverProps = {
   documentId: string;
   onClose?: () => void;
+  onSharesChange?: () => void;
 };
 
-export function SharePopover({ documentId, onClose }: SharePopoverProps) {
+export function SharePopover({ documentId, onClose, onSharesChange }: SharePopoverProps) {
   const [search, setSearch] = useState("");
   const [targets, setTargets] = useState<ShareTarget[]>([]);
   const [shares, setShares] = useState<DocumentShareRecord[]>([]);
@@ -87,7 +88,10 @@ export function SharePopover({ documentId, onClose }: SharePopoverProps) {
       body: JSON.stringify({
         grantee_type: target.kind,
         grantee_id: target.id,
-        label: target.label,
+        label:
+          target.kind === "user" && target.subtitle
+            ? `${target.label} (${target.subtitle})`
+            : target.label,
       }),
     });
     const data = await response.json().catch(() => ({}));
@@ -96,6 +100,7 @@ export function SharePopover({ documentId, onClose }: SharePopoverProps) {
       return;
     }
     await refreshShares();
+    onSharesChange?.();
     setSearch("");
   };
 
@@ -110,6 +115,7 @@ export function SharePopover({ documentId, onClose }: SharePopoverProps) {
       return;
     }
     await refreshShares();
+    onSharesChange?.();
   };
 
   const sharedIds = new Set(
@@ -130,7 +136,7 @@ export function SharePopover({ documentId, onClose }: SharePopoverProps) {
       <Input
         value={search}
         onChange={setSearch}
-        placeholder="Search team or person…"
+        placeholder="Search scope, name, or email…"
         icon={<Search size={15} strokeWidth={1.75} />}
         aria-label="Search share targets"
       />
@@ -162,7 +168,10 @@ export function SharePopover({ documentId, onClose }: SharePopoverProps) {
         {loading ? (
           <p className="share-popover__empty caption">Loading…</p>
         ) : targets.length === 0 ? (
-          <p className="share-popover__empty caption">No matches found</p>
+          <p className="share-popover__empty caption">
+            No matches found. You can share with scopes you belong to and people who share a
+            team scope with you.
+          </p>
         ) : (
           <ul className="share-popover__list">
             {targets

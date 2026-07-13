@@ -3,6 +3,7 @@ import type { Template } from "@/data/templates";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
 import { NeutralPill } from "./NeutralPill";
+import { PanelActionBar } from "./PanelActionBar";
 import "./TemplateDetailPanel.css";
 
 type TemplateDetailPanelProps = {
@@ -68,23 +69,25 @@ export function TemplateDetailPanel({
             )}
           </div>
 
-          <div className="template-detail__actionbar">
-            <div className="template-detail__actionbar-start">
-              {template.mine && onDelete && (
+          <PanelActionBar
+            start={
+              template.mine && onDelete ? (
                 <Button variant="danger" onClick={() => onDelete(template)}>
                   Delete
                 </Button>
-              )}
-            </div>
-            <div className="template-detail__actionbar-end">
-              {template.mine && onEdit && (
-                <Button variant="secondary" onClick={() => onEdit(template)}>
-                  Edit
-                </Button>
-              )}
-              <Button onClick={() => onUse(template)}>Use</Button>
-            </div>
-          </div>
+              ) : undefined
+            }
+            end={
+              <>
+                {template.mine && onEdit && (
+                  <Button variant="secondary" onClick={() => onEdit(template)}>
+                    Edit
+                  </Button>
+                )}
+                <Button onClick={() => onUse(template)}>Use</Button>
+              </>
+            }
+          />
         </>
       )}
     </aside>

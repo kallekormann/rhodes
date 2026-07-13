@@ -1,0 +1,31 @@
+.property-preset-row {
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.property-preset-row:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.property-preset-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.props-list--preset-preview {
+  margin: 0;
+}
+
+.props-list--preset-preview .props-list__row {
+  padding: var(--space-xs) 0;
+}
+
+.props-list--preset-preview .props-list__row:last-child {
+  border-bottom: none;
+}

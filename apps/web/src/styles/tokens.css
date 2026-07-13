@@ -80,6 +80,13 @@
   --header-height: 48px;
   --panel-width-sm: 352px;
   --panel-width-md: 420px;
+  --panel-flyout-width: 320px;
+  --panel-width-with-flyout: calc(var(--panel-width-sm) + var(--panel-flyout-width));
+
+  /* Properties Studio — three visual zones */
+  --color-studio-sidebar-bg: var(--color-bg-elevated);
+  --color-studio-editor-bg: var(--color-bg);
+  --color-studio-presets-bg: var(--color-surface);
   --editor-max-width: 720px;
 
   --scrollbar-size: 8px;
@@ -149,6 +156,10 @@
 
   --scrollbar-thumb: rgba(255, 255, 255, 0.28);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.42);
+
+  --color-studio-sidebar-bg: var(--color-bg-elevated);
+  --color-studio-editor-bg: var(--color-bg);
+  --color-studio-presets-bg: var(--color-surface);
 }
 
 @media (prefers-reduced-motion: reduce) {

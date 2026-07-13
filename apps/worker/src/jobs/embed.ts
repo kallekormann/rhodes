@@ -1,7 +1,18 @@
 import type { Job } from "bullmq";
+import { Queue } from "bullmq";
 import { createAdminClient } from "@rhodes/db";
 import { createOllamaClient } from "@rhodes/ai";
-import { EMBEDDING_DIMENSIONS } from "@rhodes/shared/constants";
+import {
+  EMBEDDING_DIMENSIONS,
+  LIBRARY_SUMMARIZE_QUEUE,
+} from "@rhodes/shared/constants";
+import { addOrReplaceJob } from "../lib/queue-job";
+import {
+  LIBRARY_PIPELINE_STAGE,
+  mergeSourceMetadata,
+  setLibraryPipelineStage,
+} from "../lib/library-source";
+import { connection } from "../connection";
 
 export type EmbedJobData = {
   sourceId: string;
@@ -10,6 +21,7 @@ export type EmbedJobData = {
 
 const BATCH_SIZE = 32;
 const MAX_RETRIES = 3;
+const summarizeQueue = new Queue(LIBRARY_SUMMARIZE_QUEUE, { connection });
 
 function toVectorLiteral(vector: number[]): string {
   if (vector.length !== EMBEDDING_DIMENSIONS) {
@@ -34,9 +46,50 @@ async function embedWithRetry(texts: string[]): Promise<number[][]> {
   throw lastError instanceof Error ? lastError : new Error("Embedding failed");
 }
 
+async function enqueueSummarizeJob(sourceId: string, workspaceId: string) {
+  const admin = createAdminClient();
+  const { data: source, error } = await admin
+    .from("library_sources")
+    .select("summary, metadata")
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!source || source.summary) return;
+
+  const metadata =
+    source.metadata && typeof source.metadata === "object"
+      ? (source.metadata as Record<string, unknown>)
+      : null;
+  const excerpt =
+    typeof metadata?.extracted_text_excerpt === "string"
+      ? metadata.extracted_text_excerpt
+      : "";
+
+  if (!excerpt.trim()) return;
+
+  await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.ANALYZING);
+
+  await addOrReplaceJob(
+    summarizeQueue,
+    "summarize-source",
+    { sourceId, workspaceId, excerpt },
+    `summarize-${sourceId}`,
+    {
+      removeOnComplete: 100,
+      removeOnFail: 50,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 15_000 },
+    },
+  );
+}
+
 export async function processEmbedJob(job: Job<EmbedJobData>) {
   const started = Date.now();
-  const { sourceId } = job.data;
+  const { sourceId, workspaceId } = job.data;
   const admin = createAdminClient();
 
   try {
@@ -90,6 +143,8 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
         .from("library_sources")
         .update({ embedding_status: "ready" })
         .eq("id", sourceId);
+
+      await enqueueSummarizeJob(sourceId, workspaceId);
     }
 
     console.log("[embed] done", {
@@ -102,6 +157,9 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", sourceId);
+    await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.FAILED).catch(
+      () => {},
+    );
     throw error;
   }
 }

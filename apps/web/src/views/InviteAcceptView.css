@@ -1,0 +1,43 @@
+.invite-accept {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+  background: var(--color-bg);
+}
+
+.invite-accept__card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.invite-accept__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.invite-accept__desc {
+  margin: 0;
+}
+
+.invite-accept__notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-hover);
+}
+
+.invite-accept__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}

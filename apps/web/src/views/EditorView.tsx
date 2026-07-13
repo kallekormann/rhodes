@@ -3,17 +3,21 @@
 import { LayoutTemplate, MessageSquare, SlidersHorizontal, Star } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { getScopeMetaLabel } from "@/data/scopes";
+import { LoaderState } from "@/components/Loader";
+import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { EditorTitleField } from "@/components/EditorTitleField";
 import { IconLabelButton } from "@/components/IconLabelButton";
-import { InsightDot } from "@/components/InsightDot";
+import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
+import { useRhodesDocumentActivity } from "@/hooks/useRhodesDocumentActivity";
+import { useWritingCoach } from "@/hooks/useWritingCoach";
 import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
 import { useEditorSession } from "@/hooks/useEditorSession";
 import { useInsights } from "@/hooks/useInsights";
 import { getCommentIdsToRemove } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
+import type { PropertiesPanelStage } from "@/components/PropertiesTab";
 import "./EditorView.css";
 
 const SCROLL_TOP_THRESHOLD = 16;
@@ -28,7 +32,6 @@ function EditorViewContent() {
     setHeaderHidden,
     openPanel,
     panelTab,
-    activeScope,
   } = useApp();
 
   const {
@@ -36,6 +39,9 @@ function EditorViewContent() {
     content,
     contentPlain,
     documentId,
+    documentScopeLabel,
+    shareContext,
+    refreshShareContext,
     workspaceId,
     createdAtLabel,
     updatedAtLabel,
@@ -58,8 +64,18 @@ function EditorViewContent() {
     templateDescription,
     templateMetadata,
     onMetadataFieldChange,
+    onMetadataGroupInstancesChange,
     onTemplateDescriptionChange,
     onTemplateMetadataChange,
+    metadataSchemas,
+    metadataGroups,
+    metadataSchemasLoading,
+    createMetadataSchema,
+    createMetadataGroup,
+    updateMetadataSchema,
+    updateMetadataGroup,
+    deleteMetadataSchema,
+    deleteMetadataGroup,
   } = useEditorSession();
 
   const {
@@ -71,8 +87,33 @@ function EditorViewContent() {
     contentPlain,
   );
 
+  const {
+    processing: rhodesProcessing,
+    processingLabel,
+    propertiesNotice,
+    dismissPropertiesNotice,
+  } = useRhodesDocumentActivity({
+    documentId: isTemplateMode ? null : documentId,
+    documentMetadata,
+    contentPlain,
+    insightsLoading,
+  });
+
+  const writingCoachEnabled = !isTemplateMode && !loading && !panelOpen;
+  const {
+    registerEditor,
+    evaluateOnBlur,
+    suggestion: writingSuggestion,
+    loading: writingLoading,
+    open: writingOpen,
+    toggleWriting,
+    dismissWriting,
+    acceptWriting,
+  } = useWritingCoach(writingCoachEnabled);
+
   const [shareOpen, setShareOpen] = useState(false);
   const [askPrefill, setAskPrefill] = useState("");
+  const [propertiesStage, setPropertiesStage] = useState<PropertiesPanelStage>("view");
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
   const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
@@ -151,10 +192,18 @@ function EditorViewContent() {
   const [isScrolling, setIsScrolling] = useState(false);
 
   useEffect(() => {
+    if (propertiesStage !== "view") {
+      setHeaderHidden(false);
+    }
+  }, [propertiesStage, setHeaderHidden]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const onScroll = () => {
+      if (propertiesStage !== "view") return;
+
       const scrollTop = canvas.scrollTop;
 
       if (scrollTop <= SCROLL_TOP_THRESHOLD) {
@@ -178,7 +227,7 @@ function EditorViewContent() {
       if (scrollFadeTimer.current) clearTimeout(scrollFadeTimer.current);
       setHeaderHidden(false);
     };
-  }, [setHeaderHidden]);
+  }, [propertiesStage, setHeaderHidden]);
 
   const canvasClass = [
     "editor-view__canvas",
@@ -190,7 +239,9 @@ function EditorViewContent() {
     .join(" ");
 
   return (
-    <div className={`editor-view ${panelOpen ? "editor-view--panel-open" : ""}`}>
+    <div
+      className={`editor-view ${panelOpen ? "editor-view--panel-open" : ""}`}
+    >
       <div ref={canvasRef} className={canvasClass}>
         <article className="editor-content">
           <header className="editor-content__header">
@@ -213,7 +264,7 @@ function EditorViewContent() {
                 )}
                 <span>{updatedAtLabel ?? "Updated just now"}</span>
               </div>
-              <div className="editor-content__meta-row">
+              <div className="editor-content__meta-row editor-content__meta-row--scope">
               {!isTemplateMode && (
                 <>
               <div className="editor-content__share-anchor">
@@ -222,17 +273,19 @@ function EditorViewContent() {
                   active={shareOpen}
                   onClick={() => setShareOpen((open) => !open)}
                 >
-                  {getScopeMetaLabel(activeScope)}
+                  {documentScopeLabel ?? "Document scope"}
                 </IconLabelButton>
                 {shareOpen && documentId && (
                   <div className="editor-content__share-popover">
                     <SharePopover
                       documentId={documentId}
                       onClose={() => setShareOpen(false)}
+                      onSharesChange={refreshShareContext}
                     />
                   </div>
                 )}
               </div>
+              <DocumentShareBadge context={shareContext} />
               <span className="editor-content__meta-sep" aria-hidden="true">
                 ·
               </span>
@@ -296,7 +349,18 @@ function EditorViewContent() {
           </header>
 
           {loading ? (
-            <p className="caption editor-content__loading">Loading document…</p>
+            <div className="editor-content__body">
+              <div className="editor-content__gutter" aria-hidden="true" />
+              <div className="editor-content__main editor-content__main--body">
+                <LoaderState
+                  label="Loading document…"
+                  size="m"
+                  align="start"
+                  className="editor-content__loading"
+                />
+              </div>
+              <div className="editor-content__gutter" aria-hidden="true" />
+            </div>
           ) : (
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
@@ -325,6 +389,10 @@ function EditorViewContent() {
                   onRegisterInsertCitation={(insertCitation) => {
                     insertCitationRef.current = insertCitation;
                   }}
+                  onRegisterEditor={registerEditor}
+                  onBlur={() => {
+                    void evaluateOnBlur();
+                  }}
                 />
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
@@ -333,7 +401,19 @@ function EditorViewContent() {
         </article>
 
         {!panelOpen && !isTemplateMode && (
-          <InsightDot count={insights.length} />
+          <RhodesActivityRail
+            processing={rhodesProcessing}
+            processingLabel={processingLabel}
+            insightCount={insights.length}
+            propertiesNotice={propertiesNotice}
+            onDismissProperties={dismissPropertiesNotice}
+            writingSuggestion={writingSuggestion}
+            writingOpen={writingOpen}
+            writingLoading={writingLoading}
+            onToggleWriting={toggleWriting}
+            onDismissWriting={dismissWriting}
+            onAcceptWriting={acceptWriting}
+          />
         )}
       </div>
       <RightPanel
@@ -346,14 +426,26 @@ function EditorViewContent() {
         onRemoveComment={isTemplateMode ? () => {} : handleRemoveComment}
         workspaceId={workspaceId}
         propertiesMode={isEditingTemplate ? "template" : "document"}
+        propertiesStage={propertiesStage}
+        onPropertiesStageChange={setPropertiesStage}
         documentMetadata={documentMetadata}
         createdAtLabel={createdAtLabel}
         createdByLabel={createdByLabel}
         templateDescription={templateDescription}
         templateMetadata={templateMetadata}
         onMetadataFieldChange={onMetadataFieldChange}
+        onMetadataGroupInstancesChange={onMetadataGroupInstancesChange}
         onTemplateDescriptionChange={onTemplateDescriptionChange}
         onTemplateMetadataChange={onTemplateMetadataChange}
+        metadataSchemas={metadataSchemas}
+        metadataGroups={metadataGroups}
+        metadataSchemasLoading={metadataSchemasLoading}
+        createMetadataSchema={createMetadataSchema}
+        createMetadataGroup={createMetadataGroup}
+        updateMetadataSchema={updateMetadataSchema}
+        updateMetadataGroup={updateMetadataGroup}
+        deleteMetadataSchema={deleteMetadataSchema}
+        deleteMetadataGroup={deleteMetadataGroup}
         insights={insights}
         insightsLoading={insightsLoading}
         insightsError={insightsError}
@@ -368,7 +460,11 @@ function EditorViewContent() {
 
 export function EditorView() {
   return (
-    <Suspense fallback={<p className="caption">Loading editor…</p>}>
+    <Suspense
+      fallback={
+        <LoaderState label="Loading editor…" size="m" className="editor-suspense-fallback" />
+      }
+    >
       <EditorViewContent />
     </Suspense>
   );

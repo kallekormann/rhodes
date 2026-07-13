@@ -22,15 +22,22 @@ export function useInsights(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    setInsights([]);
+    setError(null);
+    setLoading(false);
+  }, [workspaceId]);
 
   const fetchInsights = useCallback(async () => {
     const query = queryText.trim();
     if (!workspaceId || query.length < 20) {
-      setInsights([]);
       setLoading(false);
       return;
     }
 
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
 
@@ -43,10 +50,11 @@ export function useInsights(
       }),
     });
 
+    if (requestId !== requestIdRef.current) return;
+
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setError(typeof data.error === "string" ? data.error : "Failed to load insights");
-      setInsights([]);
       setLoading(false);
       return;
     }
@@ -58,6 +66,12 @@ export function useInsights(
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
 
+    const query = queryText.trim();
+    if (!workspaceId || query.length < 20) {
+      setLoading(false);
+      return;
+    }
+
     timerRef.current = setTimeout(() => {
       void fetchInsights();
     }, debounceMs);
@@ -65,7 +79,7 @@ export function useInsights(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [debounceMs, fetchInsights]);
+  }, [debounceMs, fetchInsights, queryText, workspaceId]);
 
   return { insights, loading, error, refresh: fetchInsights };
 }

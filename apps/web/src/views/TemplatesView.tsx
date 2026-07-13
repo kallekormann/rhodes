@@ -7,6 +7,7 @@ import type { Template } from "@/data/templates";
 import { useDocuments } from "@/hooks/useDocuments";
 import { deleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { templateRecordToUi } from "@/lib/templates/map";
+import { LoaderState } from "@/components/Loader";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { TemplateDetailPanel } from "@/components/TemplateDetailPanel";
 import { IconLabelButton } from "@/components/IconLabelButton";
@@ -23,7 +24,11 @@ export function TemplatesView() {
     setDocumentTitle,
     setDocumentId,
     showToast,
+    canWriteActiveScope,
+    featureGates,
   } = useApp();
+  const canCreateTemplates =
+    canWriteActiveScope && featureGates.can("templates.create");
   const [tab, setTab] = useState<TemplateTab>("all");
   const [selected, setSelected] = useState<Template | null>(null);
   const [creating, setCreating] = useState(false);
@@ -36,6 +41,10 @@ export function TemplatesView() {
   const filtered = templates.map(templateRecordToUi);
 
   const handleCreateTemplate = async () => {
+    if (!canCreateTemplates) {
+      showToast("You don't have permission to create templates in this scope", "error");
+      return;
+    }
     if (!workspaceId || creating) return;
     setCreating(true);
 
@@ -86,6 +95,10 @@ export function TemplatesView() {
   };
 
   const handleUse = async (template: Template) => {
+    if (!canWriteActiveScope) {
+      showToast("You have read-only access in this scope", "error");
+      return;
+    }
     if (!workspaceId || creating) return;
     setCreating(true);
 
@@ -120,17 +133,23 @@ export function TemplatesView() {
               value={tab}
               onChange={setTab}
             />
-            <IconLabelButton
-              variant="ghost"
-              icon={Plus}
-              onClick={() => void handleCreateTemplate()}
-            >
-              Create template
-            </IconLabelButton>
+            {canCreateTemplates ? (
+              <IconLabelButton
+                variant="ghost"
+                icon={Plus}
+                onClick={() => void handleCreateTemplate()}
+              >
+                Create template
+              </IconLabelButton>
+            ) : null}
           </div>
 
           {loading ? (
-            <p className="caption templates-view__status">Loading templates…</p>
+            <LoaderState
+              label="Loading templates…"
+              size="s"
+              className="templates-view__status"
+            />
           ) : error ? (
             <p className="caption templates-view__status">{error}</p>
           ) : filtered.length === 0 ? (

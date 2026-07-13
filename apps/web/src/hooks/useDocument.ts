@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { isDocumentId } from "@/lib/documents/ids";
 
+import type { DocumentShareContext } from "@/lib/documents/share-context";
+
 export type DocumentRecord = {
   id: string;
   workspace_id: string;
@@ -13,6 +15,7 @@ export type DocumentRecord = {
   metadata: Record<string, unknown> | null;
   updated_at: string;
   created_at: string;
+  share_context?: DocumentShareContext | null;
 };
 
 export function useDocument(documentId: string | null) {

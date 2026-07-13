@@ -10,15 +10,22 @@ import { GroupLabel } from "@/components/SectionHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { useLibrarySources } from "@/hooks/useLibrarySources";
 import {
-  embeddingStatusToPill,
   formatLibraryDate,
   formatLibraryFileSize,
 } from "@/lib/library/format";
+import { librarySourceIsInFlight, librarySourceStatusToPill } from "@/lib/library/pipeline";
 import { isLibraryFileAllowed, LIBRARY_FILE_ACCEPT, LIBRARY_FILE_LABEL } from "@/lib/library/schemas";
 import "./LibraryView.css";
 
 export function LibraryView() {
-  const { workspaceId, showToast } = useApp();
+  const {
+    workspaceId,
+    showToast,
+    canWriteActiveScope,
+    featureGates,
+  } = useApp();
+  const canUpload =
+    canWriteActiveScope && featureGates.can("library.upload");
   const { sources, loading, error, uploading, uploadFiles, retrySource, deleteSource, deletingIds } =
     useLibrarySources(workspaceId);
   const [removeTarget, setRemoveTarget] = useState<{
@@ -27,6 +34,11 @@ export function LibraryView() {
   } | null>(null);
 
   const handleFilesSelected = async (files: File[]) => {
+    if (!canUpload) {
+      showToast("You don't have permission to upload files in this scope", "error");
+      return;
+    }
+
     const allowed = files.filter(isLibraryFileAllowed);
     const rejected = files.length - allowed.length;
 
@@ -77,12 +89,18 @@ export function LibraryView() {
     <div className="canvas-view library-view">
       <div className="library-view__scroll overlay-scrollbar">
         <div className="library-view__inner">
-          <DropZone
-            className="library-view__drop"
-            disabled={!workspaceId}
-            uploading={uploading}
-            onFilesSelected={(files) => void handleFilesSelected(files)}
-          />
+          {canUpload ? (
+            <DropZone
+              className="library-view__drop"
+              disabled={!workspaceId}
+              uploading={uploading}
+              onFilesSelected={(files) => void handleFilesSelected(files)}
+            />
+          ) : (
+            <p className="caption library-view__empty">
+              You have read-only access in this scope — library uploads are disabled.
+            </p>
+          )}
 
           <GroupLabel>Sources</GroupLabel>
 
@@ -103,7 +121,8 @@ export function LibraryView() {
               const isDeleting = deletingIds.includes(source.id);
               const pill = isDeleting
                 ? { variant: "progress" as const, label: "Deleting" }
-                : embeddingStatusToPill(source.embedding_status);
+                : librarySourceStatusToPill(source);
+              const inFlight = librarySourceIsInFlight(source);
 
               return (
                 <li key={source.id}>
@@ -127,17 +146,13 @@ export function LibraryView() {
                       variant={pill.variant}
                       label={pill.label}
                       icon={
-                        isDeleting ||
-                        source.embedding_status === "pending" ||
-                        source.embedding_status === "processing"
-                          ? Loader
-                          : undefined
+                        isDeleting || inFlight ? Loader : undefined
                       }
                     />
                     <span className="source-row__date">
                       {formatLibraryDate(source.created_at)}
                     </span>
-                    {!isDeleting && source.embedding_status === "failed" && (
+                    {!canUpload ? null : !isDeleting && source.embedding_status === "failed" && (
                       <button
                         type="button"
                         className="source-row__retry"
@@ -147,7 +162,7 @@ export function LibraryView() {
                         <RotateCcw size={16} strokeWidth={1.75} />
                       </button>
                     )}
-                    {!isDeleting && source.embedding_status === "pending" && (
+                    {!canUpload ? null : !isDeleting && source.embedding_status === "pending" && (
                       <button
                         type="button"
                         className="source-row__retry"
@@ -158,7 +173,7 @@ export function LibraryView() {
                         <RotateCcw size={16} strokeWidth={1.75} />
                       </button>
                     )}
-                    {!isDeleting && (
+                    {!canUpload ? null : !isDeleting && (
                       <button
                         type="button"
                         className="source-row__remove"

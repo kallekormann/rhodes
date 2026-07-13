@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
+import { getScopeMetaLabel } from "@/data/scopes";
 import { EMPTY_DOCUMENT_CONTENT } from "@/lib/documents/schemas";
+import type { DocumentShareContext } from "@/lib/documents/share-context";
+import {
+  documentAccessibleInActiveScope,
+  emptyShareContext,
+} from "@/lib/documents/share-context";
 import {
   normalizeDocumentImageContent,
   resolveDocumentImageUrls,
@@ -19,10 +25,7 @@ import {
 } from "@/lib/documents/comments";
 import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { isDocumentId } from "@/lib/documents/ids";
-import {
-  readLastDocumentId,
-  writeLastDocumentId,
-} from "@/lib/documents/last-document";
+import { writeLastDocumentId } from "@/lib/documents/last-document";
 import {
   buildTemplateMetadata,
   parseTemplateMetadata,
@@ -30,7 +33,7 @@ import {
 } from "@/lib/templates/metadata";
 import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
-import { useDocuments } from "@/hooks/useDocuments";
+import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import type { Editor } from "@tiptap/react";
 import {
   createTemplate,
@@ -59,11 +62,12 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
 }
 
 export function useEditorSession() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const {
     scopesLoading,
     workspaceId,
-    ensureWorkspace,
+    scopes,
     setDocumentTitle,
     setDocumentId,
     documentTitle,
@@ -84,7 +88,6 @@ export function useEditorSession() {
         ? requestedId
         : null,
   );
-  const { createDocument } = useDocuments(resolvedWorkspaceId, "recent");
   const { document, loading, error, save, refresh } = useDocument(
     isEditingTemplate ? null : resolvedId,
   );
@@ -105,6 +108,73 @@ export function useEditorSession() {
   const latestContentRef = useRef<Record<string, unknown>>(EMPTY_DOCUMENT_CONTENT);
   const [publishingTemplate, setPublishingTemplate] = useState(false);
   const [comments, setComments] = useState<StoredDocumentComment[]>([]);
+  const [shareContext, setShareContext] = useState<DocumentShareContext>(emptyShareContext());
+  const [shareContextVersion, setShareContextVersion] = useState(0);
+  const [crossScopeAccess, setCrossScopeAccess] = useState<
+    "allowed" | "pending" | "denied"
+  >("allowed");
+
+  const refreshShareContext = useCallback(() => {
+    setShareContextVersion((version) => version + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!document?.id || isEditingTemplate || !resolvedWorkspaceId) {
+      setShareContext(emptyShareContext());
+      return;
+    }
+
+    let cancelled = false;
+
+    const documentId = document.id;
+    const documentWorkspaceId = document.workspace_id;
+
+    async function loadShareContext() {
+      const params = new URLSearchParams();
+      if (resolvedWorkspaceId) {
+        params.set("active_workspace_id", resolvedWorkspaceId);
+      }
+
+      const response = await fetch(
+        `/app/api/documents/${documentId}/shares?${params.toString()}`,
+      );
+      const body = (await response.json().catch(() => ({}))) as {
+        shares?: Array<{ label: string; grantee_type: string }>;
+        shared_by_user?: string | null;
+      };
+
+      if (cancelled) return;
+
+      const shares = body.shares ?? [];
+      const isOrigin = documentWorkspaceId === resolvedWorkspaceId;
+
+      if (isOrigin) {
+        const sharedWith = shares.map((share) => share.label).filter(Boolean);
+        setShareContext({
+          is_origin: true,
+          is_incoming: false,
+          has_outgoing: sharedWith.length > 0,
+          shared_with: sharedWith,
+          shared_by_user: null,
+        });
+        return;
+      }
+
+      setShareContext({
+        is_origin: false,
+        is_incoming: true,
+        has_outgoing: false,
+        shared_with: [],
+        shared_by_user: body.shared_by_user ?? null,
+      });
+    }
+
+    void loadShareContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document?.id, document?.workspace_id, isEditingTemplate, resolvedWorkspaceId, scopes, shareContextVersion]);
 
   useEffect(() => {
     if (isEditingTemplate || !document?.id) return;
@@ -218,47 +288,62 @@ export function useEditorSession() {
   useEffect(() => {
     if (scopesLoading || isEditingTemplate) return;
 
-    let cancelled = false;
-
-    async function resolveDocument() {
-      let wsId = resolvedWorkspaceId;
-      if (!wsId) {
-        const scope = await ensureWorkspace();
-        if (cancelled || !scope) return;
-        wsId = scope.id;
-      }
-
-      if (requestedId && isDocumentId(requestedId)) {
-        setResolvedId(requestedId);
-        writeLastDocumentId(wsId, requestedId);
-        return;
-      }
-
-      const lastId = readLastDocumentId(wsId);
-      if (lastId && isDocumentId(lastId)) {
-        setResolvedId(lastId);
-        return;
-      }
-
-      const created = await createDocument(undefined, wsId);
-      if (cancelled || !created) return;
-      setResolvedId(created.id);
-      writeLastDocumentId(wsId, created.id);
+    if (requestedId && isDocumentId(requestedId)) {
+      setResolvedId(requestedId);
+      return;
     }
 
-    void resolveDocument();
+    router.replace("/documents");
+  }, [scopesLoading, requestedId, isEditingTemplate, router]);
+
+  useEffect(() => {
+    if (!document || !resolvedWorkspaceId || isEditingTemplate) {
+      setCrossScopeAccess("allowed");
+      return;
+    }
+
+    if (document.workspace_id === resolvedWorkspaceId) {
+      setCrossScopeAccess("allowed");
+      return;
+    }
+
+    let cancelled = false;
+    setCrossScopeAccess("pending");
+
+    const activeScope = scopes.find((scope) => scope.id === resolvedWorkspaceId);
+    const isPersonalScope = activeScope?.type === "private";
+
+    void documentAccessibleInActiveScope(
+      document.id,
+      document.workspace_id,
+      resolvedWorkspaceId,
+      {
+        userId: session.userId,
+        personalScope: isPersonalScope,
+      },
+    ).then((allowed) => {
+      if (!cancelled) {
+        setCrossScopeAccess(allowed ? "allowed" : "denied");
+      }
+    });
 
     return () => {
       cancelled = true;
     };
   }, [
-    scopesLoading,
-    resolvedWorkspaceId,
-    requestedId,
-    createDocument,
-    ensureWorkspace,
+    document?.id,
+    document?.workspace_id,
     isEditingTemplate,
+    resolvedWorkspaceId,
+    scopes,
+    session.userId,
   ]);
+
+  useEffect(() => {
+    if (crossScopeAccess === "denied") {
+      router.replace("/documents");
+    }
+  }, [crossScopeAccess, router]);
 
   useEffect(() => {
     if (!document || isEditingTemplate) return;
@@ -326,6 +411,22 @@ export function useEditorSession() {
 
   const isTemplateDraft = document?.metadata?.template_draft === true;
   const isTemplateMode = isTemplateDraft || isEditingTemplate;
+
+  const metadataWorkspaceId = isEditingTemplate
+    ? templateRecord?.workspace_id ?? resolvedWorkspaceId
+    : document?.workspace_id ?? resolvedWorkspaceId;
+
+  const {
+    schemas: metadataSchemas,
+    groups: metadataGroups,
+    loading: metadataSchemasLoading,
+    createSchema,
+    createGroup,
+    updateSchema,
+    updateGroup,
+    deleteSchema,
+    deleteGroup,
+  } = useMetadataSchemas(metadataWorkspaceId);
 
   const saveAsTemplate = useCallback(async () => {
     if (publishingTemplate) return false;
@@ -419,14 +520,22 @@ export function useEditorSession() {
     400,
   );
 
-  const debouncedSaveMetadataField = useDebouncedCallback(
+  const saveMetadataField = useCallback(
     (fieldKey: string, value: MetadataFieldValue) => {
       if (!document) return;
       void persistDocument({
         metadata: withUserMetadataValue(document.metadata, fieldKey, value),
       });
     },
-    400,
+    [document, persistDocument],
+  );
+
+  const saveMetadataDocument = useCallback(
+    (metadata: Record<string, unknown>) => {
+      if (!document) return;
+      void persistDocument({ metadata });
+    },
+    [document, persistDocument],
   );
 
   const debouncedSaveComments = useDebouncedCallback(
@@ -548,9 +657,17 @@ export function useEditorSession() {
         : "Workspace member"
       : null;
 
+  const documentScope = document?.workspace_id
+    ? scopes.find((scope) => scope.id === document.workspace_id)
+    : null;
+  const documentScopeLabel = documentScope ? getScopeMetaLabel(documentScope) : null;
+
   return {
     document: document as DocumentRecord | null,
     documentId: isEditingTemplate ? null : (document?.id ?? null),
+    documentScopeLabel,
+    shareContext,
+    refreshShareContext,
     workspaceId: isEditingTemplate
       ? (templateRecord?.workspace_id ?? resolvedWorkspaceId)
       : (document?.workspace_id ?? null),
@@ -561,6 +678,7 @@ export function useEditorSession() {
       : scopesLoading ||
         !resolvedId ||
         !resolvedWorkspaceId ||
+        crossScopeAccess === "pending" ||
         (!document && loading) ||
         (document != null && contentHydratedForId !== document.id),
     error: isEditingTemplate ? templateError : error,
@@ -592,10 +710,20 @@ export function useEditorSession() {
     syncCommentsFromEditor,
     onContentUpdate: handleContentUpdate,
     documentMetadata: document?.metadata ?? null,
+    metadataSchemas,
+    metadataGroups,
+    metadataSchemasLoading,
+    createMetadataSchema: createSchema,
+    createMetadataGroup: createGroup,
+    updateMetadataSchema: updateSchema,
+    updateMetadataGroup: updateGroup,
+    deleteMetadataSchema: deleteSchema,
+    deleteMetadataGroup: deleteGroup,
     createdByLabel,
     templateDescription: templateRecord?.description ?? "",
     templateMetadata,
-    onMetadataFieldChange: debouncedSaveMetadataField,
+    onMetadataFieldChange: saveMetadataField,
+    onMetadataGroupInstancesChange: saveMetadataDocument,
     onTemplateDescriptionChange: debouncedSaveTemplateDescription,
     onTemplateMetadataChange: debouncedSaveTemplateMetadata,
     onTitleChange: (title: string) => {

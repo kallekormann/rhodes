@@ -1,0 +1,27 @@
+/* Shared panel shell — matches template-detail flex layout (scroll + action bar). */
+
+.panel-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+}
+
+.panel-shell__scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.panel-shell__scroll--with-actionbar {
+  padding-bottom: 0;
+}
+
+.panel-shell .field-root,
+.panel-shell .input-wrap {
+  width: 100%;
+}

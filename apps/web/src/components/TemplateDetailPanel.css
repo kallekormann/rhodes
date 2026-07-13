@@ -1,11 +1,11 @@
 .template-detail {
+  display: flex;
+  flex-direction: column;
   width: 0;
   flex-shrink: 0;
   overflow: hidden;
   background: var(--color-bg-elevated);
   border-left: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
   transition:
     width var(--duration-panel) var(--ease-out),
     border-color var(--duration-panel) var(--ease-out);
@@ -34,7 +34,8 @@
 }
 
 .template-detail__content {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-md);
 }
@@ -75,23 +76,5 @@
 .template-detail__pills {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.template-detail__actionbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  flex-shrink: 0;
-  padding: var(--space-sm) var(--space-md);
-  border-top: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-elevated);
-}
-
-.template-detail__actionbar-start,
-.template-detail__actionbar-end {
-  display: flex;
-  align-items: center;
   gap: var(--space-sm);
 }

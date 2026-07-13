@@ -5,14 +5,14 @@ import { ScopeTrigger } from "./ScopeTrigger";
 import "./ScopeSwitcherShowcase.css";
 
 const demoPersonal: Scope[] = [
-  { id: "demo-private", name: "Private", type: "private", role: "owner" },
-  { id: "demo-book", name: "Book Draft", type: "private", role: "owner" },
-  { id: "demo-research", name: "Research", type: "private", role: "owner" },
+  { id: "demo-private", name: "Private", type: "private", role: "owner", createdAt: "2020-01-01T00:00:00.000Z" },
+  { id: "demo-book", name: "Book Draft", type: "private", role: "owner", createdAt: "2020-01-02T00:00:00.000Z" },
+  { id: "demo-research", name: "Research", type: "private", role: "owner", createdAt: "2020-01-03T00:00:00.000Z" },
 ];
 
 const demoTeam: Scope[] = [
-  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin" },
-  { id: "demo-product", name: "Product", type: "team", role: "member" },
+  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", createdAt: "2020-01-04T00:00:00.000Z" },
+  { id: "demo-product", name: "Product", type: "team", role: "member", createdAt: "2020-01-05T00:00:00.000Z" },
 ];
 
 type ShowcaseItem = {

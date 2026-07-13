@@ -12,8 +12,8 @@ export const viewToPath: Record<AppView, string> = {
 export function pathToView(pathname: string): AppView {
   const normalized = pathname.replace(/\/$/, "") || "/";
 
-  if (normalized === "/" || normalized === "/editor") return "editor";
-  if (normalized === "/documents") return "documents";
+  if (normalized === "/" || normalized === "/documents") return "documents";
+  if (normalized === "/editor") return "editor";
   if (normalized === "/templates") return "templates";
   if (normalized === "/library") return "library";
   if (normalized === "/settings") return "settings";

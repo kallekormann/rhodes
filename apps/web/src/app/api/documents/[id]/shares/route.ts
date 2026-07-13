@@ -1,11 +1,50 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { resolveSharedByDisplayName } from "@/lib/documents/enrich-share-context";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+type ShareRow = {
+  id: string;
+  grantee_type: "user" | "workspace";
+  grantee_user_id: string | null;
+  grantee_workspace_id: string | null;
+  label: string;
+  shared_by: string | null;
+  created_at: string;
+};
+
+function pickIncomingShare(
+  shares: ShareRow[],
+  userId: string,
+  activeWorkspaceId: string | null,
+  includePersonalUserShares: boolean,
+): ShareRow | null {
+  if (activeWorkspaceId) {
+    const workspaceShare = shares.find(
+      (share) =>
+        share.grantee_type === "workspace" &&
+        share.grantee_workspace_id === activeWorkspaceId,
+    );
+    if (workspaceShare) return workspaceShare;
+  }
+
+  if (includePersonalUserShares) {
+    const userShare = shares.find(
+      (share) => share.grantee_type === "user" && share.grantee_user_id === userId,
+    );
+    if (userShare) return userShare;
+  }
+
+  return null;
+}
+
+export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
+  const { searchParams } = new URL(request.url);
+  const activeWorkspaceId = searchParams.get("active_workspace_id");
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -19,7 +58,9 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { data, error } = await supabase
     .from("document_shares")
-    .select("id, grantee_type, grantee_user_id, grantee_workspace_id, label, created_at")
+    .select(
+      "id, grantee_type, grantee_user_id, grantee_workspace_id, label, shared_by, created_at",
+    )
     .eq("document_id", id)
     .order("created_at", { ascending: false });
 
@@ -29,7 +70,36 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  return withSecurityHeaders(NextResponse.json({ shares: data ?? [] }));
+  const shares = (data ?? []) as ShareRow[];
+
+  let includePersonalUserShares = false;
+  if (activeWorkspaceId) {
+    const { data: workspace } = await supabase
+      .from("workspaces")
+      .select("is_team_workspace")
+      .eq("id", activeWorkspaceId)
+      .maybeSingle();
+    includePersonalUserShares = workspace?.is_team_workspace === false;
+  }
+
+  const incomingShare = pickIncomingShare(
+    shares,
+    user.id,
+    activeWorkspaceId,
+    includePersonalUserShares,
+  );
+
+  const sharedByUser = await resolveSharedByDisplayName(
+    supabase,
+    incomingShare?.shared_by,
+  );
+
+  return withSecurityHeaders(
+    NextResponse.json({
+      shares,
+      shared_by_user: sharedByUser,
+    }),
+  );
 }
 
 export async function POST(request: Request, context: RouteContext) {

@@ -17,6 +17,8 @@ import {
 import { useDocuments } from "@/hooks/useDocuments";
 import { useTemplates } from "@/hooks/useTemplates";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
+import { LoaderState } from "@/components/Loader";
+import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { Dialog } from "@/components/Dialog";
 import { Divider } from "@/components/Divider";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
@@ -39,6 +41,7 @@ export function DocumentsView() {
     setDocumentId,
     setView,
     showToast,
+    canWriteActiveScope,
   } = useApp();
   const [tab, setTab] = useState<DocTab>("recent");
   const [filter, setFilter] = useState("");
@@ -58,7 +61,7 @@ export function DocumentsView() {
     createDocument,
   } = useDocuments(workspaceId, tab);
 
-  const { templates } = useTemplates(workspaceId, "all");
+  const { templates, loading: templatesLoading } = useTemplates(workspaceId, "all");
   const overviewTemplates = useMemo(
     () => pickOverviewTemplates(templates).map(templateRecordToUi),
     [templates],
@@ -106,7 +109,9 @@ export function DocumentsView() {
     if (tab === "shared") {
       return "No shared documents yet. Open a document and use Share in the editor.";
     }
-    return "No documents yet. Use + in the header to create one.";
+    return canWriteActiveScope
+      ? "No documents yet. Use + in the header to create one."
+      : "No documents in this scope yet.";
   })();
 
   return (
@@ -118,29 +123,41 @@ export function DocumentsView() {
               title="Templates"
               action={{ label: "More templates", onClick: () => setView("templates") }}
             />
-            <TemplateCardGrid>
-              {overviewTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  name={template.name}
-                  description={template.shortDescription}
-                  onClick={async () => {
-                    if (!workspaceId) return;
-                    const created = await createDocument({
-                      title: template.name,
-                      template_id: template.id,
-                    });
-                    if (!created) {
-                      showToast("Couldn't create document from template", "error");
-                      return;
-                    }
-                    setDocumentId(created.id);
-                    setDocumentTitle(created.title);
-                    openEditor(created.id);
-                  }}
-                />
-              ))}
-            </TemplateCardGrid>
+            {templatesLoading || scopesLoading ? (
+              <LoaderState
+                label="Loading templates…"
+                size="s"
+                className="documents-section__loading"
+              />
+            ) : (
+              <TemplateCardGrid>
+                {overviewTemplates.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    name={template.name}
+                    description={template.shortDescription}
+                    onClick={async () => {
+                      if (!canWriteActiveScope) {
+                        showToast("You have read-only access in this scope", "error");
+                        return;
+                      }
+                      if (!workspaceId) return;
+                      const created = await createDocument({
+                        title: template.name,
+                        template_id: template.id,
+                      });
+                      if (!created) {
+                        showToast("Couldn't create document from template", "error");
+                        return;
+                      }
+                      setDocumentId(created.id);
+                      setDocumentTitle(created.title);
+                      openEditor(created.id);
+                    }}
+                  />
+                ))}
+              </TemplateCardGrid>
+            )}
           </section>
 
           <Divider />
@@ -170,7 +187,11 @@ export function DocumentsView() {
             </div>
 
             {loading || scopesLoading ? (
-              <p className="documents-empty caption">Loading documents…</p>
+              <LoaderState
+                label="Loading documents…"
+                size="s"
+                className="documents-empty"
+              />
             ) : error ? (
               <p className="documents-empty caption">{error}</p>
             ) : filtered.length === 0 ? (
@@ -189,11 +210,16 @@ export function DocumentsView() {
                             key={doc.id}
                             title={doc.title}
                             meta={formatCreatedAt(doc.created_at)}
-                            metaSecondary={formatUpdatedAt(doc.updated_at)}
+                            metaSecondary={
+                              <span className="documents-row__meta-line">
+                                <span>{formatUpdatedAt(doc.updated_at)}</span>
+                                <DocumentShareBadge context={doc.share_context} />
+                              </span>
+                            }
                             trailing={
                               archived ? (
                                 <StatusPill variant="draft" label="Archived" />
-                              ) : undefined
+                              ) : null
                             }
                             footer={
                               shareDocId === doc.id ? (
@@ -201,11 +227,13 @@ export function DocumentsView() {
                                   <SharePopover
                                     documentId={doc.id}
                                     onClose={() => setShareDocId(null)}
+                                    onSharesChange={() => void refresh()}
                                   />
                                 </div>
                               ) : undefined
                             }
                             actions={
+                              canWriteActiveScope ? (
                                 <>
                                   <button
                                     type="button"
@@ -253,7 +281,8 @@ export function DocumentsView() {
                                     <Trash2 size={15} strokeWidth={1.75} />
                                   </button>
                                 </>
-                              }
+                              ) : undefined
+                            }
                             onClick={() => {
                               setShareDocId(null);
                               setDocumentId(doc.id);

@@ -19,7 +19,8 @@ export function DatePickerField({
   variant = "field",
   className = "",
 }: DatePickerFieldProps) {
-  const { open, setOpen, rootRef, panelRef, align } = useFieldPanel();
+  const { open, setOpen, rootRef, panelRef, align, placement, panelCoords } =
+    useFieldPanel();
   const isPlain = variant === "plain";
 
   const handleChange = (date: Date) => {
@@ -41,7 +42,13 @@ export function DatePickerField({
       </button>
 
       {open && (
-        <FieldPanel ref={panelRef} align={align} calendar>
+        <FieldPanel
+          ref={panelRef}
+          align={align}
+          placement={placement}
+          coords={panelCoords}
+          calendar
+        >
           <DatePicker embedded value={value} onChange={handleChange} />
         </FieldPanel>
       )}

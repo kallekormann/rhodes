@@ -1,7 +1,7 @@
 import { OLLAMA_EMBED_MODEL } from "@rhodes/shared/constants";
 
-const EMBED_TIMEOUT_MS = 90_000;
-const GENERATE_TIMEOUT_MS = 120_000;
+const EMBED_TIMEOUT_MS = Number(process.env.OLLAMA_EMBED_TIMEOUT_MS ?? 90_000);
+const GENERATE_TIMEOUT_MS = Number(process.env.OLLAMA_GENERATE_TIMEOUT_MS ?? 120_000);
 
 export interface OllamaTagsResponse {
   models: Array<{ name: string; size?: number }>;
@@ -101,7 +101,7 @@ export class OllamaClient {
   async generate(
     prompt: string,
     model: string,
-    options?: { temperature?: number },
+    options?: { temperature?: number; numPredict?: number; timeoutMs?: number },
   ): Promise<string> {
     const response = await this.fetchWithTimeout(
       "/api/generate",
@@ -114,10 +114,11 @@ export class OllamaClient {
           stream: false,
           options: {
             temperature: options?.temperature ?? 0.2,
+            ...(options?.numPredict != null ? { num_predict: options.numPredict } : {}),
           },
         }),
       },
-      GENERATE_TIMEOUT_MS,
+      options?.timeoutMs ?? GENERATE_TIMEOUT_MS,
     );
 
     if (!response.ok) {

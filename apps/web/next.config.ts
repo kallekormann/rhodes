@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   basePath: "/app",
   transpilePackages: ["@rhodes/db", "@rhodes/shared"],
+  serverExternalPackages: ["nodemailer"],
   async redirects() {
     return [
       {

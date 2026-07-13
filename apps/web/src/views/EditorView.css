@@ -106,6 +106,10 @@
   gap: 6px;
 }
 
+.editor-content__meta-row--scope {
+  gap: var(--space-sm);
+}
+
 .editor-content__meta-sep {
   color: var(--color-text-tertiary);
   user-select: none;
@@ -150,6 +154,16 @@
 
 .editor-content__gutter {
   pointer-events: none;
+}
+
+.editor-content__loading {
+  padding-top: var(--space-sm);
+}
+
+.editor-suspense-fallback {
+  flex: 1;
+  justify-content: center;
+  min-height: 200px;
 }
 
 .editor-view--panel-open .editor-content {

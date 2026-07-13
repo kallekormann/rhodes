@@ -21,9 +21,27 @@ const items = [
 ];
 
 export function CmdKModal() {
-  const { cmdKOpen, closeCmdK, setView, openPanel, createNewDocument } = useApp();
+  const {
+    cmdKOpen,
+    closeCmdK,
+    setView,
+    openPanel,
+    createNewDocument,
+    canWriteActiveScope,
+    featureGates,
+  } = useApp();
 
   if (!cmdKOpen) return null;
+
+  const visibleItems = items.filter((item) => {
+    if (item.label === "New document" || item.label === "Import file") {
+      return canWriteActiveScope;
+    }
+    if (item.label === "Ask about workspace") {
+      return featureGates.can("ask.chat");
+    }
+    return true;
+  });
 
   const handleAction = (item: (typeof items)[number]) => {
     closeCmdK();
@@ -56,7 +74,7 @@ export function CmdKModal() {
           hint="⌘K"
         />
         <ul className="cmdk-list">
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const showSection = item.section !== lastSection;
             lastSection = item.section;
             const Icon = item.icon;

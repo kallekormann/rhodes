@@ -109,7 +109,11 @@ export async function POST(request: Request) {
       file_path: filePath,
       file_type: mimeType,
       embedding_status: "pending",
-      metadata: { byte_size: file.size },
+      metadata: {
+        byte_size: file.size,
+        pipeline_stage: "queued",
+        pipeline_updated_at: new Date().toISOString(),
+      },
     })
     .select(SOURCE_FIELDS)
     .single();

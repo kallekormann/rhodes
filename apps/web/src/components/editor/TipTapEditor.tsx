@@ -19,6 +19,7 @@ import {
 import { TableInsertModal } from "@/components/TableInsertModal";
 import { filterSlashItems } from "@/components/editorSlash";
 import { CitationBlock } from "@/components/editor/extensions/CitationBlock";
+import { RhodesSuggestion } from "@/components/editor/extensions/RhodesSuggestion";
 import { BlockId } from "@/components/editor/extensions/BlockId";
 import { ensureEditorBlockIds, resolveCommentBlock } from "@/lib/documents/block-ids";
 import { CommentHighlight } from "@/components/editor/extensions/CommentHighlight";
@@ -73,6 +74,8 @@ type TipTapEditorProps = {
   onRegisterInsertCitation?: (
     insertCitation: (input: import("@/lib/documents/editor-commands").CitationInsertInput) => void,
   ) => void;
+  onBlur?: (editor: Editor) => void;
+  onRegisterEditor?: (editor: Editor | null) => void;
 };
 
 type SlashState = {
@@ -168,9 +171,13 @@ export function TipTapEditor({
   onCommentHighlightClick,
   onRegisterScrollToComment,
   onRegisterInsertCitation,
+  onBlur,
+  onRegisterEditor,
 }: TipTapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const onBlurRef = useRef(onBlur);
+  onBlurRef.current = onBlur;
   const onCommentHighlightClickRef = useRef(onCommentHighlightClick);
   onCommentHighlightClickRef.current = onCommentHighlightClick;
 
@@ -350,6 +357,7 @@ export function TipTapEditor({
       TableCell,
       DocumentImage.configure({ inline: false, allowBase64: false }),
       CitationBlock,
+      RhodesSuggestion,
       BlockId,
       CommentHighlight,
       Extension.create({
@@ -466,9 +474,17 @@ export function TipTapEditor({
     onUpdate: ({ editor: instance }) => {
       onUpdateRef.current(instance.getJSON(), instance.getText());
     },
+    onBlur: ({ editor: instance }) => {
+      onBlurRef.current?.(instance);
+    },
   });
 
   editorRef.current = editor;
+
+  useEffect(() => {
+    onRegisterEditor?.(editor ?? null);
+    return () => onRegisterEditor?.(null);
+  }, [editor, onRegisterEditor]);
 
   useEffect(() => {
     if (!editor) return;

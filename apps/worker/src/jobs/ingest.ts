@@ -4,9 +4,13 @@ import { createAdminClient } from "@rhodes/db";
 import {
   EMBEDDING_MODEL,
   LIBRARY_EMBED_QUEUE,
-  LIBRARY_SUMMARIZE_QUEUE,
 } from "@rhodes/shared/constants";
 import { chunkText } from "../lib/chunker";
+import {
+  LIBRARY_PIPELINE_STAGE,
+  mergeSourceMetadata,
+  setLibraryPipelineStage,
+} from "../lib/library-source";
 import { addOrReplaceJob } from "../lib/queue-job";
 import { downloadLibraryFile } from "../lib/storage";
 import { extractLibraryText } from "../lib/extract";
@@ -20,7 +24,6 @@ export type IngestJobData = {
 };
 
 const embedQueue = new Queue(LIBRARY_EMBED_QUEUE, { connection });
-const summarizeQueue = new Queue(LIBRARY_SUMMARIZE_QUEUE, { connection });
 
 export async function processIngestJob(job: Job<IngestJobData>) {
   const started = Date.now();
@@ -33,6 +36,8 @@ export async function processIngestJob(job: Job<IngestJobData>) {
     .from("library_sources")
     .update({ embedding_status: "processing" })
     .eq("id", sourceId);
+
+  await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.READING);
 
   try {
     const bytes = await downloadLibraryFile(filePath);
@@ -65,29 +70,18 @@ export async function processIngestJob(job: Job<IngestJobData>) {
     }
 
     const excerpt = extractedText.slice(0, 4000);
-    await admin
-      .from("library_sources")
-      .update({
-        metadata: {
-          extracted_text_excerpt: excerpt,
-          chunk_count: chunks.length,
-        },
-      })
-      .eq("id", sourceId);
+    await mergeSourceMetadata(admin, sourceId, {
+      extracted_text_excerpt: excerpt,
+      chunk_count: chunks.length,
+      pipeline_stage: LIBRARY_PIPELINE_STAGE.INDEXING,
+      pipeline_updated_at: new Date().toISOString(),
+    });
 
     await addOrReplaceJob(
       embedQueue,
       "embed-chunks",
       { sourceId, workspaceId },
       `embed-${sourceId}`,
-      { removeOnComplete: 100, removeOnFail: 50 },
-    );
-
-    await addOrReplaceJob(
-      summarizeQueue,
-      "summarize-source",
-      { sourceId, workspaceId, excerpt },
-      `summarize-${sourceId}`,
       { removeOnComplete: 100, removeOnFail: 50 },
     );
 
@@ -101,6 +95,9 @@ export async function processIngestJob(job: Job<IngestJobData>) {
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", sourceId);
+    await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.FAILED).catch(
+      () => {},
+    );
     throw error;
   }
 }

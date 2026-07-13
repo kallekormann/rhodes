@@ -43,8 +43,10 @@
 
 .documents-empty {
   margin: 0;
-  padding: var(--space-xl) 0;
-  text-align: center;
+}
+
+.documents-section__loading {
+  padding: var(--space-lg) 0;
 }
 
 .doc-group {
@@ -53,6 +55,13 @@
 
 .doc-group:last-child {
   margin-bottom: 0;
+}
+
+.documents-row__meta-line {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
 }
 
 .documents-row__share-popover {

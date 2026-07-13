@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
 import { Button } from "@/components/Button";
@@ -10,10 +10,17 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
-  const [email, setEmail] = useState("");
+  const invitedEmail = searchParams.get("email") ?? "";
+  const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+    }
+  }, [invitedEmail]);
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -69,7 +76,9 @@ function LoginForm() {
       <p className="auth-footer">
         <Link href="/auth/forgot-password">Forgot password?</Link>
         {" · "}
-        <Link href="/auth/register">Create account</Link>
+        <Link href={`/auth/register?next=${encodeURIComponent(next)}${email ? `&email=${encodeURIComponent(email)}` : ""}`}>
+          Create account
+        </Link>
       </p>
     </>
   );

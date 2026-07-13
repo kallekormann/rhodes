@@ -1,0 +1,57 @@
+.property-add-flyout {
+  display: flex;
+  flex-direction: column;
+  width: var(--panel-flyout-width);
+  flex-shrink: 0;
+  min-height: 0;
+  height: 100%;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-flyout-bg, var(--color-bg-elevated));
+  animation: propertyFlyoutIn 200ms var(--ease-out);
+}
+
+@keyframes propertyFlyoutIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.property-add-flyout__header {
+  background: var(--color-bg-elevated);
+}
+
+.property-add-flyout__header-start {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.property-flyout__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.panel-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  height: 48px;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.panel-column-header__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}

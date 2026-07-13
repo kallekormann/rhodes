@@ -8,17 +8,6 @@ import {
 } from "@rhodes/ai";
 import { OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
 
-const AI_FILLABLE_KEYS = new Set([
-  "summary",
-  "tags",
-  "document_type",
-  "due_date",
-  "stakeholders",
-  "decision_status",
-  "confidence",
-  "status",
-]);
-
 export type WhyRelevantJobData = {
   type: "why-relevant";
   workspaceId: string;
@@ -93,14 +82,14 @@ async function processExtractDocumentMetadata(
 
   const { data: schemas, error: schemaError } = await admin
     .from("metadata_schemas")
-    .select("field_key, field_label, field_type, options")
-    .eq("workspace_id", workspaceId);
+    .select("field_key, field_label, field_type, options, ai_fill_enabled, group_id")
+    .eq("workspace_id", workspaceId)
+    .eq("ai_fill_enabled", true)
+    .is("group_id", null);
 
   if (schemaError) throw new Error(schemaError.message);
 
-  const eligibleFields = (schemas ?? []).filter((field) =>
-    AI_FILLABLE_KEYS.has(field.field_key),
-  );
+  const eligibleFields = schemas ?? [];
 
   if (eligibleFields.length === 0) return;
 

@@ -2,7 +2,7 @@
 
 import { Link2, PanelRightClose } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useApp, type PanelTab } from "@/context/AppContext";
+import { useApp } from "@/context/AppContext";
 import type { StoredDocumentComment } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
 import {
@@ -10,11 +10,14 @@ import {
   insightOriginLabel,
 } from "@/lib/insights/format";
 import { openKnowledgeSourcePreview } from "@/lib/library/preview";
+import { PANEL_TAB_OPTIONS } from "@/lib/panel-tabs";
 import { useAskChat } from "@/hooks/useAskChat";
+import { hasAskEngagedToday } from "@/lib/ask/engagement";
 import type { InsightMatch } from "@/hooks/useInsights";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
-import type { MetadataFieldValue } from "@/lib/metadata/schemas";
-import { PropertiesTab } from "./PropertiesTab";
+import type { MetadataFieldValue, MetadataSchemaField, MetadataSchemaGroup } from "@/lib/metadata/schemas";
+import type { MetadataFieldType } from "@/lib/metadata/schemas";
+import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
 import { Button } from "./Button";
 import { ChatMessageBubble } from "./ChatMessageBubble";
@@ -25,12 +28,7 @@ import "./AskComposer.css";
 import "./ChatMessageBubble.css";
 import "./RightPanel.css";
 
-const tabOptions: { value: PanelTab; label: string }[] = [
-  { value: "insights", label: "Insights" },
-  { value: "ask", label: "Ask" },
-  { value: "comments", label: "Comments" },
-  { value: "properties", label: "Properties" },
-];
+type MetadataSchemaWriteResult = { ok: boolean; error?: string };
 
 type RightPanelProps = {
   comments?: StoredDocumentComment[];
@@ -42,12 +40,66 @@ type RightPanelProps = {
   onRemoveComment?: (commentId: string) => void;
   workspaceId?: string | null;
   propertiesMode?: "document" | "template";
+  propertiesStage?: PropertiesPanelStage;
+  onPropertiesStageChange?: (stage: PropertiesPanelStage) => void;
   documentMetadata?: Record<string, unknown> | null;
+  metadataSchemas: MetadataSchemaField[];
+  metadataGroups: MetadataSchemaGroup[];
+  metadataSchemasLoading?: boolean;
+  createMetadataSchema: (input: {
+    field_label: string;
+    field_type: MetadataFieldType;
+    options?: string[] | { unit: string };
+    ai_fill_enabled?: boolean;
+  }) => Promise<MetadataSchemaWriteResult>;
+  createMetadataGroup: (input: {
+    group_label: string;
+    repeatable?: boolean;
+    fields: Array<{
+      field_label: string;
+      field_type: MetadataFieldType;
+      sub_key?: string;
+      options?: string[] | { unit: string };
+      ai_fill_enabled?: boolean;
+    }>;
+  }) => Promise<MetadataSchemaWriteResult>;
+  updateMetadataSchema: (
+    schemaId: string,
+    input: {
+      field_label: string;
+      field_type: MetadataFieldType;
+      options?: string[] | { unit: string };
+      ai_fill_enabled?: boolean;
+    },
+  ) => Promise<MetadataSchemaWriteResult>;
+  updateMetadataGroup: (
+    groupId: string,
+    input: {
+      group_label: string;
+      fields: Array<{
+        id?: string;
+        field_label: string;
+        field_type: MetadataFieldType;
+        sub_key?: string;
+        options?: string[] | { unit: string };
+        ai_fill_enabled?: boolean;
+      }>;
+    },
+  ) => Promise<MetadataSchemaWriteResult>;
+  deleteMetadataSchema: (
+    schemaId: string,
+    purgeValues?: boolean,
+  ) => Promise<MetadataSchemaWriteResult>;
+  deleteMetadataGroup: (
+    groupId: string,
+    purgeValues?: boolean,
+  ) => Promise<MetadataSchemaWriteResult>;
   createdAtLabel?: string | null;
   createdByLabel?: string | null;
   templateDescription?: string | null;
   templateMetadata?: TemplateMetadata;
   onMetadataFieldChange?: (fieldKey: string, value: MetadataFieldValue) => void;
+  onMetadataGroupInstancesChange?: (metadata: Record<string, unknown>) => void;
   onTemplateDescriptionChange?: (description: string) => void;
   onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
   insights?: InsightMatch[];
@@ -69,12 +121,24 @@ export function RightPanel({
   onRemoveComment,
   workspaceId = null,
   propertiesMode = "document",
+  propertiesStage = "view",
+  onPropertiesStageChange,
   documentMetadata = null,
+  metadataSchemas,
+  metadataGroups,
+  metadataSchemasLoading = false,
+  createMetadataSchema,
+  createMetadataGroup,
+  updateMetadataSchema,
+  updateMetadataGroup,
+  deleteMetadataSchema,
+  deleteMetadataGroup,
   createdAtLabel = null,
   createdByLabel = null,
   templateDescription = null,
   templateMetadata,
   onMetadataFieldChange,
+  onMetadataGroupInstancesChange,
   onTemplateDescriptionChange,
   onTemplateMetadataChange,
   insights = [],
@@ -87,6 +151,12 @@ export function RightPanel({
 }: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
 
+  useEffect(() => {
+    if (panelTab !== "properties" && propertiesStage !== "view") {
+      onPropertiesStageChange?.("view");
+    }
+  }, [panelTab, propertiesStage, onPropertiesStageChange]);
+
   return (
     <aside
       className={`right-panel ${panelOpen ? "right-panel--open" : ""} ${!headerHidden ? "right-panel--below-header" : ""}`}
@@ -95,14 +165,17 @@ export function RightPanel({
       <div className="right-panel__header">
         <TabBar
           className="tab-bar--panel"
-          options={tabOptions}
+          options={PANEL_TAB_OPTIONS}
           value={panelTab}
           onChange={setPanelTab}
         />
         <IconButton icon={PanelRightClose} label="Close panel" onClick={closePanel} iconSize={18} />
       </div>
 
-      <div className="right-panel__content overlay-scrollbar" key={panelTab}>
+      <div
+        className={`right-panel__content ${panelTab === "properties" ? "right-panel__content--properties" : "overlay-scrollbar"}`}
+        key={panelTab}
+      >
         {panelTab === "insights" && (
           <InsightsTab
             workspaceId={workspaceId}
@@ -133,14 +206,25 @@ export function RightPanel({
         )}
         {panelTab === "properties" && (
           <PropertiesTab
-            workspaceId={workspaceId}
             mode={propertiesMode}
+            stage={propertiesStage}
+            onStageChange={onPropertiesStageChange}
             metadata={documentMetadata}
+            metadataSchemas={metadataSchemas}
+            metadataGroups={metadataGroups}
+            metadataSchemasLoading={metadataSchemasLoading}
+            createMetadataSchema={createMetadataSchema}
+            createMetadataGroup={createMetadataGroup}
+            updateMetadataSchema={updateMetadataSchema}
+            updateMetadataGroup={updateMetadataGroup}
+            deleteMetadataSchema={deleteMetadataSchema}
+            deleteMetadataGroup={deleteMetadataGroup}
             createdAtLabel={createdAtLabel}
             createdByLabel={createdByLabel}
             templateDescription={templateDescription}
             templateMetadata={templateMetadata}
             onMetadataFieldChange={onMetadataFieldChange}
+            onMetadataGroupInstancesChange={onMetadataGroupInstancesChange}
             onTemplateDescriptionChange={onTemplateDescriptionChange}
             onTemplateMetadataChange={onTemplateMetadataChange}
           />
@@ -304,8 +388,9 @@ function InsightsTab({
     return (
       <div className="panel-tab">
         <p className="caption">
-          Keep writing — Rhodes will surface related library sources and documents
-          here.
+          {loading
+            ? "Finding related sources…"
+            : "Keep writing — Rhodes will surface related library sources and documents here."}
         </p>
       </div>
     );
@@ -313,6 +398,9 @@ function InsightsTab({
 
   return (
     <div className="panel-tab panel-tab--insights">
+      {loading && (
+        <p className="caption panel-tab__insights-status">Refreshing matches…</p>
+      )}
       <div className="panel-tab__insights-scroll overlay-scrollbar">
         {insights.map((insight, index) => {
           const whyKey = `${insight.item_id}-${insight.origin_type}`;
@@ -416,9 +504,12 @@ function AskTab({
   askPrefill?: string;
   onConsumeAskPrefill?: () => void;
 }) {
+  const { session } = useApp();
   const { messages, pending, error, sendMessage } = useAskChat(workspaceId);
   const [draft, setDraft] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const displayName = session.displayName || "there";
+  const engagedToday = hasAskEngagedToday();
 
   useEffect(() => {
     if (!askPrefill) return;
@@ -439,13 +530,17 @@ function AskTab({
 
   const status: AskComposerStatus = pending ? "thinking" : "idle";
 
+  const welcomeMessage = engagedToday
+    ? `Hi again, ${displayName}. What would you like to explore?`
+    : `Hi ${displayName}, I'm Rhodes. Ask me anything. I'll answer using your library sources and documents, with citations when I can.`;
+
   return (
     <div className="panel-tab panel-tab--ask">
       <div className="panel-tab__messages">
         {messages.length === 0 && (
-          <p className="caption">
-            Ask questions about your workspace. Answers cite library sources and documents only.
-          </p>
+          <ChatMessageBubble role="rhodes">
+            <p>{welcomeMessage}</p>
+          </ChatMessageBubble>
         )}
         {messages.map((message) => (
           <ChatMessageBubble

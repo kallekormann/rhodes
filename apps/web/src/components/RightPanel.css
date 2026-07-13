@@ -24,16 +24,6 @@
   border-left-color: var(--color-border);
 }
 
-.right-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-sm) var(--space-md);
-  height: 48px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  flex-shrink: 0;
-}
-
 .right-panel__content {
   flex: 1;
   display: flex;
@@ -42,6 +32,27 @@
   overflow: hidden;
   padding: var(--space-md);
   animation: tabFade 150ms ease;
+}
+
+/* Properties — no outer padding; panel-shell handles inner scroll padding + action bar */
+.right-panel__content.right-panel__content--properties {
+  flex: 1 1 0;
+  padding: 0;
+}
+
+.right-panel__content--properties .panel-shell {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.right-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  height: 48px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-shrink: 0;
 }
 
 .panel-tab {
@@ -57,11 +68,6 @@
 }
 
 .panel-tab--ask {
-  height: 100%;
-  min-height: 0;
-}
-
-.panel-tab__messages {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -73,6 +79,19 @@
 
 .panel-tab__composer {
   margin-top: auto;
+  flex-shrink: 0;
+}
+
+.panel-tab__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  flex: 1;
+  min-height: 0;
+}
+
+.panel-tab__insights-status {
+  margin: 0 0 var(--space-xs);
   flex-shrink: 0;
 }
 
@@ -204,26 +223,34 @@
 
 .props-list__row {
   display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: var(--space-sm);
+  grid-template-columns: 1fr;
+  gap: 6px;
+  align-items: start;
   padding: var(--space-sm) 0;
   border-bottom: 1px solid var(--color-border-subtle);
 }
 
+.props-list__row:last-child {
+  border-bottom: none;
+}
+
 .props-list__row dt {
   font-size: 13px;
-  color: var(--color-text-tertiary);
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--color-text-secondary);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .props-list__row dd {
   margin: 0;
-  font-size: 14px;
-  min-width: 0;
-}
-
-.panel-tab--properties .field-root,
-.panel-tab--properties .input-wrap {
+  font-size: 12px;
   width: 100%;
+  min-width: 0;
+  color: var(--color-text);
 }
 
 .props-list__link {

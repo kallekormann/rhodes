@@ -17,6 +17,8 @@ import {
   type Scope,
 } from "@/data/scopes";
 import { useDocuments } from "@/hooks/useDocuments";
+import { buildFeatureGates } from "@/lib/features/gates";
+import { canWriteInScope } from "@/lib/workspaces/permissions";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { pathToView, viewToPath } from "@/lib/navigation";
 
@@ -80,11 +82,15 @@ type AppContextValue = {
   scopesLoading: boolean;
   workspaceId: string | null;
   ensureWorkspace: () => Promise<Scope | null>;
+  refreshScopes: () => Promise<void>;
   setActiveScope: (scopeId: string) => void;
-  createPersonalSpace: (name: string) => void;
-  createTeamSpace: (name: string) => void;
+  createPersonalSpace: (name: string) => Promise<void>;
+  createTeamSpace: (name: string) => Promise<void>;
+  updateDisplayName: (name: string) => void;
   canCreatePersonalSpace: boolean;
   canCreateTeamSpace: boolean;
+  canWriteActiveScope: boolean;
+  featureGates: ReturnType<typeof buildFeatureGates>;
   toasts: ToastItem[];
   showToast: (message: string, variant?: ToastVariant) => void;
   dismissToast: (id: string) => void;
@@ -99,6 +105,7 @@ const FALLBACK_SCOPE: Scope = {
   name: "Private",
   type: "private",
   role: "owner",
+  createdAt: new Date(0).toISOString(),
 };
 
 function readStoredThemeMode(): ThemeMode {
@@ -143,7 +150,12 @@ export function AppProvider({
     () => new Set(initialFavoriteIds),
   );
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [sessionState, setSessionState] = useState(session);
   const insightCount = 3;
+
+  useEffect(() => {
+    setSessionState(session);
+  }, [session.userId, session.userEmail, session.displayName]);
 
   const {
     scopes,
@@ -152,15 +164,25 @@ export function AppProvider({
     error: scopesError,
     setActiveScopeId,
     ensureWorkspace,
+    refresh: refreshScopes,
   } = useWorkspaces(session.userId);
 
   const activeScope =
     scopes.find((s) => s.id === activeScopeId) ?? scopes[0] ?? FALLBACK_SCOPE;
+  const featureGates = useMemo(
+    () =>
+      buildFeatureGates({
+        teamRole: activeScope.type === "team" ? activeScope.role : undefined,
+      }),
+    [activeScope.role, activeScope.type],
+  );
+  const allowTeamCreate = canCreateTeamSpace(featureGates.tier);
+  const allowPersonalCreate = canCreatePersonalSpace(scopes, featureGates.tier);
+  const canWriteActiveScope = canWriteInScope(activeScope);
   const workspaceId = scopesLoading
     ? null
     : (activeScopeId ?? scopes[0]?.id ?? null);
   const { createDocument } = useDocuments(workspaceId, "recent");
-  const allowPersonalCreate = canCreatePersonalSpace(scopes);
 
   useEffect(() => {
     setViewState(pathToView(pathname));
@@ -189,9 +211,15 @@ export function AppProvider({
 
   const setActiveScope = useCallback(
     (scopeId: string) => {
+      if (activeScopeId === scopeId) return;
+      setDocumentId("");
+      setDocumentTitle("Untitled Document");
+      if (pathToView(pathname) === "editor") {
+        router.push("/documents");
+      }
       setActiveScopeId(scopeId);
     },
-    [setActiveScopeId],
+    [activeScopeId, pathname, router, setActiveScopeId],
   );
 
   const dismissToast = useCallback((id: string) => {
@@ -207,19 +235,90 @@ export function AppProvider({
     [dismissToast],
   );
 
-  const createPersonalSpace = useCallback(
-    (_name: string) => {
-      showToast("Creating additional spaces ships in Phase 08.", "info");
+  useEffect(() => {
+    if (!session.userId) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch("/app/api/invites/accept-pending", {
+          method: "POST",
+        });
+        if (!response.ok || cancelled) return;
+
+        const body = (await response.json().catch(() => ({}))) as {
+          workspaces?: Array<{ id: string; name: string }>;
+          joined?: number;
+        };
+
+        if ((body.joined ?? 0) > 0) {
+          await refreshScopes();
+          const joined = body.workspaces?.[body.workspaces.length - 1];
+          if (joined?.id) {
+            setActiveScopeId(joined.id);
+            showToast(`Joined ${joined.name}`, "success");
+          }
+        }
+      } catch {
+        // Non-blocking: invite acceptance should not block app load.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.userId, refreshScopes, setActiveScopeId, showToast]);
+
+  const createScope = useCallback(
+    async (name: string, isTeam: boolean) => {
+      try {
+        const response = await fetch("/app/api/workspaces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            is_team_workspace: isTeam,
+          }),
+        });
+
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          workspace?: { id: string };
+        };
+
+        if (!response.ok) {
+          showToast(body.error ?? "Couldn't create scope", "error");
+          return;
+        }
+
+        await refreshScopes();
+
+        if (body.workspace?.id) {
+          setActiveScopeId(body.workspace.id);
+        }
+
+        showToast(`"${name}" scope created`, "success");
+      } catch {
+        showToast("Couldn't create scope", "error");
+      }
     },
-    [showToast],
+    [refreshScopes, setActiveScopeId, showToast],
+  );
+
+  const createPersonalSpace = useCallback(
+    (name: string) => createScope(name, false),
+    [createScope],
   );
 
   const createTeamSpace = useCallback(
-    (_name: string) => {
-      showToast("Team spaces ship in Phase 08.", "info");
-    },
-    [showToast],
+    (name: string) => createScope(name, true),
+    [createScope],
   );
+
+  const updateDisplayName = useCallback((name: string) => {
+    setSessionState((prev) => ({ ...prev, displayName: name }));
+  }, []);
 
   useEffect(() => {
     if (view !== "editor") {
@@ -267,18 +366,23 @@ export function AppProvider({
   );
 
   const createNewDocument = useCallback(async () => {
+    if (!canWriteActiveScope) {
+      showToast("You have read-only access in this scope", "error");
+      return;
+    }
+
     let targetWorkspaceId = workspaceId;
 
     if (!targetWorkspaceId) {
       if (scopesLoading) {
-        showToast("Workspace is still loading…", "info");
+        showToast("Scope is still loading…", "info");
         return;
       }
 
       const scope = await ensureWorkspace();
       if (!scope) {
         showToast(
-          scopesError ?? "Couldn't set up your private workspace",
+          scopesError ?? "Couldn't set up your private scope",
           "error",
         );
         return;
@@ -296,6 +400,7 @@ export function AppProvider({
     setDocumentTitle(created.title);
     openEditor(created.id);
   }, [
+    canWriteActiveScope,
     workspaceId,
     scopesLoading,
     ensureWorkspace,
@@ -345,7 +450,7 @@ export function AppProvider({
 
   const value = useMemo(
     () => ({
-      session,
+      session: sessionState,
       view,
       setView,
       openEditor,
@@ -380,17 +485,21 @@ export function AppProvider({
       scopesLoading,
       workspaceId,
       ensureWorkspace,
+      refreshScopes,
       setActiveScope,
       createPersonalSpace,
       createTeamSpace,
+      updateDisplayName,
       canCreatePersonalSpace: allowPersonalCreate,
-      canCreateTeamSpace,
+      canCreateTeamSpace: allowTeamCreate,
+      canWriteActiveScope,
+      featureGates,
       toasts,
       showToast,
       dismissToast,
     }),
     [
-      session,
+      sessionState,
       view,
       setView,
       openEditor,
@@ -419,10 +528,15 @@ export function AppProvider({
       scopesLoading,
       workspaceId,
       ensureWorkspace,
+      refreshScopes,
       setActiveScope,
       createPersonalSpace,
       createTeamSpace,
+      updateDisplayName,
       allowPersonalCreate,
+      allowTeamCreate,
+      canWriteActiveScope,
+      featureGates,
       toasts,
       showToast,
       dismissToast,

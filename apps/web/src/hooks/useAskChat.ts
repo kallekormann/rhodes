@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { markAskEngagedToday } from "@/lib/ask/engagement";
 
 export type AskMessage = {
   id: string;
@@ -81,6 +82,7 @@ export function useAskChat(workspaceId: string | null) {
       setPending(true);
       setError(null);
       setContextMatches([]);
+      markAskEngagedToday();
 
       const response = await fetch("/app/api/ask", {
         method: "POST",

@@ -28,8 +28,6 @@
 
 .templates-view__status {
   margin: 0;
-  padding: var(--space-xl) 0;
-  text-align: center;
 }
 
 .template-list {

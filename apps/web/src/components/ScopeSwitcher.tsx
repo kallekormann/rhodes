@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { type Scope } from "@/data/scopes";
 import { useApp } from "@/context/AppContext";
 import { ScopeMenu } from "./ScopeMenu";
 import { ScopeTrigger } from "./ScopeTrigger";
-import { SpaceCreateModal } from "./SpaceCreateModal";
+import { ScopeCreateModal } from "./ScopeCreateModal";
 import "./ScopeSwitcher.css";
 
 type CreateKind = "personal" | "team" | null;
@@ -14,13 +15,14 @@ export function ScopeSwitcher() {
   const {
     activeScope,
     scopes,
+    session,
     setActiveScope,
-    setView,
     createPersonalSpace,
     createTeamSpace,
     canCreatePersonalSpace,
     canCreateTeamSpace,
   } = useApp();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [createKind, setCreateKind] = useState<CreateKind>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -76,6 +78,7 @@ export function ScopeSwitcher() {
             personalScopes={personalScopes}
             teamScopes={teamScopes}
             activeScopeId={activeScope.id}
+            userLabel={session.userEmail || session.displayName}
             canCreatePersonalSpace={canCreatePersonalSpace}
             canCreateTeamSpace={canCreateTeamSpace}
             onSelect={selectScope}
@@ -83,22 +86,22 @@ export function ScopeSwitcher() {
             onCreateTeam={() => openCreate("team")}
             onManage={() => {
               setOpen(false);
-              setView("settings");
+              router.push("/settings?section=Scopes");
             }}
           />
         )}
       </div>
 
-      <SpaceCreateModal
+      <ScopeCreateModal
         open={createKind === "personal"}
-        title="New personal space"
+        title="New personal scope"
         placeholder="e.g. Book draft, Research notes"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}
       />
-      <SpaceCreateModal
+      <ScopeCreateModal
         open={createKind === "team"}
-        title="New team space"
+        title="New team scope"
         placeholder="e.g. Growth Engine"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}

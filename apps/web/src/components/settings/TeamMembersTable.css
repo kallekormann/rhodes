@@ -1,0 +1,66 @@
+.team-members-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  margin-bottom: var(--space-lg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.team-members-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.team-members-table thead {
+  background: var(--color-surface-hover);
+}
+
+.team-members-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.team-members-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.team-members-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.team-members-table__name {
+  font-weight: 500;
+}
+
+.team-members-table__actions-col {
+  width: 120px;
+}
+
+.team-members-table__actions {
+  text-align: right;
+}
+
+.team-members-table__actions .btn {
+  margin-left: auto;
+}
+
+.team-members-table .field-root {
+  width: auto;
+  max-width: 160px;
+}
+
+.team-members-table .dropdown {
+  min-width: 140px;
+}

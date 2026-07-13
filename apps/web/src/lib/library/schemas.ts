@@ -74,6 +74,11 @@ export type LibrarySourceRecord = {
   file_type: string | null;
   summary: string | null;
   embedding_status: LibraryEmbeddingStatus;
-  metadata?: { byte_size?: number } | null;
+  metadata?: {
+    byte_size?: number;
+    pipeline_stage?: string;
+    pipeline_updated_at?: string;
+    chunk_count?: number;
+  } | null;
   created_at: string;
 };

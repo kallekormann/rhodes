@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import {
+  normalizeUpdateMetadataSchemaInput,
+  updateMetadataSchemaInput,
+} from "@/lib/metadata/api";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 const SCHEMA_FIELDS =
-  "id, workspace_id, field_key, field_label, field_type, options, created_at";
+  "id, workspace_id, field_key, field_label, field_type, options, group_id, sub_key, sort_order, ai_fill_enabled, created_at";
 
 async function canManageWorkspaceSchemas(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -21,6 +25,86 @@ async function canManageWorkspaceSchemas(
 
   if (!membership) return false;
   return membership.role === "owner" || membership.role === "admin";
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const { id } = await context.params;
+  const body = await request.json().catch(() => null);
+  const parsed = updateMetadataSchemaInput.safeParse(body);
+
+  if (!parsed.success) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }),
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    );
+  }
+
+  const { data: existing, error: loadError } = await supabase
+    .from("metadata_schemas")
+    .select("id, workspace_id, group_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (loadError || !existing) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: "Not found" }, { status: 404 }),
+    );
+  }
+
+  if (existing.group_id) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: "Edit sub-properties through the property group editor" },
+        { status: 400 },
+      ),
+    );
+  }
+
+  if (!(await canManageWorkspaceSchemas(supabase, existing.workspace_id, user.id))) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: "Only workspace owners and admins can manage properties" },
+        { status: 403 },
+      ),
+    );
+  }
+
+  let normalized;
+  try {
+    normalized = normalizeUpdateMetadataSchemaInput(parsed.data);
+  } catch (error) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid property" },
+        { status: 400 },
+      ),
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("metadata_schemas")
+    .update(normalized)
+    .eq("id", id)
+    .select(SCHEMA_FIELDS)
+    .single();
+
+  if (error || !data) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: error?.message ?? "Update failed" }, { status: 400 }),
+    );
+  }
+
+  return withSecurityHeaders(NextResponse.json({ schema: data }));
 }
 
 export async function DELETE(request: Request, context: RouteContext) {

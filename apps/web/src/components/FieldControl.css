@@ -97,6 +97,27 @@
   right: 0;
 }
 
+.field-panel--portal {
+  top: auto;
+  left: auto;
+  bottom: auto;
+  right: auto;
+  min-width: 0;
+  max-width: min(320px, calc(100vw - 16px));
+  box-sizing: border-box;
+}
+
+.field-panel--portal .field-panel__list {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.field-panel--portal .field-panel__item {
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
 .field-panel--calendar {
   padding: 0;
   min-width: 0;

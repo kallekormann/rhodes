@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   membershipToScope,
   readActiveWorkspaceId,
+  readDefaultScopeId,
   writeActiveWorkspaceId,
 } from "@/lib/workspaces/scope";
 
@@ -18,6 +19,7 @@ type WorkspaceRow = {
   id: string;
   name: string;
   is_team_workspace: boolean;
+  created_at: string;
 };
 
 type UseWorkspacesResult = {
@@ -37,13 +39,29 @@ async function bootstrapWorkspace(): Promise<boolean> {
   return response.ok;
 }
 
+function roleRank(role: string): number {
+  if (role === "owner") return 4;
+  if (role === "admin") return 3;
+  if (role === "member") return 2;
+  if (role === "viewer") return 1;
+  return 0;
+}
+
 function mergeMemberships(
   memberships: MembershipRow[],
   workspaces: WorkspaceRow[],
 ): Scope[] {
   const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws]));
+  const bestMembershipByWorkspace = new Map<string, MembershipRow>();
 
-  return memberships
+  for (const row of memberships) {
+    const existing = bestMembershipByWorkspace.get(row.workspace_id);
+    if (!existing || roleRank(row.role) > roleRank(existing.role)) {
+      bestMembershipByWorkspace.set(row.workspace_id, row);
+    }
+  }
+
+  return Array.from(bestMembershipByWorkspace.values())
     .map((row) => {
       const workspace = workspaceById.get(row.workspace_id);
       if (!workspace) return null;
@@ -95,7 +113,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
     const { data: workspaces, error: workspaceError } = await supabase
       .from("workspaces")
-      .select("id, name, is_team_workspace")
+      .select("id, name, is_team_workspace, created_at")
       .in("id", workspaceIds);
 
     if (workspaceError) {
@@ -122,9 +140,11 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       setScopes(nextScopes);
 
       const storedId = readActiveWorkspaceId();
+      const defaultId = readDefaultScopeId();
       const validStored = nextScopes.find((s) => s.id === storedId)?.id;
+      const validDefault = nextScopes.find((s) => s.id === defaultId)?.id;
       const fallbackId = nextScopes[0]?.id ?? null;
-      const resolvedId = validStored ?? fallbackId;
+      const resolvedId = validStored ?? validDefault ?? fallbackId;
 
       setActiveScopeIdState(resolvedId);
       if (resolvedId) {
@@ -132,7 +152,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       }
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to load workspaces";
+        err instanceof Error ? err.message : "Failed to load scopes";
       setError(message);
       setScopes([]);
       setActiveScopeIdState(null);
@@ -153,7 +173,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       if (nextScopes.length === 0) {
         const bootstrapped = await bootstrapWorkspace();
         if (!bootstrapped) {
-          throw new Error("Couldn't create your private workspace");
+          throw new Error("Couldn't create your private scope");
         }
         nextScopes = await loadScopes(false);
       }
@@ -161,8 +181,11 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       setScopes(nextScopes);
 
       const storedId = readActiveWorkspaceId();
+      const defaultId = readDefaultScopeId();
       const validStored = nextScopes.find((s) => s.id === storedId)?.id;
-      const resolvedId = validStored ?? nextScopes[0]?.id ?? null;
+      const validDefault = nextScopes.find((s) => s.id === defaultId)?.id;
+      const resolvedId =
+        validStored ?? validDefault ?? nextScopes[0]?.id ?? null;
 
       setActiveScopeIdState(resolvedId);
       if (resolvedId) {
@@ -172,7 +195,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       return nextScopes.find((s) => s.id === resolvedId) ?? nextScopes[0] ?? null;
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to prepare workspace";
+        err instanceof Error ? err.message : "Failed to prepare scope";
       setError(message);
       return null;
     } finally {

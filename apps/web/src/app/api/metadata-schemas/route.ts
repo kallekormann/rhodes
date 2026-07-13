@@ -13,7 +13,10 @@ const listQuerySchema = z.object({
 });
 
 const SCHEMA_FIELDS =
-  "id, workspace_id, field_key, field_label, field_type, options, created_at";
+  "id, workspace_id, field_key, field_label, field_type, options, group_id, sub_key, sort_order, ai_fill_enabled, created_at";
+
+const GROUP_FIELDS =
+  "id, workspace_id, group_key, group_label, repeatable, sort_order, created_at";
 
 async function canManageWorkspaceSchemas(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -64,20 +67,57 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data, error } = await supabase
+  const { data: schemas, error: schemaError } = await supabase
     .from("metadata_schemas")
     .select(SCHEMA_FIELDS)
     .eq("workspace_id", parsed.data.workspace_id)
+    .is("group_id", null)
     .order("field_label", { ascending: true });
 
-  if (error) {
+  if (schemaError) {
     return withSecurityHeaders(
-      NextResponse.json({ error: error.message }, { status: 400 }),
+      NextResponse.json({ error: schemaError.message }, { status: 400 }),
     );
   }
 
+  const { data: groupRows, error: groupError } = await supabase
+    .from("metadata_schema_groups")
+    .select(GROUP_FIELDS)
+    .eq("workspace_id", parsed.data.workspace_id)
+    .order("sort_order", { ascending: true });
+
+  if (groupError) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: groupError.message }, { status: 400 }),
+    );
+  }
+
+  const groupIds = (groupRows ?? []).map((group) => group.id);
+  let groupFields: Array<Record<string, unknown>> = [];
+
+  if (groupIds.length > 0) {
+    const { data: fields, error: fieldsError } = await supabase
+      .from("metadata_schemas")
+      .select(SCHEMA_FIELDS)
+      .in("group_id", groupIds)
+      .order("sort_order", { ascending: true });
+
+    if (fieldsError) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: fieldsError.message }, { status: 400 }),
+      );
+    }
+
+    groupFields = fields ?? [];
+  }
+
+  const groups = (groupRows ?? []).map((group) => ({
+    ...group,
+    fields: groupFields.filter((field) => field.group_id === group.id),
+  }));
+
   return withSecurityHeaders(
-    NextResponse.json({ schemas: data ?? [] }),
+    NextResponse.json({ schemas: schemas ?? [], groups }),
   );
 }
 
@@ -155,6 +195,7 @@ export async function POST(request: Request) {
       field_label: normalized.field_label,
       field_type: normalized.field_type,
       options: normalized.options,
+      ai_fill_enabled: normalized.ai_fill_enabled,
     })
     .select(SCHEMA_FIELDS)
     .single();

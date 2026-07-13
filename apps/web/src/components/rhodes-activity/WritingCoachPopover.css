@@ -1,0 +1,60 @@
+.writing-coach-popover {
+  width: min(320px, calc(100vw - var(--space-lg) * 2 - 48px));
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-float);
+  animation: rhodesActivityAppear 300ms var(--ease-out) both;
+}
+
+.writing-coach-popover__eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-warning);
+}
+
+.writing-coach-popover__context {
+  margin: 0 0 var(--space-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.writing-coach-popover__feedback {
+  margin: 0 0 var(--space-sm);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.writing-coach-popover__suggestion {
+  margin: 0 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--color-warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-warning-bg);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.writing-coach-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+@keyframes rhodesActivityAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

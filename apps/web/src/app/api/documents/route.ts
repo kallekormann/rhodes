@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import {
+  attachShareContextToDocuments,
+  enrichDocumentListForWorkspace,
+  fetchIncomingSharedDocuments,
+} from "@/lib/documents/enrich-share-context";
 import { extractPlainText } from "@/lib/documents/plain-text";
 import {
   createDocumentSchema,
@@ -11,6 +16,19 @@ import { stripLeadingTitleHeading } from "@/lib/templates/content";
 
 const DOCUMENT_FIELDS =
   "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
+
+async function workspaceAcceptsPersonalUserShares(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  workspaceId: string,
+) {
+  const { data } = await supabase
+    .from("workspaces")
+    .select("is_team_workspace")
+    .eq("id", workspaceId)
+    .maybeSingle();
+
+  return data?.is_team_workspace === false;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -37,25 +55,10 @@ export async function GET(request: Request) {
   }
 
   if (parsed.data.filter === "shared") {
-    const { data: memberships } = await supabase
-      .from("workspace_members")
-      .select("workspace_id");
-
-    const workspaceIds = (memberships ?? []).map((row) => row.workspace_id);
-
-    const { data: incomingShares } = await supabase
-      .from("document_shares")
-      .select("document_id")
-      .or(
-        [
-          `grantee_user_id.eq.${user.id}`,
-          workspaceIds.length > 0
-            ? `grantee_workspace_id.in.(${workspaceIds.join(",")})`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(","),
-      );
+    const includePersonalUserShares = await workspaceAcceptsPersonalUserShares(
+      supabase,
+      parsed.data.workspace_id,
+    );
 
     const { data: workspaceDocs } = await supabase
       .from("documents")
@@ -72,12 +75,24 @@ export async function GET(request: Request) {
             .in("document_id", workspaceDocIds)
         : { data: [] };
 
+    const { documents: incomingDocs, incomingDocIds, incomingSharerByDoc } =
+      await fetchIncomingSharedDocuments(
+        supabase,
+        parsed.data.workspace_id,
+        DOCUMENT_FIELDS,
+        {
+          userId: user.id,
+          includePersonalUserShares,
+        },
+      );
+
     const documentIds = new Set<string>();
-    for (const row of incomingShares ?? []) {
-      if (row.document_id) documentIds.add(row.document_id);
-    }
     for (const row of outgoingShares ?? []) {
       if (row.document_id) documentIds.add(row.document_id);
+    }
+    for (const doc of incomingDocs) {
+      const id = (doc as { id?: string }).id;
+      if (id) documentIds.add(id);
     }
 
     if (documentIds.size === 0) {
@@ -97,7 +112,35 @@ export async function GET(request: Request) {
       );
     }
 
-    return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
+    const workspaceOwned = (data ?? []).filter(
+      (doc) => doc.workspace_id === parsed.data.workspace_id,
+    );
+    const sharedIn = (data ?? []).filter(
+      (doc) => doc.workspace_id !== parsed.data.workspace_id,
+    );
+
+    const enrichedOwned = await attachShareContextToDocuments(
+      supabase,
+      parsed.data.workspace_id,
+      workspaceOwned,
+      incomingDocIds,
+      incomingSharerByDoc,
+    );
+    const enrichedIncoming = await attachShareContextToDocuments(
+      supabase,
+      parsed.data.workspace_id,
+      sharedIn,
+      incomingDocIds,
+      incomingSharerByDoc,
+    );
+
+    const merged = [...enrichedOwned, ...enrichedIncoming].sort((a, b) => {
+      const aUpdated = (a as { updated_at?: string }).updated_at ?? "";
+      const bUpdated = (b as { updated_at?: string }).updated_at ?? "";
+      return bUpdated.localeCompare(aUpdated);
+    });
+
+    return withSecurityHeaders(NextResponse.json({ documents: merged }));
   }
 
   let query = supabase
@@ -132,7 +175,23 @@ export async function GET(request: Request) {
     );
   }
 
-  return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
+  const includePersonalUserShares = await workspaceAcceptsPersonalUserShares(
+    supabase,
+    parsed.data.workspace_id,
+  );
+
+  const enriched = await enrichDocumentListForWorkspace(
+    supabase,
+    parsed.data.workspace_id,
+    data ?? [],
+    DOCUMENT_FIELDS,
+    {
+      userId: user.id,
+      includePersonalUserShares,
+    },
+  );
+
+  return withSecurityHeaders(NextResponse.json({ documents: enriched }));
 }
 
 export async function POST(request: Request) {
@@ -153,6 +212,19 @@ export async function POST(request: Request) {
   if (!user) {
     return withSecurityHeaders(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    );
+  }
+
+  const { data: canWrite } = await supabase.rpc("can_write_workspace", {
+    ws_id: parsed.data.workspace_id,
+  });
+
+  if (!canWrite) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: "You have read-only access in this scope" },
+        { status: 403 },
+      ),
     );
   }
 

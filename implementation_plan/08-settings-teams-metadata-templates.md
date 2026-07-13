@@ -210,6 +210,48 @@ No new vars. Uses existing Supabase + storage config.
 
 ---
 
+### 8. Feature gates and team roles
+
+Foundation for Phase 11 billing and team permission enforcement.
+
+**Shared package** (`packages/shared/src/`):
+
+| Module | Purpose |
+|--------|---------|
+| `team-roles.ts` | `owner`, `admin`, `member`, `viewer` + capabilities (`team.invite`, `content.write`, …) |
+| `tiers.ts` | `free` / `pro` / `team` limits (scopes, library size, file types, gated views) |
+| `features.ts` | Combines tier + team role into `FeatureGateContext` |
+
+**Team capabilities (owner / admin):**
+
+- Remove members, cancel invites, change roles (owner can assign admin; admin can assign member/viewer only)
+- Viewer: read-only — no document create, library upload, template create
+
+**Web wiring:**
+
+- `buildFeatureGates()` in `apps/web/src/lib/features/gates.ts` — dev override via `NEXT_PUBLIC_MOCK_TIER=free|pro|team`
+- `AppContext` exposes `featureGates`, `canWriteActiveScope`
+- RLS: `can_write_workspace()` + migration `00031`
+- UI gates: header New doc, library upload, templates create, documents mutate actions
+
+**Future tier gates** (wired when billing lands):
+
+- Library upload count / max file MB / allowed file types
+- Personal scope count, team scope count
+- Templates create, Ask chat, properties manage
+- Per-view access via `featureGates.canAccessView()`
+
+---
+
+## UAT checklist additions
+
+- [ ] Viewer on team scope: can read documents, cannot create/upload/edit/delete
+- [ ] Owner can change member roles (member ↔ viewer ↔ admin)
+- [ ] Admin can change member/viewer roles but not other admins
+- [ ] `NEXT_PUBLIC_MOCK_TIER=free` hides team scope creation and template create
+
+---
+
 ## Exit criteria
 
 1. Settings overlay fully navigable with Profile, Security, Preferences, Spaces, Team implemented.

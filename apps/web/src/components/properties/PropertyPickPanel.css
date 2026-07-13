@@ -1,0 +1,21 @@
+.property-pick__section {
+  margin-bottom: var(--space-md);
+}
+
+.property-pick__section:last-child {
+  margin-bottom: 0;
+}
+
+.property-pick__section .props-list__section-title {
+  margin: 0;
+  padding: var(--space-lg) 0 var(--space-md);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.property-pick__section:first-of-type .props-list__section-title {
+  padding-top: var(--space-md);
+}

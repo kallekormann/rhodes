@@ -41,7 +41,15 @@ export function Dropdown({
   onChange,
   className = "",
 }: DropdownProps) {
-  const { open, setOpen, rootRef, panelRef, align: computedAlign } = useFieldPanel();
+  const {
+    open,
+    setOpen,
+    rootRef,
+    panelRef,
+    align: computedAlign,
+    placement,
+    panelCoords,
+  } = useFieldPanel();
   const [query, setQuery] = useState("");
   const panelAlign = align === "auto" ? computedAlign : align;
 
@@ -107,7 +115,13 @@ export function Dropdown({
       </button>
 
       {open && (
-        <FieldPanel ref={panelRef} align={panelAlign} className={isField ? "" : "dropdown__panel"}>
+        <FieldPanel
+          ref={panelRef}
+          align={panelAlign}
+          placement={placement}
+          coords={panelCoords}
+          className={isField ? "" : "dropdown__panel"}
+        >
           {searchable && (
             <div className="field-panel__search">
               <Input

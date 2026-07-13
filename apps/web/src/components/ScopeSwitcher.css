@@ -42,13 +42,24 @@
   top: calc(100% + 6px);
   left: 0;
   z-index: 30;
+  display: flex;
+  flex-direction: column;
   width: 300px;
-  padding: var(--space-sm);
+  max-height: min(70vh, calc(100dvh - var(--header-height) - 16px));
+  padding: 0;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-float);
   animation: scopeMenuIn 150ms var(--ease-out);
+  overflow: hidden;
+}
+
+.scope-menu__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-sm);
 }
 
 .scope-menu__section {
@@ -65,6 +76,13 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-tertiary);
+}
+
+.scope-menu__user {
+  margin: 0 0 var(--space-xs);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .scope-menu__hint {
@@ -166,9 +184,11 @@
 }
 
 .scope-menu__footer {
-  margin-top: var(--space-xs);
-  padding-top: var(--space-xs);
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
   border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
 }
 
 .scope-menu__settings {
@@ -193,8 +213,14 @@
 .scope-menu--inline {
   position: static;
   width: 100%;
+  max-height: none;
   box-shadow: none;
   animation: none;
+  overflow: visible;
+}
+
+.scope-menu--inline .scope-menu__scroll {
+  overflow: visible;
 }
 
 .scope-menu__empty {

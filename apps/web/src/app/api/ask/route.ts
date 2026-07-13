@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   askSystemPrompt,
   askUserPrompt,
+  ASK_NO_CONTEXT_REPLY,
   createOllamaClient,
   retrieveWorkspaceKnowledge,
   type KnowledgeMatch,
@@ -110,8 +111,7 @@ export async function POST(request: Request) {
         if (matches.length === 0) {
           send({
             type: "token",
-            token:
-              "I don't have that in this workspace. Try uploading sources to your library or writing more in related documents.",
+            token: ASK_NO_CONTEXT_REPLY,
           });
           send({ type: "done" });
           controller.close();

@@ -1,14 +1,23 @@
-.props-list__row--stacked dd {
-  width: 100%;
+.property-panel__empty {
+  margin: var(--space-md) 0 0;
 }
 
-.props-list__row--stacked dt {
-  margin-bottom: 6px;
+.props-list--manage {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-shell--properties--add .panel-shell__scroll--add {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .props-list__readonly {
-  color: var(--text-secondary);
-  font-size: 14px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
 }
 
 .props-list__ai-hint {
@@ -21,6 +30,11 @@
   letter-spacing: normal;
 }
 
+.props-list__ai-hint--enabled {
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+
 .props-list__section {
   margin-top: 8px;
 }
@@ -30,7 +44,7 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   margin: 0 0 8px;
 }
 
@@ -62,7 +76,7 @@
 .props-use-cases__remove {
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
@@ -79,26 +93,6 @@
   flex: 1;
 }
 
-.panel-tab--properties {
-  height: 100%;
-  min-height: 0;
-}
-
-.panel-tab--properties__scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.properties-tab__actionbar {
-  display: flex;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  padding-top: var(--space-sm);
-  margin-top: var(--space-sm);
-  border-top: 1px solid var(--color-border-subtle);
-}
-
 .props-tags__list {
   display: flex;
   flex-wrap: wrap;
@@ -113,10 +107,16 @@
   cursor: pointer;
 }
 
-.props-tags__add {
+.props-list__number {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
+}
+
+.props-list__unit {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
 .props-multi-select {
@@ -134,4 +134,8 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
+}
+
+.props-list__row--stacked dt {
+  margin-bottom: 0;
 }

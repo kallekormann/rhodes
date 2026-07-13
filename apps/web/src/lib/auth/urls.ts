@@ -1,4 +1,4 @@
-import { APP_BASE_PATH } from "@rhodes/shared";
+import { APP_BASE_PATH } from "@rhodes/shared/constants";
 
 export function appOrigin() {
   return (

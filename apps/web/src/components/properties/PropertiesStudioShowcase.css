@@ -1,0 +1,34 @@
+.properties-flyout-showcase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.properties-flyout-showcase__zones {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.properties-flyout-showcase__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  min-height: 72px;
+}
+
+.properties-flyout-showcase__zone--panel {
+  background: var(--color-bg-elevated);
+}
+
+.properties-flyout-showcase__zone--flyout {
+  background: var(--color-flyout-bg, var(--color-bg-elevated));
+}
+
+.properties-flyout-showcase__zone-label {
+  font-size: 13px;
+  font-weight: 600;
+}

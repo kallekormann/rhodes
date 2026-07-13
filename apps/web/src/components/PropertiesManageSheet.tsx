@@ -137,7 +137,7 @@ export function PropertiesManageSheet({
       >
         <div className="properties-manage">
           <p className="properties-manage__intro caption">
-            Add or remove property definitions for all documents in this workspace.
+            Add or remove property definitions for all documents in this scope.
           </p>
 
           {!adding && (
@@ -242,7 +242,7 @@ export function PropertiesManageSheet({
         title="Remove property?"
         description={
           deleteTarget
-            ? `Remove "${deleteTarget.field_label}" from this workspace? Values on existing documents will also be cleared.`
+            ? `Remove "${deleteTarget.field_label}" from this scope? Values on existing documents will also be cleared.`
             : ""
         }
         confirmLabel={deleting ? "Removing…" : "Remove"}

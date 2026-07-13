@@ -22,7 +22,7 @@ This folder contains the **executable implementation plan** for building Rhodes:
 2. **Feature phases 01–10** — build core product locally against specs and ui-mock.
 3. **Integration phases 11–12** — billing and email/privacy built locally with test/stub modes.
 4. **Phase 12b** — distributed Docker topology (optional 3-server prod: app / data / storage); monolith remains default for dev.
-5. **Phase 13 (VPS)** — deploy to Hetzner + Coolify when mature; choose monolith or distributed topology from 12b.
+5. **Phase 13 (VPS)** — deploy to Hetzner + Coolify when mature; **distributed 3-role prod** from day 1 ([13b](13b-scale-ready-production-infra.md)); monolith for dev only.
 
 ---
 
@@ -41,13 +41,15 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | ✅ complete |
 | 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, Ask, Properties Manage + AI auto-fill | ✅ complete |
 | 07b | [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md) | Properties tab UX, builder, scope views, metadata intelligence | **next** |
+| 07b-ux | [07b-ux-properties-studio.md](07b-ux-properties-studio.md) | **UX design session** — Properties Studio look & behavior (gate before UI polish) | **review** |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | planned |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
 | 12 | [12-email-privacy-and-security.md](12-email-privacy-and-security.md) | Email relay, GDPR, hardening | 4–6 days |
 | 12b | [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md) | App / Data / Storage Compose profiles; monolith or 3-server prod | 4–6 days |
-| 13 | [13-vps-production-and-integration.md](13-vps-production-and-integration.md) | Coolify deploy, integration testing | 5–7 days |
+| 13 | [13-vps-production-and-integration.md](13-vps-production-and-integration.md) | Coolify deploy, integration testing (13A launch) | 5–7 days |
+| 13b | [13b-scale-ready-production-infra.md](13b-scale-ready-production-infra.md) | Scale-ready workers, queues, observability, 10k+ path (with 13) | 6–10 days |
 | 14 | [14-marketing-website.md](14-marketing-website.md) | Decoupled marketing site, demos, pricing, legal | 7–10 days |
 
 **Total estimate:** ~14–18 weeks for a solo developer; parallelize UI + backend + marketing where phases allow.

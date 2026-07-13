@@ -13,7 +13,7 @@ Phase 07 shipped the **mechanics** of properties: schema CRUD API, a Manage moda
 
 | Problem | Symptom |
 |---------|---------|
-| **Manage modal grows without bound** | Replace modal with **expanded sidebar** (Properties Studio): left = live Properties tab, center = builder, right = presets |
+| **Manage modal grows without bound** | Replace with **in-context flyout**: Properties tab stays 352px; add/edit opens a temporary drawer (Notion/Figma pattern) |
 | **Add/remove feels broken** | Users cannot confidently add, preview, reorder, or remove properties; error states and success feedback are unclear |
 | **No mental model** | It is unclear *why* properties matter, what they power downstream, or how they relate to the active **Scope** (workspace) |
 | **Limited field builder** | `select` uses a textarea for options; no radio list type; yes/no is a generic checkbox buried in a long type dropdown — not a first-class **toggle** |
@@ -26,7 +26,7 @@ Phase 07b makes properties **understandable, pleasant to define, and valuable to
 
 ## Objectives
 
-1. **Redesign Properties tab + Properties Studio** — expanded sidebar (three columns), reliable add/remove/edit.
+1. **Redesign Properties tab + property add flyout** — single panel for values + workspace schema; temporary drawer for presets/composer.
 2. **Property builder** — presets for one-click add *plus* a guided builder (label → type → options → preview).
 3. **Rich field types** — dropdown, **radio list**, **yes/no toggle**, multi-select chips; sensible display in the tab.
 4. **Document the value loop** — in-product copy + dev docs: what properties do, where they flow in logic (AI, search, views).
@@ -96,187 +96,390 @@ Scope aggregates API — facet counts, topic rollups (Phase 07b)
 
 ---
 
-## UX redesign — Properties tab + **Properties Studio** (expanded sidebar)
+## UX redesign — Properties tab + **property add flyout**
 
-### Concept: extended sidebar, not a modal
+> **Design gate:** [07b-ux-properties-studio.md](07b-ux-properties-studio.md) — flyout model (**D12**). **UI element definitions (flows a–d)** specify `PropertyAddFlyout`, `PropertyPickPanel`, `PropertyPresetRow`, composers, and chip editors. Implement per **D13**; compose controls per **D14**.
 
-When the user clicks **Manage**, the right panel **expands leftward** over the document area — an **extended sidebar** (~960–1100px total width) instead of a centered modal or a narrow nested sheet.
+### Concept: flyout, not fullscreen studio
 
-| Mode | Width | What it covers |
-|------|-------|----------------|
-| Normal | `--panel-width-sm` (352px) | Standard Insights / Ask / Properties / Comments |
-| **Manage** | `--panel-width-studio` (~1000px) | Slides left over the editor; document still visible underneath (dimmed) on the far left |
+The Properties tab stays **352px**. Schema administration lives in the same tab (WORKSPACE PROPERTIES section). When the user taps **+ Add property**, a **320px flyout** slides in from the right — presets on top, custom/group creation at the bottom. The flyout transforms into the composer when needed; on Save it closes. **No Manage / Done mode.** App header and document canvas remain the focus.
 
-Animation: same easing as `right-panel--open`, width transition + optional scrim on the editor (`pointer-events: none` on doc while managing).
+| Surface | Width | Role |
+|---------|-------|------|
+| Properties panel | 352px | Document values + workspace schema list |
+| Property add flyout | 320px | Temporary — pick preset or compose |
 
-**Dismiss:** `Done` / `Back` / Escape → panel animates back to 352px; Properties tab unchanged.
-
-This solves the modal-height problem by using **horizontal space** the editor already has, and keeps the **live Properties tab** visible while defining fields.
-
-### Three-column layout (Manage mode)
+### Layout (default vs flyout open)
 
 ```
-┌─ Document (dimmed) ─────────────┬─ LEFT ────┬─ CENTER ──────────┬─ RIGHT ──────┐
-│                                 │ Properties│ Property builder  │ Presets      │
-│                                 │ tab       │                   │              │
-│                                 │ (352px)   │ (flex, min 360px) │ (~280px)     │
-│                                 │           │                   │              │
-│                                 │ System    │ Name: [Review…]   │ ┌ Status ──┐ │
-│                                 │ Created   │ Type: [cards]     │ │ Priority │ │
-│                                 │           │ Options: chips    │ │ Doc type │ │
-│                                 │ YOUR      │ Preview: toggle   │ │ Summary  │ │
-│                                 │ PROPS     │ [Save property]   │ │ Tags     │ │
-│                                 │ Status ▾  │                   │ └──────────┘ │
-│                                 │ Priority  │ — or idle state:  │ click = add  │
-│                                 │ …scroll   │ workspace schema  │              │
-│                                 │           │ list + Remove     │ [Custom →]   │
-│                                 │ Scope     │                   │              │
-│                                 │ snapshot  │                   │              │
-└─────────────────────────────────┴───────────┴───────────────────┴──────────────┘
+┌─ editor ─────────────┬─ Properties 352px ─┐     ┌─ editor ───┬─ Props ─┬─ Flyout ─┐
+│                      │ THIS DOCUMENT     │     │            │ values  │ presets  │
+│                      │ WORKSPACE PROPS   │     │            │ schema  │ or editor│
+│                      │ [+ Add property]  │     │            │         │    [×]   │
+└──────────────────────┴───────────────────┘     └────────────┴─────────┴──────────┘
 ```
 
-#### Left column — **existing Properties tab** (unchanged role)
+#### Properties tab sections
 
-- Full current Properties tab UI: system rows, schema-driven value editors, scope snapshot.
-- **Live preview:** when user adds a field in center/right, new row appears here immediately.
-- User can **edit values on the open document** while configuring the workspace schema — validates that the builder preview matches reality.
-- Fixed width: current `--panel-width-sm`; own vertical scroll.
+| Section | Content |
+|---------|---------|
+| **SYSTEM** | Created, word count, etc. |
+| **THIS DOCUMENT** | Interactive `SchemaFieldRow` values on open doc |
+| **WORKSPACE PROPERTIES** | `PropertySchemaIndexRow` list — remove, edit opens flyout |
+| **Footer** | `+ Add property` (primary) — opens flyout pick state |
 
-#### Center column — **property builder + schema admin**
+#### Flyout states
 
-Two states:
-
-| State | When | Content |
-|-------|------|---------|
-| **Idle** | Manage opens, no preset/builder selected | Workspace schema list: label, type, usage count, **Remove**; intro copy; **Build custom property** CTA |
-| **Builder** | Custom CTA, or **Customize** on a preset | Wizard: Name → Type cards → Option chip editor → Live preview → Save |
-
-- Builder preview uses the **same field renderers** as the left column.
-- Saving returns to **Idle** (or keeps builder open for “add another”).
-- This column gets the **most horizontal space** — room for type cards and option chips without vertical stacking hell.
-
-#### Right column — **preset catalog**
-
-- Scrollable list/grid of **predefined properties** (`PROPERTY_PRESETS` + icons).
-- Each card: label, type hint, short description (e.g. *"Track document lifecycle"*).
-- **Click preset** → add immediately to workspace schema (if not exists) + toast; new field appears in left column.
-- **Customize** (secondary action on card) → loads preset into **center builder** for tweak before save.
-- Disabled/“Already added” state when `field_key` exists.
-- Optional filter/search at top if catalog grows.
-
-### Normal Properties tab (before Manage)
-
-```
-┌─ Properties tab ─────────────────────────────┐
-│ SYSTEM                                       │
-│ Created · Created by · Word count            │
-├──────────────────────────────────────────────┤
-│ YOUR PROPERTIES                              │
-│ Status           [ In progress ▾ ]           │
-│ Priority         ( ) Low (•) Med ( ) High    │
-│ Needs review     [====○    ] Yes             │
-│ …scroll…                                     │
-├──────────────────────────────────────────────┤
-│ SCOPE SNAPSHOT               [All views →]   │
-│ 12 docs · 4 in review · 3 experiments        │
-├──────────────────────────────────────────────┤
-│                        [ Manage properties ] │  ← pinned footer; enters Studio mode
-└──────────────────────────────────────────────┘
-```
-
-- **Manage properties** expands the panel (not a modal).
-- Empty state copy: *"Properties help you filter and understand documents in this scope."*
+| State | Content |
+|-------|---------|
+| **Pick** | Preset list (`props-list` previews) + footer: Create custom property / Create property group |
+| **Compose** | Field or group composer + Save/Cancel |
 
 ### Interactions summary
 
 | User action | Result |
 |-------------|--------|
-| Click **Manage properties** | Panel expands to Studio; three columns shown |
-| Click preset (right) | Schema created; field appears in left Properties tab |
-| Click **Customize** on preset | Center builder pre-filled |
-| **Build custom** (center idle) | Center → builder wizard |
-| **Save** in builder | Schema created/updated; left tab refreshes; center → idle |
-| **Remove** (center idle list) | Confirm + optional value purge |
-| **Done** | Panel collapses to normal 352px sidebar |
+| **+ Add property** | Flyout opens — pick presets |
+| Click preset **Add** | Schema created; flyout closes; rows update in tab |
+| **Customize** on preset | Flyout → compose, pre-filled |
+| **Create custom property** | Flyout → compose, empty |
+| **Save** | Schema saved; flyout closes |
+| **×** / `Escape` | Flyout closes |
+| **Remove** (workspace list) | Confirm + purge optional |
 
-### Why this layout works
+### Why flyout beats 3-column studio
 
 | Goal | How |
 |------|-----|
-| No growing modal | Fixed viewport height; three columns scroll independently |
-| Understand properties | Left tab shows real document values while you define fields |
-| Fast path | Right presets = one click |
-| Power path | Center builder = full control (radio, toggle, options) |
-| Context | Still in editor; document dimmed but not navigated away |
+| Clear mental model | One task at a time — document first, add is a side quest |
+| No attention competition | Presets and editor never sit beside schema list permanently |
+| Document focus | Canvas never covered by 100vw studio |
+| Fast path | One-click preset add inside flyout |
+| Power path | Same composer, inside flyout |
 
 ### CSS / component notes
 
 ```css
-/* tokens.css */
 --panel-width-sm: 352px;
---panel-width-studio: 1000px;   /* or min(1000px, 55vw) */
-
-.right-panel--studio {
-  width: var(--panel-width-studio);
-}
+--panel-flyout-width: 320px;
 ```
 
 ```
 RightPanel
 └── PropertiesTab
-    ├── normal mode (single column)
-    └── studio mode (PropertiesStudioLayout)
-        ├── PropertiesTabColumn      ← left, reuses field list
-        ├── PropertiesBuilderColumn  ← center
-        └── PropertiesPresetColumn   ← right
+    ├── document values (THIS DOCUMENT)
+    ├── workspace schema (WORKSPACE PROPERTIES)
+    ├── panel-actionbar (+ Add property)
+    └── PropertyAddFlyout (conditional)
+        ├── pick state (PropertyPresetRow list)
+        └── compose state (PropertyFieldComposer | PropertyGroupComposer)
 ```
 
-Remove `PropertiesManageSheet` / centered `Modal` for Manage — replaced by `PropertiesStudioLayout`.
+**Retire:** `PropertiesStudioLayout`, `right-panel--studio`, `Manage properties`, `Done`.
+
+Remove `PropertiesManageSheet` / centered `Modal` for Manage — replaced by `PropertyAddFlyout`.
 
 ### Fix: modal getting taller
 
 | Current (Phase 07) | Target (07b) |
 |--------------------|--------------|
-| Centered `Modal`; list ↔ form swap in one body | **Expanded sidebar**; three columns |
-| Presets + list + form stack vertically | Presets **right**; builder **center**; values **left** |
-| Type = long `Dropdown` | Type = **icon cards** in center column |
-| Options = `<textarea rows={5}>` | **OptionChipEditor** in center column |
+| Centered `Modal`; list ↔ form swap in one body | **Flyout drawer**; pick ↔ compose inside flyout |
+| Presets + list + form stack vertically | Presets in flyout; schema list in tab; values in tab |
+| Type = long `Dropdown` | Type = **icon cards** in flyout compose |
+| Options = `<textarea rows={5}>` | **OptionChipEditor** in flyout compose |
 
 ---
 
-## Field types — schema and UI
+## Property editor — types, builder, and groups
 
-### New / clarified types
+The **property add flyout** is where users create either a **single field** (one label → one value) or a **property group** (one section title → multiple sub-label + value rows).
+
+### What users can create
+
+#### Single fields (atomic properties)
+
+Each field has one **label**, one **type**, and optional **options** (for choice types). Values are stored flat on `documents.metadata`.
+
+| Category | `field_type` | Control in Properties tab | Value shape | Builder options |
+|----------|--------------|---------------------------|-------------|-----------------|
+| **Text** | `text` | Single-line input | `string` | — |
+| | `textarea` | Multi-line input | `string` | — |
+| | `url` | Input + link validation | `string` | — |
+| **Numbers** | `number` | Numeric input | `number` | Unit suffix (optional, display-only: `%`, `€`, `days`) |
+| **Choice** | `select` | Dropdown | `string` | Option chips |
+| | `radio` | Vertical radio list | `string` | Option chips |
+| | `multi_select` | Chip multi-select | `string[]` | Option chips |
+| | `toggle` | Yes/No switch | `boolean` | Default on/off (replaces `checkbox` in UI) |
+| **Dates** | `date` | Date picker | `string` (ISO) | — |
+| | `date_range` | Start / end pickers | `{ start, end }` | — |
+| **Organization** | `tags` | Tag chips + add | `string[]` | Suggested tags (optional) |
+
+**Builder UX for single fields** (replaces current dropdown + textarea):
+
+1. **Label** — e.g. "Review date"; auto key preview (`review_date`)
+2. **Type** — compact **icon cards** grouped by category (not a long dropdown)
+3. **Options** — `OptionChipEditor` when type is select / radio / multi_select
+4. **Preview** — live row in left column using real field renderers
+5. **Save** — primary small button
+
+#### Property groups (composite + repeatable)
+
+A **property group** is something the user **defines once** at workspace level:
+
+1. **Name the group** — e.g. "KPI", "Experiment", "Review"
+2. **Define sub-properties** — each row: sub-label + type (+ options / unit)
+
+That definition is the **shape**. On each document, the user fills in **one or more instances** of that shape — repeatable blocks.
+
+**Define once (flyout → Group compose):**
+
+```
+Group name     [ KPI                  ]
+
+Sub-properties
+│ Name             │ Text       │  [ − ]  │
+│ Baseline         │ Number     │  [ − ]  │
+│ Expected lift    │ Number  %  │  [ − ]  │
+  [ + Add sub-property ]
+               [ Save group ]
+```
+
+**Use on a document (Properties tab — left column):**
+
+```
+KPI                                    [ + Add KPI ]
+┌─ KPI 1 ───────────────────────────────── [ Remove ]
+│  Name            [ Revenue per seat     ]
+│  Baseline        [ 1200                 ]
+│  Expected lift   [ 15                   ]
+└────────────────────────────────────────────────────
+┌─ KPI 2 ───────────────────────────────── [ Remove ]
+│  Name            [ Activation rate      ]
+│  Baseline        [ 42                   ]
+│  Expected lift   [ 8                    ]
+└────────────────────────────────────────────────────
+```
+
+Same group definition, two **instances** on one document. The user does **not** need separate "Primary KPI" and "Secondary KPI" group types — they add another block.
+
+For groups that are naturally singular (e.g. **Review**), the UI still uses the same model but starts with **one instance** and hides **+ Add** unless the workspace owner marked the group as repeatable (default: **repeatable = true**; owner can turn off for Review-style groups).
+
+**Example — Experiment** (preset group, one instance typical):
+
+```
+EXPERIMENT
+  Hypothesis      [ We believe…          ]   textarea
+  Outcome         ( ) Pending (•) Success    radio
+  Confidence      [====○    ] High           toggle
+```
+
+### Mental model — definition vs instance
+
+| Layer | Who sets it | Where | What |
+|-------|-------------|-------|------|
+| **Group definition** | Workspace admin | Properties Studio | Group name + sub-property schema |
+| **Group instance** | Anyone editing a doc | Properties tab | One filled-in block (values for each sub-property) |
+| **Single field** | Workspace admin | Properties Studio | One label + type; one value per document |
+
+```
+Workspace                          Document metadata
+─────────                          ─────────────────
+metadata_schema_groups             metadata.kpi = [
+  KPI (repeatable)                   { name, baseline, expected_lift },  ← instance 1
+metadata_schemas (children)          { name, baseline, expected_lift },  ← instance 2
+  name: text                       ]
+  baseline: number
+  expected_lift: number
+```
+
+### Field keys — definition uses relative sub-keys
+
+Sub-properties inside a group use a **relative `sub_key`** (not a workspace-global `field_key`):
+
+```
+group_label: "KPI"           →  group_key: kpi
+sub_label:   "Expected lift" →  sub_key: expected_lift
+sub_label:   "Name"          →  sub_key: name
+```
+
+Instance values live under `metadata[group_key]` as an **array of objects** keyed by `sub_key`:
+
+```json
+{
+  "kpi": [
+    { "name": "Revenue per seat", "baseline": 1200, "expected_lift": 15 },
+    { "name": "Activation rate", "baseline": 42, "expected_lift": 8 }
+  ],
+  "status": "in_progress"
+}
+```
+
+Single fields stay flat at the top level (`status`, `due_date`, …). Group data is namespaced by `group_key` so instances never collide.
+
+**Why arrays:** Matches repeatable blocks, keeps instance boundaries clear, and avoids encoding instance index in flat keys (`kpi_0_name`, `kpi_1_name`).
+
+**Filters / views / RAG:** Query with JSON path (e.g. `metadata->kpi @> '[{"baseline": 1200}]'` or app-layer facet). Acceptable tradeoff for correct UX.
+
+### Data model
+
+**Migration `00020_metadata_schema_groups.sql`:**
+
+```sql
+create table metadata_schema_groups (
+  id uuid primary key default uuid_generate_v4(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  group_key text not null,
+  group_label text not null,
+  repeatable boolean not null default true,
+  sort_order int not null default 0,
+  created_at timestamptz default now() not null,
+  unique (workspace_id, group_key)
+);
+
+alter table metadata_schemas
+  add column group_id uuid references metadata_schema_groups(id) on delete cascade,
+  add column sub_key text,           -- relative key within group; null for ungrouped fields
+  add column sort_order int not null default 0;
+
+-- Ungrouped fields: field_key required, sub_key null
+-- Group sub-fields: sub_key required, field_key = group_key || '_' || sub_key (denormalized for migrations) OR generated only in API
+```
+
+| Layer | Table | Notes |
+|-------|-------|-------|
+| Group definition | `metadata_schema_groups` | `group_label`, `group_key`, `repeatable` |
+| Sub-property def | `metadata_schemas` | `group_id` + `sub_key` + `field_type` + `options` |
+| Instance values | `documents.metadata[group_key]` | `Array<Record<sub_key, value>>` |
+| Single field values | `documents.metadata[field_key]` | Scalar / array per type |
+
+**Limits:** Sub-properties count toward `MAX_METADATA_SCHEMAS_PER_WORKSPACE` (a KPI group with 3 sub-properties = 3). Group definitions themselves do not.
+
+**Instance limits (V1):** Max 10 instances per group per document (configurable constant).
+
+### Builder UX — two modes
+
+At the top of the center column when editor is active:
+
+```
+[ Field ]  [ Group ]     ← segmented control, small secondary/ghost
+```
+
+#### Mode: Field (default)
+
+Triggered by **+ Add property** or preset **Customize** on a single-field preset.
+
+```
+Label          [ Review date          ]
+Type           [ Text ] [ Number ] [ Select ] …   ← icon cards
+Options        (chip editor if choice type)
+Preview        (inline, optional)
+               [ Cancel ]  [ Save property ]
+```
+
+#### Mode: Group
+
+Triggered by **+ Add property → Group** tab, or preset **Customize** on a group preset (e.g. "KPI").
+
+```
+Group name     [ KPI                  ]
+☑ Allow multiple on a document        ← repeatable (default on)
+
+Sub-properties
+┌──────────────────┬────────────┬─────────┐
+│ Name             │ Text       │  [ − ]  │
+│ Baseline         │ Number     │  [ − ]  │
+│ Expected lift    │ Number  %  │  [ − ]  │
+└──────────────────┴────────────┴─────────┘
+  [ + Add sub-property ]
+
+Preview        (one instance block in left column)
+               [ Cancel ]  [ Save group ]
+```
+
+**Sub-property row:** sub-label input · compact type picker · optional unit suffix for numbers · ghost Remove.
+
+**Allowed sub-property types:** text, textarea, number, select, radio, multi_select, toggle, date, tags, url. No nested groups in V1.
+
+**Save group** = one API call: create `metadata_schema_groups` + all child `metadata_schemas` rows.
+
+### Presets — single and group
+
+Right column shows two sections (or visual separator):
+
+**Quick fields** — existing `PROPERTY_PRESETS` (Status, Priority, …)
+
+**Group templates** — new `PROPERTY_GROUP_PRESETS`:
+
+| Group preset | Sub-fields |
+|--------------|------------|
+| **KPI** | Name (text), Baseline (number), Expected lift (number, `%`) — repeatable |
+| **Experiment** | Hypothesis (textarea), Outcome (radio), Confidence (radio) — single instance |
+| **Review** | Reviewer (text), Review date (date), Approved (toggle) — single instance |
+| **Decision** | Status (select), Stakeholders (tags), Deadline (date) — single instance |
+
+Card actions unchanged: **Add** (instant) / **Customize** (opens group builder pre-filled).
+
+### Properties tab rendering
+
+Order: system rows → **ungrouped fields** → **groups** (each group renders instances).
+
+```tsx
+// Pseudocode — repeatable group
+{groups.map(group => {
+  const instances = readGroupInstances(metadata, group.group_key); // default [{},] if empty
+  return (
+    <section className="props-list__section">
+      <div className="props-group__header">
+        <h3 className="props-list__section-title">{group.group_label}</h3>
+        {group.repeatable && (
+          <Button size="small" variant="ghost" onClick={() => addInstance(group)}>
+            + Add {group.group_label}
+          </Button>
+        )}
+      </div>
+      {instances.map((instance, index) => (
+        <div key={index} className="props-group__instance">
+          {group.repeatable && instances.length > 1 && (
+            <Button size="small" variant="ghost" onClick={() => removeInstance(group, index)}>
+              Remove
+            </Button>
+          )}
+          {group.fields.map(field => (
+            <SchemaFieldRow
+              variant="grouped"
+              value={instance[field.sub_key]}
+              onChange={(v) => setInstanceValue(group, index, field.sub_key, v)}
+            />
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+})}
+```
+
+Each **instance** is a subtle card (`border`, `radius-md`) so repeatable blocks are visually distinct. Singular groups (Review) show one card without **+ Add**.
+
+### Field types — schema additions
 
 | `field_type` | UI control | Value shape | Notes |
 |--------------|------------|-------------|-------|
 | `select` | Dropdown | `string` | Existing |
-| `radio` | **Radio list** (vertical) | `string` | **New** — same storage as select; `display_as: "radio"` in schema options or distinct type |
-| `checkbox` / `toggle` | **Toggle** (yes/no) | `boolean` | Rename label to "Yes/No"; never use dropdown for booleans |
-| `multi_select` | Chip multi + dropdown | `string[]` | Chip editor for options in builder |
-| … | (text, textarea, date, date_range, tags, number, url) | unchanged | Polish rendering |
+| `radio` | Radio list (vertical) | `string` | **New** — distinct type |
+| `checkbox` → `toggle` | Yes/No switch | `boolean` | UI label "Yes/No"; keep `checkbox` in DB or alias |
+| `multi_select` | Chip multi | `string[]` | Option chips in builder |
+| `number` | Numeric input | `number` | Optional `options: { unit: "%" }` for display |
+| … | text, textarea, date, date_range, tags, url | unchanged | |
 
-**Migration `00020_metadata_field_display.sql` (if needed):**
+**Migration `00021_metadata_field_radio.sql`:** add `radio` to `field_type` check; optionally rename checkbox display to toggle in UI only.
 
-```sql
--- Option A: add field_type 'radio'
--- Option B: metadata_schemas.options jsonb → { "values": [...], "display": "radio" }
-```
+### Phase split
 
-Prefer **distinct `radio` type** for simpler Zod + UI branching.
-
-### Presets catalog (expand)
-
-Keep `PROPERTY_PRESETS`; add:
-
-| Preset | Type | Notes |
-|--------|------|-------|
-| Needs review | `toggle` | Yes/No |
-| Approved | `toggle` | Yes/No |
-| Risk level | `radio` | low / medium / high |
-| Audience | `multi_select` | internal, client, public |
-
-Preset click = **immediate create** (no wizard) when preset is fully defined; toast + scroll to field in Properties tab.
+| Slice | Deliverable |
+|-------|-------------|
+| **07b.1** (current) | Studio layout, flat fields, presets, type icon cards, OptionChipEditor |
+| **07b.2** | Groups migration, group builder (name + sub-properties), repeatable instance UI, group presets (KPI, …) |
+| **07b.3** | `radio` / `toggle` types, scope snapshot, saved views V1 |
 
 ---
 

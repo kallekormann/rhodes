@@ -2,26 +2,35 @@
 
 **Status:** planned  
 **Depends on:** Phases 09–12 **and Phase 12b** (topology profiles)  
+**Related:** [13b-scale-ready-production-infra.md](13b-scale-ready-production-infra.md) — scale-ready worker topology, queues, observability, 10k+ preparedness  
 **Blocks:** — (V1 release)  
-**Estimated duration:** 5–7 days
+**Estimated duration:** 5–7 days (13A launch) + 6–10 days (13B scale platform, overlapping)
 
 ---
 
 ## Objectives
 
 1. Deploy Rhodes to **Hetzner VPS** via **Coolify** using the same Docker images as local dev.
-2. Choose **deployment topology** from Phase 12b: monolith (one server) or distributed (app + data + storage).
+2. Deploy **distributed 3-role topology** from day 1 (App + Data + Storage) per [13b](13b-scale-ready-production-infra.md) — monolith for local dev only.
 3. Configure **production overlays**: TLS, Resend/SES, LemonSqueezy live webhooks, secrets.
-3. Run **full integration test checklist**: auth, billing, email, backend hand-in-hand.
-4. Establish **backups, monitoring, and runbooks**.
-5. Tag `main` as **v1.0.0-rc1** when staging passes.
+4. Run **full integration test checklist**: auth, billing, email, backend hand-in-hand.
+5. Establish **backups, monitoring, and runbooks** (including 5k-user scale review).
+6. Tag `main` as **v1.0.0-rc1** when staging passes.
+
+Phase 13 has two tracks that ship together:
+
+| Track | Document | Purpose |
+|-------|----------|---------|
+| **13A — Production launch** | This document | TLS, Coolify, billing/email, integration checklist |
+| **13B — Scale-ready platform** | [13b-scale-ready-production-infra.md](13b-scale-ready-production-infra.md) | Worker roles, queue orchestration, observability, 10k+ scaling |
 
 ---
 
 ## Prerequisites
 
 - Phases 01–12 exit criteria met on `dev` branch.
-- **Phase 12b exit criteria met** — Compose profiles and `RHODES_TOPOLOGY` documented; distributed smoke test passed (or consciously deferred with monolith-only V1 deploy documented in runbook).
+- **Phase 12b exit criteria met** — Compose profiles and `RHODES_TOPOLOGY` documented; distributed smoke test passed.
+- **Phase 13b scale-ready tasks** — worker role split, Ollama admission control, health/queue metrics (see [13b](13b-scale-ready-production-infra.md)).
 - `main` merged with all features.
 - Domain: **`rhodes.quinsy.app`** (D-012, validated launch). Optional **`rhodes.app`** if acquired later (O-018) — env-driven URLs, no code change required.
 - LemonSqueezy live store configured.
@@ -33,6 +42,7 @@
 ## Canonical spec references
 
 - [13-infrastructure-vps.md](../docs/13-infrastructure-vps.md)
+- [13b-scale-ready-production-infra.md](13b-scale-ready-production-infra.md)
 - [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md)
 - [18-non-functional-requirements.md](../docs/18-non-functional-requirements.md)
 - [14-email-delivery.md](../docs/14-email-delivery.md)
@@ -43,14 +53,24 @@
 
 ## Target infrastructure
 
+**Default for V1 production:** distributed 3-role minimal sizing per [13b](13b-scale-ready-production-infra.md). Monolith (single CPX41) is **dev/local only**.
+
+| Role | Launch spec | Est. cost |
+|------|-------------|-----------|
+| **App** | CPX31 — 4 vCPU, 8 GB RAM | ~€15/mo |
+| **Data** | CCX33 — 8 vCPU, 32 GB RAM | ~€50/mo |
+| **Storage** | CPX11 + 500 GB Volume | ~€15/mo + volume |
+| **Orchestration** | Coolify on App server | — |
+| **TLS** | Caddy via Coolify | — |
+| **Backups** | Daily `pg_dump` + restic → Hetzner Object Storage | — |
+| **Monitoring** | Uptime Kuma + queue depth / Ollama alerts (see 13b) | — |
+
+Legacy monolith reference (not used in prod):
+
 | Resource | Spec |
 |----------|------|
 | Provider | Hetzner Cloud EU (Falkenstein or Nuremberg) |
 | Instance | CPX41 — 8 vCPU, 16 GB RAM, 240 GB disk (~€28/mo) |
-| Orchestration | Coolify |
-| TLS | Caddy via Coolify |
-| Backups | Daily `pg_dump` + restic → Hetzner Object Storage |
-| Monitoring | Uptime Kuma + disk/queue/Ollama alerts |
 
 ---
 
@@ -68,7 +88,9 @@ docs/
     ├── rollback.md
     ├── rescale.md
     ├── backup-restore.md
-    └── incident-ollama-oom.md
+    ├── scale-review-5k.md
+    ├── worker-roles.md
+    └── topology-distributed-minimal.md
 
 scripts/
 ├── deploy-prod.sh
@@ -89,7 +111,7 @@ scripts/
 
 ### 2. Coolify project setup
 
-**First decision:** `RHODES_TOPOLOGY=monolith` (single CPX41) or `distributed` (see [12b-distributed-docker-topology.md](12b-distributed-docker-topology.md)).
+**Topology:** `RHODES_TOPOLOGY=distributed` — three Hetzner servers (App, Data, Storage). See [13b](13b-scale-ready-production-infra.md) for Coolify service matrix and worker role split.
 
 Create Coolify project `rhodes` with services:
 
@@ -97,7 +119,7 @@ Create Coolify project `rhodes` with services:
 |---------|--------|-------|
 | `marketing` | GitHub `kallekormann/rhodes` branch `main`, `apps/marketing` Dockerfile | `https://rhodes.quinsy.app/` — see [14-marketing-website.md](14-marketing-website.md) |
 | `web` | Same repo, `apps/web` Dockerfile | `https://rhodes.quinsy.app/app` (`basePath: '/app'`) — **app role** |
-| `worker` | Same repo, `apps/worker` Dockerfile | Internal only — **app role** |
+| `worker` | Same repo, `apps/worker` Dockerfile | **Split into four roles in prod** — see [13b](13b-scale-ready-production-infra.md): `worker-ingest`, `worker-embed`, `worker-summarize`, `worker-llm` |
 | `supabase` | Docker compose stack from repo `docker/` — **data role** (Postgres, Auth, Kong, …) | Private network; or separate Coolify host in distributed mode |
 | `ollama` | `ollama/ollama` | **data role** (with Supabase); `OLLAMA_HOST` points here from app/worker |
 | `storage` | Compose profile `storage` from Phase 12b | Private network; dedicated host when library &gt;100 GB |
@@ -282,6 +304,9 @@ Write in `docs/runbooks/`:
 | `rescale.md` | Hetzner power off → rescale RAM → power on (~2–5 min) |
 | `backup-restore.md` | pg_restore procedure; restic restore |
 | `incident-ollama-oom.md` | Restart Ollama; reduce concurrent jobs; rescale RAM |
+| `scale-review-5k.md` | Metrics export, scale decision tree, load test (see [13b](13b-scale-ready-production-infra.md)) |
+| `worker-roles.md` | `WORKER_ROLE` env, Coolify services, concurrency tuning |
+| `topology-distributed-minimal.md` | 3-node launch sizing and private network |
 
 ### 13. Staging → production promotion
 
@@ -309,12 +334,13 @@ See Phase 01 `.env.example` — all vars must be set in Coolify. Rotate `SUPABAS
 ## Exit criteria
 
 1. Rhodes marketing at `https://rhodes.quinsy.app/` and product at `https://rhodes.quinsy.app/app` with valid TLS.
-2. Full integration checklist passes on staging.
-3. Backups running daily; restore tested once.
-4. Monitoring alerts configured.
-5. Runbooks written.
-6. `main` tagged `v1.0.0-rc1`.
-7. Auth, billing, email, and backend validated **together** on VPS — not just individually.
+2. **Distributed 3-role production** live per [13b exit criteria](13b-scale-ready-production-infra.md).
+3. Full integration checklist passes on staging.
+4. Backups running daily; restore tested once.
+5. Monitoring alerts configured (including queue depth thresholds from 13b).
+6. Runbooks written (including scale-review-5k, worker-roles).
+7. `main` tagged `v1.0.0-rc1`.
+8. Auth, billing, email, and backend validated **together** on VPS — not just individually.
 
 ---
 

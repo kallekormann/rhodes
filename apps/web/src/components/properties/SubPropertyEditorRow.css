@@ -1,0 +1,41 @@
+.sub-property-editor-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.sub-property-editor-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.sub-property-editor-row__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 120px) auto;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.sub-property-editor-row__main:has(.sub-property-editor-row__unit) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 100px) 56px auto;
+}
+
+.sub-property-editor-row__label,
+.sub-property-editor-row__type,
+.sub-property-editor-row__unit {
+  min-width: 0;
+}
+
+.sub-property-editor-row__remove {
+  flex-shrink: 0;
+}
+
+.sub-property-editor-row__ai-toggle .toggle__label {
+  font-size: 12px;
+}
+
+.sub-property-editor-row__ai-toggle .toggle__desc {
+  display: none;
+}

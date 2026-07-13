@@ -4,6 +4,11 @@ import { checkRegisterLimit } from "@/lib/auth/rate-limit";
 import { registerSchema } from "@/lib/auth/schemas";
 import { appUrl } from "@/lib/auth/urls";
 import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
+
+const registerRequestSchema = registerSchema.extend({
+  next: z.string().optional(),
+});
 
 function clientIp(request: Request) {
   return (
@@ -11,6 +16,13 @@ function clientIp(request: Request) {
     request.headers.get("x-real-ip") ??
     "unknown"
   );
+}
+
+function safeNextPath(next: string | undefined) {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "/";
+  }
+  return next;
 }
 
 export async function POST(request: Request) {
@@ -23,7 +35,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = registerSchema.safeParse(body);
+  const parsed = registerRequestSchema.safeParse(body);
 
   if (!parsed.success) {
     return withSecurityHeaders(
@@ -34,12 +46,13 @@ export async function POST(request: Request) {
     );
   }
 
+  const next = safeNextPath(parsed.data.next);
   const supabase = await createClient();
   const { error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
-      emailRedirectTo: appUrl("/auth/callback"),
+      emailRedirectTo: appUrl(`/auth/callback?next=${encodeURIComponent(next)}`),
     },
   });
 

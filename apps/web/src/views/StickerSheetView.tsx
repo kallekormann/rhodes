@@ -45,6 +45,7 @@ import { AskComposerShowcase } from "@/components/AskComposerShowcase";
 import { AskPanelShowcase } from "@/components/AskPanelShowcase";
 import { BubbleMenuShowcase } from "@/components/BubbleMenuShowcase";
 import { ChatMessageBubbleShowcase } from "@/components/ChatMessageBubbleShowcase";
+import { PropertiesStudioShowcase } from "@/components/properties/PropertiesStudioShowcase";
 import { ScopeSwitcherShowcase } from "@/components/ScopeSwitcherShowcase";
 import { SlashMenuShowcase } from "@/components/SlashMenuShowcase";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -62,6 +63,9 @@ const swatches = [
   { name: "Accent muted", var: "--color-accent-muted" },
   { name: "Background", var: "--color-bg" },
   { name: "Surface", var: "--color-surface" },
+  { name: "Studio sidebar", var: "--color-studio-sidebar-bg" },
+  { name: "Studio editor", var: "--color-studio-editor-bg" },
+  { name: "Studio presets", var: "--color-studio-presets-bg" },
   { name: "Float bg", var: "--color-float-bg" },
   { name: "Float border", var: "--color-float-border" },
   { name: "Text", var: "--color-text" },
@@ -584,6 +588,14 @@ export function StickerSheetView() {
             </div>
           </dl>
         </div>
+      </section>
+
+      <section className="sticker-section">
+        <h2 className="type-sticker-heading">Properties flyout</h2>
+        <p className="type-caption sticker-section__desc">
+          In-context inspector: 352px properties panel plus 320px add flyout. Preset rows, schema index, and compose controls.
+        </p>
+        <PropertiesStudioShowcase />
       </section>
 
       <section className="sticker-section">

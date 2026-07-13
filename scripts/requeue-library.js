@@ -117,12 +117,6 @@ async function main() {
 
     const total = chunkRows[0]?.total ?? 0;
     const missingEmbeddings = chunkRows[0]?.missing_embeddings ?? 0;
-    const excerpt =
-      row.metadata &&
-      typeof row.metadata === "object" &&
-      typeof row.metadata.extracted_text_excerpt === "string"
-        ? row.metadata.extracted_text_excerpt
-        : null;
 
     if (total > 0 && missingEmbeddings > 0) {
       await client.query(
@@ -137,16 +131,6 @@ async function main() {
         `embed-${row.id}`,
         { removeOnComplete: 100, removeOnFail: 50 },
       );
-
-      if (typeof excerpt === "string" && excerpt.length > 0) {
-        await addOrReplaceJob(
-          summarizeQueue,
-          "summarize-source",
-          { sourceId: row.id, workspaceId: row.workspace_id, excerpt },
-          `summarize-${row.id}`,
-          { removeOnComplete: 100, removeOnFail: 50 },
-        );
-      }
 
       console.log("re-queued embed", row.file_path);
       requeued += 1;

@@ -1,0 +1,22 @@
+.rhodes-activity-rail {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  z-index: 6;
+  pointer-events: none;
+}
+
+.rhodes-activity-rail__item {
+  position: relative;
+  pointer-events: auto;
+}
+
+.rhodes-activity-rail__item--writing {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}

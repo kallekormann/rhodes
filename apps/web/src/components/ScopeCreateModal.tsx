@@ -3,7 +3,7 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { Modal } from "./Modal";
 
-type SpaceCreateModalProps = {
+type ScopeCreateModalProps = {
   open: boolean;
   title: string;
   placeholder?: string;
@@ -12,14 +12,14 @@ type SpaceCreateModalProps = {
   onSubmit: (name: string) => void;
 };
 
-export function SpaceCreateModal({
+export function ScopeCreateModal({
   open,
   title,
-  placeholder = "Space name",
+  placeholder = "Scope name",
   submitLabel = "Create",
   onClose,
   onSubmit,
-}: SpaceCreateModalProps) {
+}: ScopeCreateModalProps) {
   const [name, setName] = useState("");
 
   useEffect(() => {

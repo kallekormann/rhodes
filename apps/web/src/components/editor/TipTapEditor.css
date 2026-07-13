@@ -181,3 +181,29 @@
   color: var(--color-comment-highlight-text);
   box-shadow: 0 0 0 1px var(--color-comment-highlight-ring);
 }
+
+.tiptap-editor-body .rhodes-suggestion {
+  margin: var(--space-sm) 0 var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--color-warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--color-warning-bg);
+}
+
+.tiptap-editor-body .rhodes-suggestion__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-warning);
+  user-select: none;
+}
+
+.tiptap-editor-body .rhodes-suggestion__body {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+

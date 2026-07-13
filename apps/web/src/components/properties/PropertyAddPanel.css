@@ -1,0 +1,55 @@
+.property-add-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.property-add-panel__tabs {
+  flex-shrink: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.property-add-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+.property-pick__section {
+  margin-bottom: var(--space-md);
+}
+
+.property-pick__section:last-child {
+  margin-bottom: 0;
+}
+
+.property-pick__section .props-list__section-title {
+  margin: 0;
+  padding: var(--space-lg) 0 var(--space-md);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.property-pick__section:first-of-type .props-list__section-title {
+  padding-top: var(--space-md);
+}
+
+.property-add-panel__composer {
+  padding: 0;
+}
+
+.tab-bar--segment {
+  width: 100%;
+}
+
+.tab-bar--segment .tab-bar__item {
+  flex: 1;
+  justify-content: center;
+  font-size: 12px;
+}

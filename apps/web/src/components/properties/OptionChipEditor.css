@@ -1,0 +1,33 @@
+.option-chip-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.option-chip-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.option-chip-editor__remove {
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.option-chip-editor__add {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.option-chip-editor__add .input-wrap {
+  flex: 1;
+  min-width: 0;
+}

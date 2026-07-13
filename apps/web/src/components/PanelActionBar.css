@@ -1,0 +1,35 @@
+.panel-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  /* Match template-detail action bar */
+  padding: var(--space-sm) var(--space-md);
+  min-height: 53px;
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+}
+
+.panel-action-bar__start,
+.panel-action-bar__end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.panel-action-bar__end {
+  margin-left: auto;
+}
+
+/* Primary vs secondary differ by border width — lock height in the bar */
+.panel-action-bar .btn:not(.btn--small) {
+  box-sizing: border-box;
+  min-height: 37px;
+}

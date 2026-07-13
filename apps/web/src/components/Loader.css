@@ -1,0 +1,80 @@
+/* Rhodes loader — concentric ring + accent arc. Sizes scale proportionally. */
+
+.loader {
+  --loader-diameter: 28px;
+  --loader-stroke: 2.5px;
+  --loader-track-opacity: 0.22;
+
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--loader-diameter);
+  height: var(--loader-diameter);
+}
+
+.loader--l {
+  --loader-diameter: 40px;
+  --loader-stroke: 3px;
+}
+
+.loader--m {
+  --loader-diameter: 28px;
+  --loader-stroke: 2.5px;
+}
+
+.loader--s {
+  --loader-diameter: 20px;
+  --loader-stroke: 2px;
+}
+
+.loader--xs {
+  --loader-diameter: 14px;
+  --loader-stroke: 1.5px;
+}
+
+.loader__track,
+.loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: var(--loader-stroke) solid transparent;
+}
+
+.loader__track {
+  border-color: var(--color-text-tertiary);
+  opacity: var(--loader-track-opacity);
+}
+
+.loader__ring {
+  border-top-color: var(--color-accent);
+  border-right-color: var(--color-accent);
+  animation: loader-spin 0.75s linear infinite;
+}
+
+.loader-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl) 0;
+}
+
+.loader-state--start {
+  align-items: flex-start;
+  padding: var(--space-md) 0;
+}
+
+.loader-state--center {
+  text-align: center;
+}
+
+.loader-state__label {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+@keyframes loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

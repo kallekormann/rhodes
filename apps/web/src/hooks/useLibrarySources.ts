@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { LibrarySourceRecord } from "@/lib/library/schemas";
+import { librarySourceIsInFlight } from "@/lib/library/pipeline";
 import { toLibrarySourceRecord, upsertLibrarySource } from "@/lib/library/realtime";
 
 export function useLibrarySources(workspaceId: string | null) {
@@ -99,11 +100,7 @@ export function useLibrarySources(workspaceId: string | null) {
   }, [workspaceId]);
 
   useEffect(() => {
-    const indexing = sources.some(
-      (source) =>
-        source.embedding_status === "pending" ||
-        source.embedding_status === "processing",
-    );
+    const indexing = sources.some((source) => librarySourceIsInFlight(source));
 
     if (!indexing) {
       if (fallbackPollRef.current) {
