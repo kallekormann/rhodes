@@ -32,6 +32,7 @@ import {
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
+import { DocumentHistorySection, type ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import "./PropertiesTab.css";
 import "@/components/panel-shell.css";
 import "@/components/properties/property-composer.css";
@@ -103,6 +104,9 @@ type PropertiesTabProps = {
   onMetadataGroupInstancesChange?: (metadata: Record<string, unknown>) => void;
   onTemplateDescriptionChange?: (description: string) => void;
   onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
+  documentId?: string | null;
+  onVersionRestored?: () => void;
+  onNavigateToActivity?: (target: ActivityNavigateTarget) => void;
 };
 
 function UseCasesEditor({
@@ -216,6 +220,9 @@ export function PropertiesTab({
   onMetadataGroupInstancesChange,
   onTemplateDescriptionChange,
   onTemplateMetadataChange,
+  documentId = null,
+  onVersionRestored,
+  onNavigateToActivity,
 }: PropertiesTabProps) {
   const { showToast } = useApp();
 
@@ -528,6 +535,14 @@ export function PropertiesTab({
           <p className="caption property-panel__empty">
             No properties on this document yet. Use Manage to add fields or groups.
           </p>
+        )}
+
+        {stage === "view" && (
+          <DocumentHistorySection
+            documentId={documentId}
+            onVersionRestored={onVersionRestored}
+            onNavigateToActivity={onNavigateToActivity}
+          />
         )}
       </div>
     );

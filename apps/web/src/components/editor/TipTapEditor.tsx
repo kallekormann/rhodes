@@ -21,7 +21,9 @@ import { filterSlashItems } from "@/components/editorSlash";
 import { CitationBlock } from "@/components/editor/extensions/CitationBlock";
 import { RhodesSuggestion } from "@/components/editor/extensions/RhodesSuggestion";
 import { BlockId } from "@/components/editor/extensions/BlockId";
-import { ensureEditorBlockIds, resolveCommentBlock } from "@/lib/documents/block-ids";
+import { RemoteBlockLock } from "@/components/editor/extensions/RemoteBlockLock";
+import { ensureEditorBlockIds, readBlockId, resolveCommentBlock } from "@/lib/documents/block-ids";
+import { getTopLevelBlockAtPos } from "@/lib/documents/block-drag";
 import { CommentHighlight } from "@/components/editor/extensions/CommentHighlight";
 import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
@@ -51,7 +53,10 @@ import "./TipTapEditor.css";
 
 type TipTapEditorProps = {
   content: Record<string, unknown>;
+  contentSyncToken?: number;
   editable?: boolean;
+  lockedBlockId?: string | null;
+  lockedByName?: string | null;
   documentId?: string | null;
   workspaceId?: string | null;
   comments?: StoredDocumentComment[];
@@ -76,6 +81,7 @@ type TipTapEditorProps = {
   ) => void;
   onBlur?: (editor: Editor) => void;
   onRegisterEditor?: (editor: Editor | null) => void;
+  onActiveBlockChange?: (blockId: string | null) => void;
 };
 
 type SlashState = {
@@ -157,7 +163,10 @@ function buildSlashState(
 
 export function TipTapEditor({
   content,
+  contentSyncToken = 0,
   editable = true,
+  lockedBlockId = null,
+  lockedByName = null,
   documentId,
   workspaceId,
   comments = [],
@@ -173,9 +182,12 @@ export function TipTapEditor({
   onRegisterInsertCitation,
   onBlur,
   onRegisterEditor,
+  onActiveBlockChange,
 }: TipTapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const onActiveBlockChangeRef = useRef(onActiveBlockChange);
+  onActiveBlockChangeRef.current = onActiveBlockChange;
   const onBlurRef = useRef(onBlur);
   onBlurRef.current = onBlur;
   const onCommentHighlightClickRef = useRef(onCommentHighlightClick);
@@ -359,6 +371,10 @@ export function TipTapEditor({
       CitationBlock,
       RhodesSuggestion,
       BlockId,
+      RemoteBlockLock.configure({
+        lockedBlockId: null,
+        lockedByName: null,
+      }),
       CommentHighlight,
       Extension.create({
         name: "slashCommand",
@@ -490,6 +506,46 @@ export function TipTapEditor({
     if (!editor) return;
     editor.setEditable(editable);
   }, [editor, editable]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const extension = editor.extensionManager.extensions.find(
+      (item) => item.name === "remoteBlockLock",
+    );
+    if (!extension) return;
+    extension.options.lockedBlockId = lockedBlockId;
+    extension.options.lockedByName = lockedByName;
+    editor.view.dispatch(editor.state.tr);
+  }, [editor, lockedBlockId, lockedByName]);
+
+  useEffect(() => {
+    if (!editor || contentSyncToken === 0) return;
+    const incoming = JSON.stringify(content);
+    const current = JSON.stringify(editor.getJSON());
+    if (incoming === current) return;
+    editor.commands.setContent(content, false);
+    ensureEditorBlockIds(editor);
+  }, [content, contentSyncToken, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const syncActiveBlock = () => {
+      const { from } = editor.state.selection;
+      const match = getTopLevelBlockAtPos(editor, from);
+      const blockId = match ? readBlockId(match.node) : null;
+      onActiveBlockChangeRef.current?.(blockId);
+    };
+
+    editor.on("selectionUpdate", syncActiveBlock);
+    editor.on("update", syncActiveBlock);
+    syncActiveBlock();
+
+    return () => {
+      editor.off("selectionUpdate", syncActiveBlock);
+      editor.off("update", syncActiveBlock);
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!slashState) return;

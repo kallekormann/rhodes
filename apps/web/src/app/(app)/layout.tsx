@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_url")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         userId: user.id,
         userEmail: user.email ?? "",
         displayName,
+        avatarUrl: profile?.avatar_url ?? null,
       }}
     >
       {children}

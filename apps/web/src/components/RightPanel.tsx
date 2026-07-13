@@ -18,6 +18,7 @@ import type { TemplateMetadata } from "@/lib/templates/metadata";
 import type { MetadataFieldValue, MetadataSchemaField, MetadataSchemaGroup } from "@/lib/metadata/schemas";
 import type { MetadataFieldType } from "@/lib/metadata/schemas";
 import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
+import type { ActivityNavigateTarget } from "./DocumentHistorySection";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
 import { Button } from "./Button";
 import { ChatMessageBubble } from "./ChatMessageBubble";
@@ -102,6 +103,9 @@ type RightPanelProps = {
   onMetadataGroupInstancesChange?: (metadata: Record<string, unknown>) => void;
   onTemplateDescriptionChange?: (description: string) => void;
   onTemplateMetadataChange?: (metadata: TemplateMetadata) => void;
+  documentId?: string | null;
+  onVersionRestored?: () => void;
+  onNavigateToActivity?: (target: ActivityNavigateTarget) => void;
   insights?: InsightMatch[];
   insightsLoading?: boolean;
   insightsError?: string | null;
@@ -141,6 +145,9 @@ export function RightPanel({
   onMetadataGroupInstancesChange,
   onTemplateDescriptionChange,
   onTemplateMetadataChange,
+  documentId = null,
+  onVersionRestored,
+  onNavigateToActivity,
   insights = [],
   insightsLoading = false,
   insightsError = null,
@@ -227,6 +234,9 @@ export function RightPanel({
             onMetadataGroupInstancesChange={onMetadataGroupInstancesChange}
             onTemplateDescriptionChange={onTemplateDescriptionChange}
             onTemplateMetadataChange={onTemplateMetadataChange}
+            documentId={documentId}
+            onVersionRestored={onVersionRestored}
+            onNavigateToActivity={onNavigateToActivity}
           />
         )}
       </div>

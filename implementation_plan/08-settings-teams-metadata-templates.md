@@ -1,9 +1,40 @@
 # Phase 08 — Settings, Teams, Metadata, and Templates
 
-**Status:** planned  
+**Status:** in progress  
 **Depends on:** Phase 07b  
 **Blocks:** Phases 09–12  
 **Estimated duration:** 7–10 days
+
+**Checkpoint:** WIP through sharing, teams, feature gates, and properties panel v2 committed as `dc1e4e9` on `main` (2026-07-13).
+
+---
+
+## Completed (since Phase 08 start)
+
+- Team workspaces: create, invite flow (`/invite/{token}`), accept pending invites
+- Team members table: list, invite, PATCH role, remove member
+- Viewer role + `can_write_workspace()` RLS (migration `00031`)
+- Feature gate foundation: `@rhodes/shared` `team-roles`, `tiers`, `features`; `buildFeatureGates()` in web
+- Cross-scope document sharing with share badges (`Shared with` / `Shared by` + sharer display name)
+- Person shares only in recipient personal scope; email search in share picker (migrations `00032`–`00034`)
+- Scope switching routes to Documents (not Editor); username under Personal in scope menu
+- Properties panel v2 / metadata schema groups (migrations `00020`–`00021`, properties studio components)
+- Comments + block drag in TipTap; writing coach activity rail (partial)
+- Settings overlay (monolithic): Profile, Security, Preferences, Spaces, Team sections
+
+---
+
+## Open (Phase 8 completion — see plan)
+
+1. **Live shared documents** — share write ACL + Supabase realtime sync (fixes "copy" perception)
+2. **Document activity log** + version history API/UI (History section at bottom of Properties tab)
+3. **Avatars** — upload + `UserAvatar` sm/md/lg app-wide
+4. **Settings IA split** — header avatar → user settings; scope menu → team settings
+5. **Tier enforcement** — add `basic` tier, centralize upgrade copy, API + UI gates, default `MOCK_TIER=free`
+6. **Scope view infrastructure** + stepped `ScopeCreateWizard` (`enabled_views` stores additional views only; catalog TBD)
+7. **UX audit** — screen-by-screen checklist + bug-fix sprint
+
+**Wave 0 artifacts:** [`tier-matrix.md`](../packages/shared/src/tier-matrix.md) (user-maintained), minimal `scope-views.ts`, sync `tiers.ts` from matrix.
 
 ---
 
@@ -219,7 +250,7 @@ Foundation for Phase 11 billing and team permission enforcement.
 | Module | Purpose |
 |--------|---------|
 | `team-roles.ts` | `owner`, `admin`, `member`, `viewer` + capabilities (`team.invite`, `content.write`, …) |
-| `tiers.ts` | `free` / `pro` / `team` limits (scopes, library size, file types, gated views) |
+| `tiers.ts` | `free` / `basic` / `pro` / `team` limits (scopes, library size, file types, version retention) |
 | `features.ts` | Combines tier + team role into `FeatureGateContext` |
 
 **Team capabilities (owner / admin):**
@@ -229,7 +260,7 @@ Foundation for Phase 11 billing and team permission enforcement.
 
 **Web wiring:**
 
-- `buildFeatureGates()` in `apps/web/src/lib/features/gates.ts` — dev override via `NEXT_PUBLIC_MOCK_TIER=free|pro|team`
+- `buildFeatureGates()` in `apps/web/src/lib/features/gates.ts` — dev override via `NEXT_PUBLIC_MOCK_TIER=free|basic|pro|team`
 - `AppContext` exposes `featureGates`, `canWriteActiveScope`
 - RLS: `can_write_workspace()` + migration `00031`
 - UI gates: header New doc, library upload, templates create, documents mutate actions

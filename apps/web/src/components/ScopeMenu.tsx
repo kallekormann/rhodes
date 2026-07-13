@@ -1,5 +1,6 @@
 import { Check, Lock, Plus, Settings, User, Users } from "lucide-react";
 import type { Scope } from "@/data/scopes";
+import { UserAvatar } from "@/components/UserAvatar";
 import "./ScopeSwitcher.css";
 
 import {
@@ -14,6 +15,8 @@ export type ScopeMenuProps = {
   teamScopes: Scope[];
   activeScopeId: string;
   userLabel?: string;
+  userAvatarUrl?: string | null;
+  userId?: string;
   canCreatePersonalSpace?: boolean;
   canCreateTeamSpace?: boolean;
   onSelect?: (scope: Scope) => void;
@@ -29,6 +32,8 @@ export function ScopeMenu({
   teamScopes,
   activeScopeId,
   userLabel,
+  userAvatarUrl = null,
+  userId,
   canCreatePersonalSpace = true,
   canCreateTeamSpace = true,
   onSelect,
@@ -51,7 +56,18 @@ export function ScopeMenu({
             Personal
           </header>
           {userLabel ? (
-            <p className="scope-menu__user caption">{userLabel}</p>
+            <p className="scope-menu__user caption">
+              {userId ? (
+                <UserAvatar
+                  name={userLabel}
+                  userId={userId}
+                  src={userAvatarUrl}
+                  size="sm"
+                  className="scope-menu__user-avatar"
+                />
+              ) : null}
+              <span>{userLabel}</span>
+            </p>
           ) : null}
           <p className="scope-menu__hint">
             Only you. Separate projects, books, or research — each with its own library and AI.

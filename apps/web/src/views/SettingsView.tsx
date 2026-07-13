@@ -15,6 +15,7 @@ import { NavLink } from "@/components/NavLink";
 import { RadioGroup } from "@/components/Radio";
 import { ScopeCreateModal } from "@/components/ScopeCreateModal";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
+import { ProfileAvatarField } from "@/components/settings/ProfileAvatarField";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
 import { Toggle } from "@/components/Toggle";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -155,6 +156,7 @@ export function SettingsView() {
     canCreatePersonalSpace,
     canCreateTeamSpace,
     updateDisplayName,
+    updateAvatarUrl,
     showToast,
     refreshScopes,
   } = useApp();
@@ -172,6 +174,7 @@ export function SettingsView() {
   }, [searchParams]);
   const [createKind, setCreateKind] = useState<CreateKind>(null);
   const [displayName, setDisplayName] = useState(session.displayName);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(session.avatarUrl);
   const [language, setLanguage] = useState("en");
   const [savingProfile, setSavingProfile] = useState(false);
   const [defaultScopeId, setDefaultScopeId] = useState("");
@@ -251,6 +254,23 @@ export function SettingsView() {
   useEffect(() => {
     setDisplayName(session.displayName);
   }, [session.displayName]);
+
+  useEffect(() => {
+    setAvatarUrl(session.avatarUrl);
+  }, [session.avatarUrl]);
+
+  useEffect(() => {
+    void (async () => {
+      const response = await fetch("/app/api/profile");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return;
+      const profile = data.profile as { avatar_url?: string | null } | undefined;
+      if (profile?.avatar_url !== undefined) {
+        setAvatarUrl(profile.avatar_url);
+        updateAvatarUrl(profile.avatar_url);
+      }
+    })();
+  }, [updateAvatarUrl]);
 
   useEffect(() => {
     const stored = readDefaultScopeId();
@@ -571,6 +591,15 @@ export function SettingsView() {
           >
           {section === "Profile" && (
             <div className="settings-section">
+              <ProfileAvatarField
+                name={displayName}
+                userId={session.userId}
+                avatarUrl={avatarUrl}
+                onAvatarChange={(next) => {
+                  setAvatarUrl(next);
+                  updateAvatarUrl(next);
+                }}
+              />
               <div className="settings-field">
                 <label className="settings-field__label" htmlFor="display-name">
                   Display name

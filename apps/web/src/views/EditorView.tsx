@@ -5,6 +5,11 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
+import { DocumentRemoteConflictBanner } from "@/components/DocumentRemoteConflictBanner";
+import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
+import type { Editor } from "@tiptap/react";
+import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
+import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { EditorTitleField } from "@/components/EditorTitleField";
 import { IconLabelButton } from "@/components/IconLabelButton";
@@ -32,6 +37,7 @@ function EditorViewContent() {
     setHeaderHidden,
     openPanel,
     panelTab,
+    workspaceId: activeScopeId,
   } = useApp();
 
   const {
@@ -76,6 +82,14 @@ function EditorViewContent() {
     updateMetadataGroup,
     deleteMetadataSchema,
     deleteMetadataGroup,
+    remoteConflict,
+    dismissRemoteConflict,
+    awayNotice,
+    dismissAwayNotice,
+    reloadRemoteDocument,
+    contentSyncToken,
+    lockedBlockId,
+    lockedByName,
   } = useEditorSession();
 
   const {
@@ -83,7 +97,7 @@ function EditorViewContent() {
     loading: insightsLoading,
     error: insightsError,
   } = useInsights(
-    isTemplateMode ? null : workspaceId,
+    isTemplateMode ? null : activeScopeId,
     contentPlain,
   );
 
@@ -118,6 +132,24 @@ function EditorViewContent() {
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
   const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
   const insertCitationRef = useRef<(input: CitationInsertInput) => void>(() => {});
+  const editorRef = useRef<Editor | null>(null);
+
+  const handleRegisterEditor = useCallback(
+    (editor: Editor | null) => {
+      editorRef.current = editor;
+      registerEditor(editor);
+    },
+    [registerEditor],
+  );
+
+  const handleNavigateToActivity = useCallback((target: ActivityNavigateTarget) => {
+    const editor = editorRef.current;
+    if (!editor || target.eventType !== "content_edited") return;
+
+    const excerpt = target.payload.excerpt;
+    if (typeof excerpt !== "string") return;
+    scrollEditorToExcerpt(editor, excerpt);
+  }, []);
 
   const handleOpenAsk = useCallback(
     (selectedText?: string) => {
@@ -365,11 +397,30 @@ function EditorViewContent() {
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
               <div className="editor-content__main editor-content__main--body">
+                {remoteConflict && (
+                  <DocumentRemoteConflictBanner
+                    conflict={remoteConflict}
+                    onReload={() => {
+                      void reloadRemoteDocument();
+                    }}
+                    onKeepLocal={dismissRemoteConflict}
+                  />
+                )}
+                {!remoteConflict && awayNotice && (
+                  <DocumentAwayNoticeBanner
+                    notice={awayNotice}
+                    onDismiss={dismissAwayNotice}
+                  />
+                )}
                 <TipTapEditor
                   key={documentId ?? "template"}
                   content={content}
+                  contentSyncToken={contentSyncToken}
+                  lockedBlockId={lockedBlockId}
+                  lockedByName={lockedByName}
                   documentId={documentId}
                   workspaceId={workspaceId}
+                  editable
                   comments={isTemplateMode ? [] : comments}
                   onAddComment={isTemplateMode ? undefined : addComment}
                   onCommentsDocumentSync={
@@ -389,7 +440,7 @@ function EditorViewContent() {
                   onRegisterInsertCitation={(insertCitation) => {
                     insertCitationRef.current = insertCitation;
                   }}
-                  onRegisterEditor={registerEditor}
+                  onRegisterEditor={handleRegisterEditor}
                   onBlur={() => {
                     void evaluateOnBlur();
                   }}
@@ -424,7 +475,7 @@ function EditorViewContent() {
         onHoverComment={setHoverCommentId}
         onAddReply={isTemplateMode ? () => {} : addReply}
         onRemoveComment={isTemplateMode ? () => {} : handleRemoveComment}
-        workspaceId={workspaceId}
+        workspaceId={activeScopeId}
         propertiesMode={isEditingTemplate ? "template" : "document"}
         propertiesStage={propertiesStage}
         onPropertiesStageChange={setPropertiesStage}
@@ -446,6 +497,11 @@ function EditorViewContent() {
         updateMetadataGroup={updateMetadataGroup}
         deleteMetadataSchema={deleteMetadataSchema}
         deleteMetadataGroup={deleteMetadataGroup}
+        documentId={isTemplateMode ? null : documentId}
+        onVersionRestored={() => {
+          void reloadRemoteDocument();
+        }}
+        onNavigateToActivity={handleNavigateToActivity}
         insights={insights}
         insightsLoading={insightsLoading}
         insightsError={insightsError}

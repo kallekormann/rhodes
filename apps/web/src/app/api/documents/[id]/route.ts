@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { extractPlainText } from "@/lib/documents/plain-text";
 import {
+  diffCommentChanges,
+  diffMetadataPropertyChanges,
+  recordDocumentActivity,
+} from "@/lib/documents/activity";
+import { buildContentEditExcerpt } from "@/lib/documents/activity-content";
+import {
   shouldEnqueueDocumentEmbed,
   shouldEnqueueMetadataExtraction,
 } from "@/lib/documents/embed-on-save";
@@ -74,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { data: existing, error: existingError } = await supabase
     .from("documents")
-    .select("id, workspace_id, content_plain")
+    .select("id, workspace_id, title, content, content_plain, metadata")
     .eq("id", id)
     .maybeSingle();
 
@@ -116,16 +122,138 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const previousPlain = existing.content_plain;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const actorDisplayName =
+    profile?.display_name?.trim() ||
+    user.email?.split("@")[0] ||
+    "Someone";
+
+  const { data: schemaRows } = await supabase
+    .from("metadata_schemas")
+    .select("field_key, field_label")
+    .eq("workspace_id", data.workspace_id);
+
+  const labelByKey = new Map(
+    (schemaRows ?? []).map((row) => [row.field_key as string, row.field_label as string]),
+  );
+
+  const previousTitle = existing.title as string;
+  const previousMetadata = existing.metadata as Record<string, unknown> | null;
+  const nextMetadata = data.metadata as Record<string, unknown> | null;
+
+  if (parsed.data.title !== undefined && parsed.data.title !== previousTitle) {
+    await recordDocumentActivity(supabase, {
+      documentId: data.id,
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      actorDisplayName,
+      eventType: "title_changed",
+      payload: { title: data.title, previous_title: previousTitle },
+    });
+  }
+
+  if (parsed.data.metadata !== undefined) {
+    const commentDiff = diffCommentChanges(previousMetadata, nextMetadata);
+    if (commentDiff.added > 0) {
+      await recordDocumentActivity(supabase, {
+        documentId: data.id,
+        workspaceId: data.workspace_id,
+        actorId: user.id,
+        actorDisplayName,
+        eventType: "comment_added",
+        payload: {
+          count: commentDiff.added,
+          excerpt: commentDiff.addedExcerpt,
+        },
+      });
+    }
+    if (commentDiff.removed > 0) {
+      await recordDocumentActivity(supabase, {
+        documentId: data.id,
+        workspaceId: data.workspace_id,
+        actorId: user.id,
+        actorDisplayName,
+        eventType: "comment_removed",
+        payload: { count: commentDiff.removed },
+      });
+    }
+
+    for (const change of diffMetadataPropertyChanges(
+      previousMetadata,
+      nextMetadata,
+      labelByKey,
+    )) {
+      await recordDocumentActivity(supabase, {
+        documentId: data.id,
+        workspaceId: data.workspace_id,
+        actorId: user.id,
+        actorDisplayName,
+        eventType: "property_changed",
+        payload: {
+          field_key: change.fieldKey,
+          field_label: change.fieldLabel,
+          from: change.from,
+          to: change.to,
+        },
+      });
+    }
+  }
+
+  const previousPlain = existing.content_plain as string | null;
   const nextPlain =
     typeof patch.content_plain === "string"
       ? patch.content_plain
       : (data.content_plain as string | null);
 
+  const contentChanged =
+    parsed.data.content !== undefined || parsed.data.content_plain !== undefined
+      ? previousPlain !== nextPlain
+      : false;
+
+  if (contentChanged && data.workspace_id) {
+    const excerpt = buildContentEditExcerpt(previousPlain, nextPlain);
+    await recordDocumentActivity(supabase, {
+      documentId: data.id,
+      workspaceId: data.workspace_id,
+      actorId: user.id,
+      actorDisplayName,
+      eventType: "content_edited",
+      payload: excerpt ? { excerpt } : {},
+    });
+  }
+
   if (
     shouldEnqueueDocumentEmbed(previousPlain, nextPlain) &&
     data.workspace_id
   ) {
+    const { data: recentVersion } = await supabase
+      .from("document_versions")
+      .select("created_at")
+      .eq("document_id", data.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const throttleElapsed = recentVersion?.created_at
+      ? Date.now() - new Date(recentVersion.created_at).getTime()
+      : Number.POSITIVE_INFINITY;
+
+    if (throttleElapsed >= 5 * 60 * 1000) {
+      await supabase.from("document_versions").insert({
+        document_id: data.id,
+        workspace_id: data.workspace_id,
+        content: data.content,
+        content_plain: data.content_plain,
+        changed_by: user.id,
+        change_summary: "Auto snapshot",
+      });
+    }
+
     try {
       await enqueueDocumentEmbed({
         documentId: data.id,

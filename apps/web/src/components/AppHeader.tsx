@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useApp, type AppView } from "@/context/AppContext";
+import { UserAvatar } from "@/components/UserAvatar";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { IconButton } from "./IconButton";
 import "./AppHeader.css";
@@ -156,6 +157,7 @@ export function AppHeader() {
     documentTitle,
     createNewDocument,
     canWriteActiveScope,
+    session,
   } = useApp();
 
   const isEditor = view === "editor";
@@ -250,12 +252,20 @@ export function AppHeader() {
             className="app-header__action--collapsible"
             onClick={() => setView("library")}
           />
-          <IconButton
-            icon={CircleUser}
-            label="Profile"
-            className="app-header__action--collapsible"
+          <button
+            type="button"
+            className="icon-btn icon-btn--default profile-menu-btn app-header__action--collapsible"
+            aria-label="Profile & settings"
+            title="Profile & settings"
             onClick={() => setView("settings")}
-          />
+          >
+            <UserAvatar
+              name={session.displayName}
+              userId={session.userId}
+              src={session.avatarUrl}
+              size="sm"
+            />
+          </button>
           <IconButton
             icon={theme === "light" ? Moon : Sun}
             label="Toggle theme"

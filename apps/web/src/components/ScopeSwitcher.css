@@ -79,6 +79,9 @@
 }
 
 .scope-menu__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   margin: 0 0 var(--space-xs);
   font-size: 12px;
   font-weight: 500;

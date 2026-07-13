@@ -15,6 +15,7 @@ export type WorkspaceMemberRole = "owner" | "admin" | "member" | "viewer";
 export type WorkspaceMember = {
   user_id: string;
   display_name: string;
+  avatar_url: string | null;
   role: WorkspaceMemberRole;
 };
 

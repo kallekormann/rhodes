@@ -35,3 +35,11 @@ export function documentImagesDataDir(): string {
   }
   return path.join(rhodesDataDir(), "document-images");
 }
+
+/** Shared dev fallback directory for profile avatars. */
+export function avatarsDataDir(): string {
+  if (process.env.RHODES_AVATARS_DATA_DIR) {
+    return process.env.RHODES_AVATARS_DATA_DIR;
+  }
+  return path.join(rhodesDataDir(), "avatars");
+}

@@ -193,6 +193,15 @@
   }
 }
 
+.profile-menu-btn {
+  padding: 0;
+  overflow: hidden;
+}
+
+.profile-menu-btn .user-avatar {
+  border: none;
+}
+
 @media (max-width: 720px) {
   .app-header__action--collapsible {
     display: none;

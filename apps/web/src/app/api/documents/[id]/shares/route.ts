@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { resolveSharedByDisplayName } from "@/lib/documents/enrich-share-context";
+import { recordDocumentActivity } from "@/lib/documents/activity";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -152,6 +153,30 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("workspace_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (doc?.workspace_id) {
+    await recordDocumentActivity(supabase, {
+      documentId: id,
+      workspaceId: doc.workspace_id,
+      actorId: user.id,
+      actorDisplayName:
+        profile?.display_name?.trim() || user.email?.split("@")[0] || "Someone",
+      eventType: "shared_with",
+      payload: { target: label, grantee_type: granteeType },
+    });
+  }
+
   return withSecurityHeaders(NextResponse.json({ share: data }, { status: 201 }));
 }
 
@@ -177,6 +202,13 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
+  const { data: shareRow } = await supabase
+    .from("document_shares")
+    .select("label")
+    .eq("id", shareId)
+    .eq("document_id", id)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("document_shares")
     .delete()
@@ -187,6 +219,30 @@ export async function DELETE(request: Request, context: RouteContext) {
     return withSecurityHeaders(
       NextResponse.json({ error: error.message }, { status: 400 }),
     );
+  }
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("workspace_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (doc?.workspace_id) {
+    await recordDocumentActivity(supabase, {
+      documentId: id,
+      workspaceId: doc.workspace_id,
+      actorId: user.id,
+      actorDisplayName:
+        profile?.display_name?.trim() || user.email?.split("@")[0] || "Someone",
+      eventType: "share_removed",
+      payload: { target: shareRow?.label ?? "recipient" },
+    });
   }
 
   return withSecurityHeaders(NextResponse.json({ ok: true }));

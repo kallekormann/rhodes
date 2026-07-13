@@ -30,7 +30,7 @@ function hasBlockId(node: ProseMirrorNode): boolean {
   return typeof blockId === "string" && blockId.length > 0;
 }
 
-function readBlockId(node: ProseMirrorNode): string | null {
+export function readBlockId(node: ProseMirrorNode): string | null {
   const blockId = node.attrs.blockId;
   return typeof blockId === "string" && blockId.length > 0 ? blockId : null;
 }

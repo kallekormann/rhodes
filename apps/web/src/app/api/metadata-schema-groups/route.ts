@@ -5,6 +5,7 @@ import {
   normalizeCreateMetadataGroupInput,
 } from "@/lib/metadata/api";
 import { MAX_METADATA_SCHEMAS_PER_WORKSPACE } from "@/lib/metadata/schemas";
+import { canManageWorkspaceMetadata } from "@/lib/metadata/access";
 import { createClient } from "@/lib/supabase/server";
 
 const GROUP_FIELDS =
@@ -12,22 +13,6 @@ const GROUP_FIELDS =
 
 const SCHEMA_FIELDS =
   "id, workspace_id, field_key, field_label, field_type, options, group_id, sub_key, sort_order, ai_fill_enabled, created_at";
-
-async function canManageWorkspaceSchemas(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  workspaceId: string,
-  userId: string,
-) {
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!membership) return false;
-  return membership.role === "owner" || membership.role === "admin";
-}
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -50,20 +35,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: allowed } = await supabase.rpc("is_workspace_member", {
-    ws_id: parsed.data.workspace_id,
-  });
-
-  if (!allowed) {
-    return withSecurityHeaders(
-      NextResponse.json({ error: "Forbidden" }, { status: 403 }),
-    );
-  }
-
-  if (!(await canManageWorkspaceSchemas(supabase, parsed.data.workspace_id, user.id))) {
+  if (!(await canManageWorkspaceMetadata(supabase, parsed.data.workspace_id))) {
     return withSecurityHeaders(
       NextResponse.json(
-        { error: "Only workspace owners and admins can manage properties" },
+        { error: "You do not have permission to manage properties in this scope" },
         { status: 403 },
       ),
     );

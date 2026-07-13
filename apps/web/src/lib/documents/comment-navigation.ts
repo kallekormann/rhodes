@@ -27,6 +27,43 @@ export function scrollCommentIntoView(
   });
 }
 
+export function scrollEditorToExcerpt(editor: Editor, excerpt: string): boolean {
+  const needle = excerpt.trim().slice(0, 80);
+  if (!needle) return false;
+
+  const { doc } = editor.state;
+  let match: { from: number; to: number } | null = null;
+
+  doc.descendants((node, pos) => {
+    if (match || !node.isTextblock) return;
+    const text = node.textContent;
+    const index = text.indexOf(needle);
+    if (index === -1) return;
+    match = {
+      from: pos + 1 + index,
+      to: pos + 1 + index + needle.length,
+    };
+  });
+
+  if (!match) {
+    const fullText = editor.getText();
+    const index = fullText.indexOf(needle);
+    if (index === -1) return false;
+    const from = index + 1;
+    match = { from, to: from + needle.length };
+  }
+
+  editor.chain().focus().setTextSelection(match).scrollIntoView().run();
+  return true;
+}
+
+export function scrollEditorToBlock(editor: Editor, blockId: string): boolean {
+  const element = editor.view.dom.querySelector(`[data-block-id="${blockId}"]`);
+  if (!element) return false;
+  element.scrollIntoView({ behavior: "smooth", block: "center" });
+  return true;
+}
+
 export function findCommentIdAtClickTarget(target: EventTarget | null): string | null {
   if (!(target instanceof Element)) return null;
 

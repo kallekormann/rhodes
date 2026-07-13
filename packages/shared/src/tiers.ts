@@ -1,4 +1,4 @@
-export type BillingTier = "free" | "pro" | "team";
+export type BillingTier = "free" | "basic" | "pro" | "team";
 
 /** Subscription-tier feature identifiers (Phase 11 billing gates). */
 export type TierFeature =
@@ -9,7 +9,8 @@ export type TierFeature =
   | "library.allowed_file_types"
   | "templates.create"
   | "ask.chat"
-  | "properties.manage";
+  | "properties.manage"
+  | "scope_views.additional";
 
 /** App surfaces that can be gated per tier in future phases. */
 export type GatedView =
@@ -28,6 +29,8 @@ export type TierLimits = {
   libraryAllowedFileTypes: string[];
   askMessagesPerDay: number;
   insightDebounceMs: number;
+  versionHistoryRetention: number;
+  maxAdditionalScopeViews: number;
   gatedViews: readonly GatedView[];
 };
 
@@ -36,30 +39,48 @@ export const TIER_LIMITS: Record<BillingTier, TierLimits> = {
     personalScopes: 1,
     teamScopes: 0,
     libraryStorageMb: 500,
-    libraryMaxFileMb: 25,
-    libraryAllowedFileTypes: ["pdf", "txt", "md", "docx"],
+    libraryMaxFileMb: 2,
+    libraryAllowedFileTypes: ["txt", "md", "docx"],
     askMessagesPerDay: 20,
-    insightDebounceMs: 5000,
+    insightDebounceMs: 10_000,
+    versionHistoryRetention: 10,
+    maxAdditionalScopeViews: 1,
+    gatedViews: ["editor", "documents", "templates", "library", "settings"],
+  },
+  basic: {
+    personalScopes: 5,
+    teamScopes: 0,
+    libraryStorageMb: 2_048,
+    libraryMaxFileMb: 5,
+    libraryAllowedFileTypes: ["txt", "md", "docx", "pdf", "epub"],
+    askMessagesPerDay: 100,
+    insightDebounceMs: 5_000,
+    versionHistoryRetention: 25,
+    maxAdditionalScopeViews: 3,
     gatedViews: ["editor", "documents", "templates", "library", "settings"],
   },
   pro: {
     personalScopes: Number.POSITIVE_INFINITY,
-    teamScopes: 0,
-    libraryStorageMb: 10_240,
-    libraryMaxFileMb: 100,
-    libraryAllowedFileTypes: ["pdf", "txt", "md", "docx", "epub"],
+    teamScopes: 3,
+    libraryStorageMb: 5_120,
+    libraryMaxFileMb: 10,
+    libraryAllowedFileTypes: ["txt", "md", "docx", "pdf", "ppt", "epub"],
     askMessagesPerDay: Number.POSITIVE_INFINITY,
-    insightDebounceMs: 3000,
+    insightDebounceMs: 3_000,
+    versionHistoryRetention: 50,
+    maxAdditionalScopeViews: 5,
     gatedViews: ["editor", "documents", "templates", "library", "settings"],
   },
   team: {
     personalScopes: Number.POSITIVE_INFINITY,
     teamScopes: Number.POSITIVE_INFINITY,
     libraryStorageMb: 51_200,
-    libraryMaxFileMb: 250,
-    libraryAllowedFileTypes: ["pdf", "txt", "md", "docx", "epub"],
+    libraryMaxFileMb: 30,
+    libraryAllowedFileTypes: ["txt", "md", "docx", "pdf", "ppt", "epub"],
     askMessagesPerDay: Number.POSITIVE_INFINITY,
-    insightDebounceMs: 3000,
+    insightDebounceMs: 3_000,
+    versionHistoryRetention: 100,
+    maxAdditionalScopeViews: 5,
     gatedViews: ["editor", "documents", "templates", "library", "settings"],
   },
 };
@@ -75,7 +96,7 @@ export function tierAllowsView(tier: BillingTier, view: GatedView): boolean {
 export function tierAllowsFeature(tier: BillingTier, feature: TierFeature): boolean {
   switch (feature) {
     case "personal_scopes.create":
-      return TIER_LIMITS[tier].personalScopes > 1;
+      return TIER_LIMITS[tier].personalScopes > TIER_LIMITS.free.personalScopes;
     case "team_scopes.create":
       return TIER_LIMITS[tier].teamScopes > 0;
     case "library.upload":
@@ -86,6 +107,8 @@ export function tierAllowsFeature(tier: BillingTier, feature: TierFeature): bool
       return true;
     case "properties.manage":
       return tier !== "free";
+    case "scope_views.additional":
+      return TIER_LIMITS[tier].maxAdditionalScopeViews > 0;
     case "library.max_file_mb":
     case "library.allowed_file_types":
       return true;
@@ -110,7 +133,13 @@ export function tierFeatureLimit(
       return limits.libraryAllowedFileTypes;
     case "ask.chat":
       return limits.askMessagesPerDay;
+    case "scope_views.additional":
+      return limits.maxAdditionalScopeViews;
     default:
       return 0;
   }
+}
+
+export function tierVersionHistoryRetention(tier: BillingTier): number {
+  return TIER_LIMITS[tier].versionHistoryRetention;
 }

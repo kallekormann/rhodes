@@ -44,6 +44,7 @@ export type AppSession = {
   userId: string;
   userEmail: string;
   displayName: string;
+  avatarUrl: string | null;
 };
 
 type AppContextValue = {
@@ -87,6 +88,7 @@ type AppContextValue = {
   createPersonalSpace: (name: string) => Promise<void>;
   createTeamSpace: (name: string) => Promise<void>;
   updateDisplayName: (name: string) => void;
+  updateAvatarUrl: (avatarUrl: string | null) => void;
   canCreatePersonalSpace: boolean;
   canCreateTeamSpace: boolean;
   canWriteActiveScope: boolean;
@@ -155,7 +157,7 @@ export function AppProvider({
 
   useEffect(() => {
     setSessionState(session);
-  }, [session.userId, session.userEmail, session.displayName]);
+  }, [session.userId, session.userEmail, session.displayName, session.avatarUrl]);
 
   const {
     scopes,
@@ -318,6 +320,10 @@ export function AppProvider({
 
   const updateDisplayName = useCallback((name: string) => {
     setSessionState((prev) => ({ ...prev, displayName: name }));
+  }, []);
+
+  const updateAvatarUrl = useCallback((avatarUrl: string | null) => {
+    setSessionState((prev) => ({ ...prev, avatarUrl }));
   }, []);
 
   useEffect(() => {
@@ -490,6 +496,7 @@ export function AppProvider({
       createPersonalSpace,
       createTeamSpace,
       updateDisplayName,
+      updateAvatarUrl,
       canCreatePersonalSpace: allowPersonalCreate,
       canCreateTeamSpace: allowTeamCreate,
       canWriteActiveScope,
@@ -533,6 +540,7 @@ export function AppProvider({
       createPersonalSpace,
       createTeamSpace,
       updateDisplayName,
+      updateAvatarUrl,
       allowPersonalCreate,
       allowTeamCreate,
       canWriteActiveScope,

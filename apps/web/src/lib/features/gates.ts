@@ -14,8 +14,8 @@ export type { BillingTier, FeatureGateContext, GatedView, TierFeature };
 
 export function resolveDevTier(): BillingTier {
   const raw = process.env.NEXT_PUBLIC_MOCK_TIER?.trim().toLowerCase();
-  if (raw === "free" || raw === "pro" || raw === "team") return raw;
-  return "pro";
+  if (raw === "free" || raw === "basic" || raw === "pro" || raw === "team") return raw;
+  return "free";
 }
 
 export function buildFeatureGates(input: {

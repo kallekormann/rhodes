@@ -4,6 +4,7 @@ import {
   normalizeUpdateMetadataGroupInput,
   updateMetadataGroupInput,
 } from "@/lib/metadata/api";
+import { canManageWorkspaceMetadata } from "@/lib/metadata/access";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -13,22 +14,6 @@ const GROUP_FIELDS =
 
 const SCHEMA_FIELDS =
   "id, workspace_id, field_key, field_label, field_type, options, group_id, sub_key, sort_order, ai_fill_enabled, created_at";
-
-async function canManageWorkspaceSchemas(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  workspaceId: string,
-  userId: string,
-) {
-  const { data: membership } = await supabase
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!membership) return false;
-  return membership.role === "owner" || membership.role === "admin";
-}
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -64,7 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  if (!(await canManageWorkspaceSchemas(supabase, existing.workspace_id, user.id))) {
+  if (!(await canManageWorkspaceMetadata(supabase, existing.workspace_id))) {
     return withSecurityHeaders(
       NextResponse.json(
         { error: "Only workspace owners and admins can manage properties" },
@@ -222,7 +207,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 
-  if (!(await canManageWorkspaceSchemas(supabase, existing.workspace_id, user.id))) {
+  if (!(await canManageWorkspaceMetadata(supabase, existing.workspace_id))) {
     return withSecurityHeaders(
       NextResponse.json(
         { error: "Only workspace owners and admins can manage properties" },

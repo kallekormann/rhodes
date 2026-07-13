@@ -1,0 +1,119 @@
+.document-remote-conflict {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-bg);
+}
+
+.document-remote-conflict__copy {
+  min-width: 0;
+}
+
+.document-remote-conflict__message {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.document-remote-conflict__detail {
+  margin: var(--space-xs) 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.document-remote-conflict__actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.document-remote-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+}
+
+.document-remote-notice__message {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.document-remote-notice__detail {
+  margin: var(--space-xs) 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.document-editor-presence {
+  position: relative;
+}
+
+.document-editor-presence--blocked .editor-content__main--body {
+  opacity: 0.72;
+}
+
+.document-editor-presence__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+  background: color-mix(in srgb, var(--color-bg) 18%, transparent);
+  pointer-events: all;
+  cursor: not-allowed;
+}
+
+.document-editor-presence__card {
+  max-width: 360px;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-float);
+  text-align: center;
+}
+
+.document-editor-presence__title {
+  margin: 0 0 var(--space-xs);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.document-editor-presence__detail {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.document-remote-notice__dismiss {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.document-remote-notice__dismiss:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}

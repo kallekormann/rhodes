@@ -43,9 +43,15 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const members: WorkspaceMember[] = (memberRows ?? []).map(
-    (row: { user_id: string; display_name: string; role: string }) => ({
+    (row: {
+      user_id: string;
+      display_name: string;
+      avatar_url?: string | null;
+      role: string;
+    }) => ({
       user_id: row.user_id,
       display_name: row.display_name?.trim() || "Teammate",
+      avatar_url: row.avatar_url ?? null,
       role: normalizeRole(row.role),
     }),
   );

@@ -1,0 +1,22 @@
+.profile-avatar-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.profile-avatar-field__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.profile-avatar-field__hint {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.profile-avatar-field__input {
+  display: none;
+}

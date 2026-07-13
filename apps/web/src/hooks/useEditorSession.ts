@@ -33,6 +33,8 @@ import {
 } from "@/lib/templates/metadata";
 import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
+import { useDocumentRealtime, useDocumentAwayNotice } from "@/hooks/useDocumentRealtime";
+import { useDocumentPresence } from "@/hooks/useDocumentPresence";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import type { Editor } from "@tiptap/react";
 import {
@@ -110,6 +112,11 @@ export function useEditorSession() {
   const [comments, setComments] = useState<StoredDocumentComment[]>([]);
   const [shareContext, setShareContext] = useState<DocumentShareContext>(emptyShareContext());
   const [shareContextVersion, setShareContextVersion] = useState(0);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [contentSyncToken, setContentSyncToken] = useState(0);
+  const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [crossScopeAccess, setCrossScopeAccess] = useState<
     "allowed" | "pending" | "denied"
   >("allowed");
@@ -219,12 +226,75 @@ export function useEditorSession() {
   useEffect(() => {
     if (isEditingTemplate || !document?.id) return;
 
-    const timer = setInterval(() => {
-      void refresh({ silent: true });
-    }, 8000);
+    // Realtime + 15s fallback polling handled by useDocumentRealtime.
+  }, [document?.id, isEditingTemplate]);
 
-    return () => clearInterval(timer);
-  }, [document?.id, isEditingTemplate, refresh]);
+  const applyRemoteDocument = useCallback(async (remote: DocumentRecord) => {
+    const raw =
+      (remote.content as Record<string, unknown> | null) ?? EMPTY_DOCUMENT_CONTENT;
+    const normalized = normalizeDocumentImageContent(raw);
+    let resolved = normalized;
+    try {
+      resolved = await resolveDocumentImageUrls(normalized);
+    } catch {
+      resolved = normalized;
+    }
+
+    setEditorContent(resolved);
+    latestContentRef.current = resolved;
+    setContentPlain(remote.content_plain?.trim() ?? "");
+    setContentHydratedForId(remote.id);
+    setComments(parseDocumentComments(remote.metadata));
+    setDocumentTitle(remote.title);
+    setDocumentId(remote.id);
+    setIsDirty(false);
+    hydratedDocumentIdRef.current = remote.id;
+    setContentSyncToken((token) => token + 1);
+    void refresh({ silent: true });
+  }, [refresh, setDocumentId, setDocumentTitle]);
+
+  const {
+    live: documentLive,
+    conflict: remoteConflict,
+    dismissConflict,
+    reloadRemote,
+    markSynced,
+    setBaselineUpdatedAt,
+  } = useDocumentRealtime({
+    documentId: isEditingTemplate ? null : (document?.id ?? null),
+    currentUserId: session.userId,
+    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    isDirty,
+    onRemoteUpdate: applyRemoteDocument,
+  });
+
+  const { awayNotice, dismissAwayNotice } = useDocumentAwayNotice(
+    isEditingTemplate ? null : (document?.id ?? null),
+    document?.updated_at ?? null,
+    session.userId,
+  );
+
+  useEffect(() => {
+    if (document?.updated_at) {
+      setBaselineUpdatedAt(document.updated_at);
+    }
+  }, [document?.id, document?.updated_at, setBaselineUpdatedAt]);
+
+  const { lockedBlockId, lockedByName } = useDocumentPresence({
+    documentId: isEditingTemplate ? null : (document?.id ?? null),
+    userId: session.userId,
+    displayName: session.displayName || session.userEmail,
+    avatarUrl: session.avatarUrl,
+    isTyping,
+    activeBlockId,
+    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+  });
+
+  useEffect(() => {
+    if (!isEditingTemplate && document?.id) {
+      setIsDirty(false);
+    }
+  }, [document?.id, isEditingTemplate]);
 
   useEffect(() => {
     if (!isEditingTemplate || !requestedTemplateId) {
@@ -363,10 +433,13 @@ export function useEditorSession() {
       const result = await save(patch);
       if (!result) {
         showToast("Couldn't save document", "error");
+        return null;
       }
+      markSynced(result.updated_at);
+      setIsDirty(false);
       return result;
     },
-    [save, showToast],
+    [markSynced, save, showToast],
   );
 
   const debouncedSaveContent = useDebouncedCallback(
@@ -395,6 +468,16 @@ export function useEditorSession() {
       latestContentRef.current = content;
       setEditorContent(content);
       setContentPlain(content_plain);
+      if (!isEditingTemplate) {
+        setIsDirty(true);
+        setIsTyping(true);
+        if (typingIdleTimerRef.current) {
+          clearTimeout(typingIdleTimerRef.current);
+        }
+        typingIdleTimerRef.current = setTimeout(() => {
+          setIsTyping(false);
+        }, 2_000);
+      }
       if (isEditingTemplate && templateRecord) {
         debouncedSaveTemplateContent(content);
       } else {
@@ -728,11 +811,25 @@ export function useEditorSession() {
     onTemplateMetadataChange: debouncedSaveTemplateMetadata,
     onTitleChange: (title: string) => {
       setDocumentTitle(title);
+      if (!isEditingTemplate) {
+        setIsDirty(true);
+      }
       if (isEditingTemplate) {
         debouncedSaveTemplateTitle(title);
       } else {
         debouncedSaveTitle(title);
       }
     },
+    documentLive,
+    remoteConflict,
+    awayNotice,
+    dismissRemoteConflict: dismissConflict,
+    dismissAwayNotice,
+    reloadRemoteDocument: reloadRemote,
+    contentSyncToken,
+    activeBlockId,
+    onActiveBlockChange: setActiveBlockId,
+    lockedBlockId,
+    lockedByName,
   };
 }

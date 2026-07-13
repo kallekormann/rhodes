@@ -10,6 +10,7 @@ import type { WorkspaceMember, WorkspacePendingInvite } from "@/lib/workspaces/m
 import { Button } from "@/components/Button";
 import { Dropdown } from "@/components/Dropdown";
 import { StatusPill } from "@/components/StatusPill";
+import { UserAvatar } from "@/components/UserAvatar";
 import "./TeamMembersTable.css";
 
 type TeamMembersTableProps = {
@@ -81,7 +82,17 @@ export function TeamMembersTable({
 
             return (
               <tr key={member.user_id}>
-                <td className="team-members-table__name">{member.display_name}</td>
+                <td className="team-members-table__name">
+                  <span className="team-members-table__identity">
+                    <UserAvatar
+                      name={member.display_name}
+                      userId={member.user_id}
+                      src={member.avatar_url}
+                      size="sm"
+                    />
+                    <span>{member.display_name}</span>
+                  </span>
+                </td>
                 <td>
                   {showRoleEditor && updatingMemberId !== member.user_id ? (
                     <Dropdown

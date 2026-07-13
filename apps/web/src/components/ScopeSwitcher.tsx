@@ -78,7 +78,9 @@ export function ScopeSwitcher() {
             personalScopes={personalScopes}
             teamScopes={teamScopes}
             activeScopeId={activeScope.id}
-            userLabel={session.userEmail || session.displayName}
+            userLabel={session.displayName}
+            userId={session.userId}
+            userAvatarUrl={session.avatarUrl}
             canCreatePersonalSpace={canCreatePersonalSpace}
             canCreateTeamSpace={canCreateTeamSpace}
             onSelect={selectScope}
