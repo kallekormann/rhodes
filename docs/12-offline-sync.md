@@ -48,7 +48,14 @@ rhodes-db/
 
 ### Conflict UX
 
-Toast (once per conflict):
+When push or realtime detects a newer server version while the user has local edits:
+
+1. **Do not** silently last-write-wins the live TipTap JSON.
+2. Banner (extend existing Keep mine / Reload): **Keep mine** | **Take theirs** | **Review**.
+3. Losing side is saved to `document_versions` so work is recoverable.
+4. Later: block-level diff via `blockId` and optional “write a third paragraph” resolve card — not CRDT in V1.
+
+Toast (once per whole-doc Take/Keep when branching):
 > "This document was updated elsewhere. Your version was saved to history."
 
 Link opens version history in ⓘ sidebar.

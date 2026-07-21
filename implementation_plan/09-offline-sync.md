@@ -6,7 +6,9 @@
 **Estimated duration:** 5–7 days  
 **Can parallel with:** Phases 10–12 (after Phase 08 recommended for conflict UX)
 
-**Started:** July 21, 2026 — IndexedDB scaffold (`lib/offline/db.ts`) + encrypted multi-conversation Ask history (never synced). Outbox / document offline sync still open.
+**Started:** July 21, 2026 — IndexedDB scaffold + encrypted Ask history.  
+**Wave A (branch `feature/phase-09-offline-wave-a`):** document local-first outbox + push + `expected_updated_at` 409 + online/sync indicator.  
+**Conflict review (shared/team docs):** Keep mine / Take theirs / Review — no silent LWW overwrite; block-level merge = Wave B/C (see plan). CRDT/Yjs still O-007 V2.
 
 ---
 
@@ -92,61 +94,25 @@ Use [`idb`](https://github.com/jakearchibald/idb) package — **done** in [`apps
 
 ### 2. Write path (local-first)
 
-**`useOfflineDocument.ts`:**
-1. On editor update → write to IndexedDB immediately
-2. Set `sync_status = 'pending'`
-3. Add entry to `outbox`: `{ type: 'PATCH', document_id, payload: { title, content, content_plain } }`
-4. If online → trigger sync engine
-
-Editor never waits for network.
+**Done (Wave A):** [`useDocument.save`](../apps/web/src/hooks/useDocument.ts) writes IndexedDB + coalesced outbox immediately, then [`pushOutbox`](../apps/web/src/lib/offline/sync-engine.ts) when online. Helpers: [`documents-cache.ts`](../apps/web/src/lib/offline/documents-cache.ts), [`outbox.ts`](../apps/web/src/lib/offline/outbox.ts).
 
 ### 3. Sync engine
 
-**`sync-engine.ts`:**
-
-**Push (outbox FIFO):**
-```
-for each outbox entry (oldest first):
-  PATCH /api/documents/{id} with payload + If-Unmodified-Since or updated_at check
-  on success: remove from outbox, set sync_status = 'synced'
-  on 409 conflict: run conflict resolver
-  on network error: stop push, retry on reconnect
-```
-
-**Pull:**
-```
-GET /api/documents?workspace_id=&since={last_sync_cursor}
-for each remote doc:
-  if local missing or remote.updated_at > local.updated_at:
-    update IndexedDB (unless local has pending outbox for same doc)
-update last_sync_cursor
-```
+**Done (Wave A — push only):** FIFO outbox drain; network errors stop and retry on `online` ([`useOnlineStatus`](../apps/web/src/hooks/useOnlineStatus.ts)); 409 → local `sync_status = conflict` (outbox kept for Wave B resolver). Pull/`since` cursor still open.
 
 ### 4. Conflict resolution
 
-Per [12-offline-sync.md](../docs/12-offline-sync.md):
+**Locked product direction (not fully built in Wave A):** shared/team docs stay in IndexedDB. On conflict, user chooses Keep mine / Take theirs / Review (extend [`DocumentRemoteConflictBanner`](../apps/web/src/components/DocumentRemoteConflictBanner.tsx)) — never silent overwrite. Wave B: Review + block-diff via `blockId`. Wave C: per-block accept + optional “write third variant” card. Until then: 409 marks conflict + sync indicator; existing realtime Keep mine / Reload remains for live remote edits.
 
-When server `updated_at` > local at push time:
-1. Compare `content_plain` hash
-2. If different:
-   - Save local version as `document_versions` branch via API
-   - Apply server version to local IndexedDB
-   - Show toast once: "This document was updated elsewhere. Your version was saved to history."
-   - Link opens version history
+Per [12-offline-sync.md](../docs/12-offline-sync.md) version-branch toast remains the recovery path when choosing Keep/Take.
 
 ### 5. Online/offline detection
 
-**`useOnlineStatus.ts`:**
-- `window.addEventListener('online' | 'offline')`
-- On `online`: run sync engine
-- Visual indicator in editor meta row (subtle dot or label)
+**Done (Wave A):** [`useOnlineStatus.ts`](../apps/web/src/hooks/useOnlineStatus.ts) — `online`/`offline` listeners; push on reconnect.
 
 ### 6. Sync status indicator
 
-**`SyncStatusIndicator.tsx`** in document meta row:
-- `synced`: hidden or checkmark
-- `pending`: subtle "Saving…" / cloud icon
-- `conflict`: warning icon
+**Done (Wave A):** [`SyncStatusIndicator.tsx`](../apps/web/src/components/SyncStatusIndicator.tsx) in editor meta row — Offline / Saving… / Conflict.
 
 ### 7. Logout behavior
 
@@ -163,10 +129,10 @@ PWA install deferred per open decision O-010. Optional service worker for backgr
 
 ## API changes
 
-**`PATCH /api/documents/[id]`** — add optimistic concurrency:
+**`PATCH /api/documents/[id]`** — optimistic concurrency (**Wave A done**):
 ```typescript
-// Body includes client updated_at
-// If server updated_at > client updated_at: return 409 with server document
+// Body may include expected_updated_at
+// If server updated_at > expected: return 409 with server document
 ```
 
 ---

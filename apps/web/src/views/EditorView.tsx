@@ -18,6 +18,7 @@ import { useRhodesDocumentActivity } from "@/hooks/useRhodesDocumentActivity";
 import { useWritingCoach } from "@/hooks/useWritingCoach";
 import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
+import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { useEditorSession } from "@/hooks/useEditorSession";
 import { useInsights } from "@/hooks/useInsights";
 import { getCommentIdsToRemove } from "@/lib/documents/comments";
@@ -304,6 +305,14 @@ function EditorViewContent() {
                   </span>
                 )}
                 <span>{updatedAtLabel ?? "Updated just now"}</span>
+                {!isTemplateMode && documentId && (
+                  <>
+                    <span className="editor-content__meta-sep" aria-hidden="true">
+                      ·
+                    </span>
+                    <SyncStatusIndicator documentId={documentId} />
+                  </>
+                )}
               </div>
               <div className="editor-content__meta-row editor-content__meta-row--scope">
               {!isTemplateMode && (

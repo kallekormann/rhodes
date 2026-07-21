@@ -20,6 +20,8 @@ export const updateDocumentSchema = z.object({
   content: z.record(z.unknown()).optional(),
   content_plain: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
+  /** Optimistic concurrency — reject with 409 when server is newer. */
+  expected_updated_at: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
 });
 
 export const listDocumentsQuerySchema = z.object({

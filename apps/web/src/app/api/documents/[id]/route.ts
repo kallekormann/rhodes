@@ -80,7 +80,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { data: existing, error: existingError } = await supabase
     .from("documents")
-    .select("id, workspace_id, title, content, content_plain, metadata")
+    .select("id, workspace_id, title, content, content_plain, metadata, updated_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -91,6 +91,36 @@ export async function PATCH(request: Request, context: RouteContext) {
         { status: existingError ? 400 : 404 },
       ),
     );
+  }
+
+  const expectedUpdatedAt = parsed.data.expected_updated_at;
+  if (expectedUpdatedAt) {
+    const serverUpdatedAt = String(existing.updated_at ?? "");
+    const serverMs = Date.parse(serverUpdatedAt);
+    const expectedMs = Date.parse(expectedUpdatedAt);
+    if (
+      Number.isFinite(serverMs) &&
+      Number.isFinite(expectedMs) &&
+      serverMs > expectedMs
+    ) {
+      const { data: fresh } = await supabase
+        .from("documents")
+        .select(
+          "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at",
+        )
+        .eq("id", id)
+        .maybeSingle();
+
+      return withSecurityHeaders(
+        NextResponse.json(
+          {
+            error: "Conflict",
+            document: fresh ?? existing,
+          },
+          { status: 409 },
+        ),
+      );
+    }
   }
 
   const patch: Record<string, unknown> = {
