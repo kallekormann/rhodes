@@ -1,0 +1,41 @@
+.scope-create-wizard__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.scope-create-wizard__hint,
+.scope-create-wizard__intro,
+.scope-create-wizard__error {
+  color: var(--color-text-secondary);
+}
+
+.scope-create-wizard__error {
+  color: var(--color-danger);
+}
+
+.scope-create-wizard__views {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.scope-create-wizard__view-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.scope-create-wizard__view-label {
+  display: block;
+  font-weight: 500;
+}
+
+.scope-create-wizard__view-description {
+  display: block;
+  margin-top: 2px;
+}

@@ -13,6 +13,7 @@ import {
   Sun,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApp, type AppView } from "@/context/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScopeSwitcher } from "./ScopeSwitcher";
@@ -159,6 +160,11 @@ export function AppHeader() {
     canWriteActiveScope,
     session,
   } = useApp();
+  const router = useRouter();
+
+  const openUserSettings = () => {
+    router.push("/settings?mode=user");
+  };
 
   const isEditor = view === "editor";
   const isHidden = isEditor && headerHidden;
@@ -177,7 +183,7 @@ export function AppHeader() {
       label: "Profile & settings",
       icon: CircleUser,
       active: view === "settings",
-      onClick: () => setView("settings"),
+      onClick: openUserSettings,
     },
     {
       id: "theme",
@@ -257,7 +263,7 @@ export function AppHeader() {
             className="icon-btn icon-btn--default profile-menu-btn app-header__action--collapsible"
             aria-label="Profile & settings"
             title="Profile & settings"
-            onClick={() => setView("settings")}
+            onClick={openUserSettings}
           >
             <UserAvatar
               name={session.displayName}

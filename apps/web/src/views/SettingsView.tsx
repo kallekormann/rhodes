@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
@@ -13,7 +13,7 @@ import { ItemList, ListRow } from "@/components/ListRow";
 import { Modal } from "@/components/Modal";
 import { NavLink } from "@/components/NavLink";
 import { RadioGroup } from "@/components/Radio";
-import { ScopeCreateModal } from "@/components/ScopeCreateModal";
+import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
 import { ProfileAvatarField } from "@/components/settings/ProfileAvatarField";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
@@ -33,20 +33,54 @@ import {
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
-const navItems = [
+const USER_SECTIONS = [
   "Profile",
   "Security",
   "Preferences",
-  "Scopes",
-  "Team",
   "Billing",
   "Privacy",
 ] as const;
 
-type SettingsSection = (typeof navItems)[number];
+const SCOPE_SECTIONS = ["Scopes", "Team"] as const;
+
+type UserSection = (typeof USER_SECTIONS)[number];
+type ScopeSection = (typeof SCOPE_SECTIONS)[number];
+type SettingsSection = UserSection | ScopeSection;
+type SettingsMode = "user" | "scope";
+
+function isUserSection(section: string): section is UserSection {
+  return (USER_SECTIONS as readonly string[]).includes(section);
+}
+
+function isScopeSection(section: string): section is ScopeSection {
+  return (SCOPE_SECTIONS as readonly string[]).includes(section);
+}
+
+function defaultSectionForMode(
+  mode: SettingsMode,
+  activeScopeType: Scope["type"],
+): SettingsSection {
+  if (mode === "user") return "Profile";
+  return activeScopeType === "team" ? "Team" : "Scopes";
+}
 type CreateKind = "personal" | "team" | null;
 
 const roleLabels = TEAM_ROLE_LABELS;
+
+function scopeMetaLabel(scope: Scope, labels: Record<string, string>): string {
+  const base =
+    scope.type === "private"
+      ? "Personal · Owner"
+      : `Team · ${labels[scope.role]}`;
+  if (scope.enabledViewsCount > 0) {
+    const suffix =
+      scope.enabledViewsCount === 1
+        ? "1 extra view"
+        : `${scope.enabledViewsCount} extra views`;
+    return `${base} · ${suffix}`;
+  }
+  return base;
+}
 
 const languageOptions = [
   { id: "en", label: "English" },
@@ -143,6 +177,7 @@ function ScopeList({
 }
 
 export function SettingsView() {
+  const router = useRouter();
   const {
     session,
     setView,
@@ -160,18 +195,36 @@ export function SettingsView() {
     showToast,
     refreshScopes,
   } = useApp();
-  const [section, setSection] = useState<SettingsSection>("Profile");
   const searchParams = useSearchParams();
+  const mode: SettingsMode =
+    searchParams.get("mode") === "scope" ? "scope" : "user";
+  const visibleSections =
+    mode === "user" ? USER_SECTIONS : SCOPE_SECTIONS;
+  const [section, setSection] = useState<SettingsSection>(() =>
+    defaultSectionForMode(mode, activeScope.type),
+  );
 
   useEffect(() => {
     const requested = searchParams.get("section");
-    if (
-      requested &&
-      navItems.includes(requested as SettingsSection)
-    ) {
-      setSection(requested as SettingsSection);
+    const fallback = defaultSectionForMode(mode, activeScope.type);
+    if (mode === "user" && requested && isUserSection(requested)) {
+      setSection(requested);
+      return;
     }
-  }, [searchParams]);
+    if (mode === "scope" && requested && isScopeSection(requested)) {
+      setSection(requested);
+      return;
+    }
+    setSection(fallback);
+  }, [activeScope.type, mode, searchParams]);
+
+  const navigateSection = (nextSection: SettingsSection) => {
+    setSection(nextSection);
+    const params = new URLSearchParams();
+    params.set("mode", mode);
+    params.set("section", nextSection);
+    router.replace(`/settings?${params.toString()}`);
+  };
   const [createKind, setCreateKind] = useState<CreateKind>(null);
   const [displayName, setDisplayName] = useState(session.displayName);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(session.avatarUrl);
@@ -281,9 +334,9 @@ export function SettingsView() {
     setDefaultScopeId(activeScope.id);
   }, [activeScope.id, scopes]);
 
-  const handleCreate = (name: string) => {
-    if (createKind === "personal") void createPersonalSpace(name);
-    if (createKind === "team") void createTeamSpace(name);
+  const handleCreate = (input: { name: string; enabledViews: string[] }) => {
+    if (createKind === "personal") void createPersonalSpace(input.name, input.enabledViews);
+    if (createKind === "team") void createTeamSpace(input.name, input.enabledViews);
     setCreateKind(null);
   };
 
@@ -567,18 +620,18 @@ export function SettingsView() {
     <div className="settings-view">
       <div className="settings-view__topbar">
         <NavLink icon={ArrowLeft} onClick={() => setView("editor")}>
-          Settings
+          {mode === "user" ? "Account settings" : "Scope settings"}
         </NavLink>
       </div>
 
       <div className="settings-view__layout">
         <nav className="settings-nav">
-          {navItems.map((item) => (
+          {visibleSections.map((item) => (
             <button
               key={item}
               type="button"
               className={`settings-nav__item ${section === item ? "settings-nav__item--active" : ""}`}
-              onClick={() => setSection(item)}
+              onClick={() => navigateSection(item)}
             >
               {item}
             </button>
@@ -754,7 +807,7 @@ export function SettingsView() {
                 scopes={personalScopes}
                 personalScopes={personalScopes}
                 activeScopeId={activeScope.id}
-                metaForScope={() => "Personal · Owner"}
+                metaForScope={(scope) => scopeMetaLabel(scope, roleLabels)}
                 onSwitch={setActiveScope}
                 onRename={openRenameScope}
                 onDelete={setDeleteTarget}
@@ -775,7 +828,7 @@ export function SettingsView() {
                 scopes={teamScopes}
                 personalScopes={personalScopes}
                 activeScopeId={activeScope.id}
-                metaForScope={(scope) => `Team · ${roleLabels[scope.role]}`}
+                metaForScope={(scope) => scopeMetaLabel(scope, roleLabels)}
                 onSwitch={setActiveScope}
                 onRename={openRenameScope}
                 onDelete={setDeleteTarget}
@@ -927,17 +980,15 @@ export function SettingsView() {
         onClose={() => setDeleteTarget(null)}
       />
 
-      <ScopeCreateModal
+      <ScopeCreateWizard
         open={createKind === "personal"}
-        title="New personal scope"
-        placeholder="e.g. Book draft, Research notes"
+        kind="personal"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}
       />
-      <ScopeCreateModal
+      <ScopeCreateWizard
         open={createKind === "team"}
-        title="New team scope"
-        placeholder="e.g. Growth Engine"
+        kind="team"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}
       />

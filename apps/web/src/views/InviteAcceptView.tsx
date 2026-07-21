@@ -69,7 +69,7 @@ export function InviteAcceptView({ token }: { token: string }) {
         writeActiveWorkspaceId(workspaceId);
       }
 
-      window.location.href = appUrl("/settings?section=Team");
+      window.location.href = appUrl("/settings?mode=scope&section=Team");
     } catch {
       setError("Couldn't accept invite");
       setStatus("error");
