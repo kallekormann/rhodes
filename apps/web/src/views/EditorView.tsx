@@ -5,8 +5,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
-import { DocumentRemoteConflictBanner } from "@/components/DocumentRemoteConflictBanner";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
+import { DocumentRemoteConflictBanner } from "@/components/DocumentRemoteConflictBanner";
 import type { Editor } from "@tiptap/react";
 import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
@@ -47,6 +47,7 @@ function EditorViewContent() {
     documentId,
     documentScopeLabel,
     shareContext,
+    canEditDocument,
     refreshShareContext,
     workspaceId,
     createdAtLabel,
@@ -82,15 +83,22 @@ function EditorViewContent() {
     updateMetadataGroup,
     deleteMetadataSchema,
     deleteMetadataGroup,
-    remoteConflict,
-    dismissRemoteConflict,
     awayNotice,
     dismissAwayNotice,
+    remoteConflict,
+    keepLocal,
     reloadRemoteDocument,
     contentSyncToken,
     lockedBlockId,
+    lockedBlockIndex,
+    lockedSelectionFrom,
     lockedByName,
+    remoteCursors,
+    onEditorSelectionChange,
+    onActiveBlockChange,
   } = useEditorSession();
+
+  const editorEditable = isTemplateMode || canEditDocument;
 
   const {
     insights,
@@ -397,30 +405,36 @@ function EditorViewContent() {
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
               <div className="editor-content__main editor-content__main--body">
-                {remoteConflict && (
-                  <DocumentRemoteConflictBanner
-                    conflict={remoteConflict}
-                    onReload={() => {
-                      void reloadRemoteDocument();
-                    }}
-                    onKeepLocal={dismissRemoteConflict}
-                  />
-                )}
-                {!remoteConflict && awayNotice && (
+                {awayNotice && (
                   <DocumentAwayNoticeBanner
                     notice={awayNotice}
                     onDismiss={dismissAwayNotice}
                   />
+                )}
+                {remoteConflict && (
+                  <DocumentRemoteConflictBanner
+                    conflict={remoteConflict}
+                    onReload={() => void reloadRemoteDocument()}
+                    onKeepLocal={keepLocal}
+                  />
+                )}
+                {!editorEditable && (
+                  <p className="editor-content__read-only-banner caption" role="status">
+                    You have view-only access to this document.
+                  </p>
                 )}
                 <TipTapEditor
                   key={documentId ?? "template"}
                   content={content}
                   contentSyncToken={contentSyncToken}
                   lockedBlockId={lockedBlockId}
+                  lockedBlockIndex={lockedBlockIndex}
+                  lockedSelectionFrom={lockedSelectionFrom}
                   lockedByName={lockedByName}
+                  remoteCursors={remoteCursors}
                   documentId={documentId}
                   workspaceId={workspaceId}
-                  editable
+                  editable={editorEditable}
                   comments={isTemplateMode ? [] : comments}
                   onAddComment={isTemplateMode ? undefined : addComment}
                   onCommentsDocumentSync={
@@ -441,6 +455,8 @@ function EditorViewContent() {
                     insertCitationRef.current = insertCitation;
                   }}
                   onRegisterEditor={handleRegisterEditor}
+                  onActiveBlockChange={onActiveBlockChange}
+                  onSelectionChange={onEditorSelectionChange}
                   onBlur={() => {
                     void evaluateOnBlur();
                   }}

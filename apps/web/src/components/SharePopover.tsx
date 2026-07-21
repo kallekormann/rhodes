@@ -2,8 +2,11 @@
 
 import { Search, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import "./SharePopover.css";
+
+export type SharePermission = "read" | "edit";
 
 export type ShareTarget = {
   kind: "user" | "workspace";
@@ -18,7 +21,13 @@ export type DocumentShareRecord = {
   grantee_user_id: string | null;
   grantee_workspace_id: string | null;
   label: string;
+  permission: SharePermission;
 };
+
+const permissionOptions = [
+  { id: "edit", label: "Can edit" },
+  { id: "read", label: "Can view" },
+];
 
 type SharePopoverProps = {
   documentId: string;
@@ -30,6 +39,7 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
   const [search, setSearch] = useState("");
   const [targets, setTargets] = useState<ShareTarget[]>([]);
   const [shares, setShares] = useState<DocumentShareRecord[]>([]);
+  const [newSharePermission, setNewSharePermission] = useState<SharePermission>("edit");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +98,7 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
       body: JSON.stringify({
         grantee_type: target.kind,
         grantee_id: target.id,
+        permission: newSharePermission,
         label:
           target.kind === "user" && target.subtitle
             ? `${target.label} (${target.subtitle})`
@@ -102,6 +113,22 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
     await refreshShares();
     onSharesChange?.();
     setSearch("");
+  };
+
+  const updateSharePermission = async (shareId: string, permission: SharePermission) => {
+    setError(null);
+    const response = await fetch(`/app/api/documents/${documentId}/shares`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ share_id: shareId, permission }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(typeof data.error === "string" ? data.error : "Couldn't update permission");
+      return;
+    }
+    await refreshShares();
+    onSharesChange?.();
   };
 
   const removeShare = async (shareId: string) => {
@@ -141,6 +168,18 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
         aria-label="Search share targets"
       />
 
+      <div className="share-popover__permission-field">
+        <label className="share-popover__section-label" htmlFor="share-permission">
+          Permission for new shares
+        </label>
+        <Dropdown
+          variant="field"
+          value={newSharePermission}
+          options={permissionOptions}
+          onChange={(value) => setNewSharePermission(value as SharePermission)}
+        />
+      </div>
+
       {error && <p className="share-popover__error caption">{error}</p>}
 
       {shares.length > 0 && (
@@ -149,14 +188,24 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
           <ul className="share-popover__list">
             {shares.map((share) => (
               <li key={share.id} className="share-popover__shared-item">
-                <span>{share.label}</span>
-                <button
-                  type="button"
-                  className="share-popover__remove"
-                  onClick={() => void removeShare(share.id)}
-                >
-                  Remove
-                </button>
+                <span className="share-popover__shared-label">{share.label}</span>
+                <div className="share-popover__shared-actions">
+                  <Dropdown
+                    variant="plain"
+                    value={share.permission ?? "edit"}
+                    options={permissionOptions}
+                    onChange={(value) =>
+                      void updateSharePermission(share.id, value as SharePermission)
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="share-popover__remove"
+                    onClick={() => void removeShare(share.id)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

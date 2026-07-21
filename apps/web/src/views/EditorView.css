@@ -133,7 +133,8 @@
   margin: var(--space-lg) 0;
 }
 
-.editor-content__template-banner {
+.editor-content__template-banner,
+.editor-content__read-only-banner {
   margin: 0 0 var(--space-sm);
   color: var(--color-text-secondary);
 }

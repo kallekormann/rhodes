@@ -89,6 +89,25 @@
 .share-popover__shared-item {
   justify-content: space-between;
   background: var(--color-surface);
+  flex-wrap: wrap;
+}
+
+.share-popover__shared-label {
+  min-width: 0;
+  font-size: 14px;
+}
+
+.share-popover__shared-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.share-popover__permission-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }
 
 .share-popover__item-main {

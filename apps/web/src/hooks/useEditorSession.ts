@@ -75,6 +75,7 @@ export function useEditorSession() {
     documentTitle,
     setView,
     showToast,
+    canWriteActiveScope,
     session,
   } = useApp();
   const resolvedWorkspaceId = workspaceId;
@@ -111,10 +112,17 @@ export function useEditorSession() {
   const [publishingTemplate, setPublishingTemplate] = useState(false);
   const [comments, setComments] = useState<StoredDocumentComment[]>([]);
   const [shareContext, setShareContext] = useState<DocumentShareContext>(emptyShareContext());
+  const [canEditDocument, setCanEditDocument] = useState(true);
   const [shareContextVersion, setShareContextVersion] = useState(0);
   const [isDirty, setIsDirty] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [activeBlockIndex, setActiveBlockIndex] = useState<number | null>(null);
+  const [cursorSelection, setCursorSelection] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const cursorSelectionRef = useRef<{ from: number; to: number } | null>(null);
   const [contentSyncToken, setContentSyncToken] = useState(0);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [crossScopeAccess, setCrossScopeAccess] = useState<
@@ -128,6 +136,7 @@ export function useEditorSession() {
   useEffect(() => {
     if (!document?.id || isEditingTemplate || !resolvedWorkspaceId) {
       setShareContext(emptyShareContext());
+      setCanEditDocument(true);
       return;
     }
 
@@ -148,9 +157,16 @@ export function useEditorSession() {
       const body = (await response.json().catch(() => ({}))) as {
         shares?: Array<{ label: string; grantee_type: string }>;
         shared_by_user?: string | null;
+        can_write?: boolean;
       };
 
       if (cancelled) return;
+
+      if (typeof body.can_write === "boolean") {
+        setCanEditDocument(body.can_write);
+      } else {
+        setCanEditDocument(canWriteActiveScope);
+      }
 
       const shares = body.shares ?? [];
       const isOrigin = documentWorkspaceId === resolvedWorkspaceId;
@@ -181,7 +197,7 @@ export function useEditorSession() {
     return () => {
       cancelled = true;
     };
-  }, [document?.id, document?.workspace_id, isEditingTemplate, resolvedWorkspaceId, scopes, shareContextVersion]);
+  }, [canWriteActiveScope, document?.id, document?.workspace_id, isEditingTemplate, resolvedWorkspaceId, scopes, shareContextVersion]);
 
   useEffect(() => {
     if (isEditingTemplate || !document?.id) return;
@@ -255,22 +271,24 @@ export function useEditorSession() {
 
   const {
     live: documentLive,
-    conflict: remoteConflict,
+    remoteConflict,
     dismissConflict,
     reloadRemote,
+    keepLocal,
     markSynced,
     setBaselineUpdatedAt,
   } = useDocumentRealtime({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
-    currentUserId: session.userId,
     enabled: !isEditingTemplate && crossScopeAccess === "allowed",
     isDirty,
+    isTyping,
+    currentUserId: session.userId,
+    getLocalContentPlain: () => contentPlain,
     onRemoteUpdate: applyRemoteDocument,
   });
 
   const { awayNotice, dismissAwayNotice } = useDocumentAwayNotice(
     isEditingTemplate ? null : (document?.id ?? null),
-    document?.updated_at ?? null,
     session.userId,
   );
 
@@ -280,15 +298,45 @@ export function useEditorSession() {
     }
   }, [document?.id, document?.updated_at, setBaselineUpdatedAt]);
 
-  const { lockedBlockId, lockedByName } = useDocumentPresence({
+  const handleActiveBlockChange = useCallback(
+    (blockId: string | null, blockIndex: number | null) => {
+      setActiveBlockId(blockId);
+      setActiveBlockIndex(blockIndex);
+    },
+    [],
+  );
+
+  const { lockedBlockId, lockedBlockIndex, lockedSelectionFrom, lockedByName, remoteCursors } = useDocumentPresence({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     userId: session.userId,
     displayName: session.displayName || session.userEmail,
     avatarUrl: session.avatarUrl,
     isTyping,
     activeBlockId,
+    activeBlockIndex,
+    selectionFrom: cursorSelection?.from ?? null,
+    selectionTo: cursorSelection?.to ?? null,
+    selectionRef: cursorSelectionRef,
     enabled: !isEditingTemplate && crossScopeAccess === "allowed",
   });
+
+  const onEditorSelectionChange = useCallback((from: number, to: number) => {
+    cursorSelectionRef.current = { from, to };
+    setCursorSelection({ from, to });
+  }, []);
+
+  const onEditorSelectionClear = useCallback(() => {
+    cursorSelectionRef.current = null;
+    setCursorSelection(null);
+    setActiveBlockId(null);
+    setActiveBlockIndex(null);
+  }, []);
+
+  useEffect(() => {
+    if (isEditingTemplate || !document?.id) {
+      onEditorSelectionClear();
+    }
+  }, [document?.id, isEditingTemplate, onEditorSelectionClear]);
 
   useEffect(() => {
     if (!isEditingTemplate && document?.id) {
@@ -476,7 +524,7 @@ export function useEditorSession() {
         }
         typingIdleTimerRef.current = setTimeout(() => {
           setIsTyping(false);
-        }, 2_000);
+        }, 3_500);
       }
       if (isEditingTemplate && templateRecord) {
         debouncedSaveTemplateContent(content);
@@ -645,13 +693,15 @@ export function useEditorSession() {
       const comment = createDocumentComment({
         ...input,
         author: session.displayName || "You",
+        authorId: session.userId,
+        authorAvatarUrl: session.avatarUrl,
       });
       const nextComments = [...comments, comment];
       setComments(nextComments);
       debouncedSaveComments(nextComments);
       return comment;
     },
-    [comments, debouncedSaveComments, document, session.displayName],
+    [comments, debouncedSaveComments, document, session.avatarUrl, session.displayName, session.userId],
   );
 
   const addReply = useCallback(
@@ -670,13 +720,15 @@ export function useEditorSession() {
         anchorText: parent.anchorText,
         text: text.trim(),
         author: session.displayName || "You",
+        authorId: session.userId,
+        authorAvatarUrl: session.avatarUrl,
       });
       const nextComments = [...comments, reply];
       setComments(nextComments);
       debouncedSaveComments(nextComments);
       return reply;
     },
-    [comments, debouncedSaveComments, document, session.displayName],
+    [comments, debouncedSaveComments, document, session.avatarUrl, session.displayName, session.userId],
   );
 
   const removeComment = useCallback(
@@ -750,6 +802,7 @@ export function useEditorSession() {
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     documentScopeLabel,
     shareContext,
+    canEditDocument,
     refreshShareContext,
     workspaceId: isEditingTemplate
       ? (templateRecord?.workspace_id ?? resolvedWorkspaceId)
@@ -822,14 +875,19 @@ export function useEditorSession() {
     },
     documentLive,
     remoteConflict,
+    dismissConflict,
+    keepLocal,
     awayNotice,
-    dismissRemoteConflict: dismissConflict,
     dismissAwayNotice,
     reloadRemoteDocument: reloadRemote,
     contentSyncToken,
     activeBlockId,
-    onActiveBlockChange: setActiveBlockId,
+    onActiveBlockChange: handleActiveBlockChange,
     lockedBlockId,
+    lockedBlockIndex,
+    lockedSelectionFrom,
     lockedByName,
+    remoteCursors,
+    onEditorSelectionChange,
   };
 }
