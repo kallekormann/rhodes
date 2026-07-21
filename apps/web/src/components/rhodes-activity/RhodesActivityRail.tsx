@@ -38,7 +38,7 @@ export function RhodesActivityRail({
 
   const showInsights = insightCount > 0;
   const showProperties = propertiesNotice;
-  const showWriting = writingSuggestion != null || writingLoading;
+  const showWriting = writingSuggestion != null;
 
   if (!processing && !showInsights && !showProperties && !showWriting) {
     return null;
@@ -58,11 +58,7 @@ export function RhodesActivityRail({
           <RhodesActivityBubble
             variant="writing"
             icon={PenLine}
-            label={
-              writingLoading
-                ? "Rhodes is reviewing your writing…"
-                : "Rhodes has a writing suggestion"
-            }
+            label="Rhodes has a writing suggestion"
             active={writingOpen}
             onClick={() => onToggleWriting?.()}
           />

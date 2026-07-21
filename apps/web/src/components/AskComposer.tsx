@@ -2,18 +2,10 @@ import { ArrowUp } from "lucide-react";
 import { useId, type KeyboardEvent } from "react";
 import "./AskComposer.css";
 
-export type AskComposerStatus = "idle" | "thinking" | "searching";
-
-const statusLabels: Record<Exclude<AskComposerStatus, "idle">, string> = {
-  thinking: "Thinking…",
-  searching: "Searching…",
-};
-
 type AskComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
-  status?: AskComposerStatus;
   pending?: boolean;
   placeholder?: string;
   className?: string;
@@ -23,14 +15,12 @@ export function AskComposer({
   value,
   onChange,
   onSend,
-  status = "idle",
   pending = false,
   placeholder = "Ask a question…",
   className = "",
 }: AskComposerProps) {
   const inputId = useId();
   const canSend = value.trim().length > 0 && !pending;
-  const statusLabel = status !== "idle" ? statusLabels[status] : "";
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -53,9 +43,7 @@ export function AskComposer({
         aria-label="Ask a question"
       />
       <div className="ask-composer__footer">
-        <span className="ask-composer__status" aria-live="polite">
-          {statusLabel}
-        </span>
+        <span className="ask-composer__status" aria-hidden="true" />
         <button
           type="button"
           className="ask-composer__send"

@@ -9,6 +9,7 @@ import {
 
 export type WritingCoachSuggestion = {
   contextLabel: string;
+  sourceExcerpt: string;
   feedback: string;
   improvedText: string;
   insertAfterPos: number;
@@ -65,6 +66,8 @@ export function useWritingCoach(enabled: boolean) {
 
       setSuggestion({
         contextLabel: block.contextLabel,
+        sourceExcerpt:
+          block.text.length > 160 ? `${block.text.slice(0, 157)}…` : block.text,
         feedback:
           feedback ||
           "I think this could read a little clearer — here's a version you might like.",
@@ -81,8 +84,9 @@ export function useWritingCoach(enabled: boolean) {
   }, [enabled]);
 
   const toggleWriting = useCallback(() => {
-    setOpen((current) => !current);
-  }, []);
+    if (!suggestion) return;
+    setOpen(true);
+  }, [suggestion]);
 
   const dismissWriting = useCallback(() => {
     if (suggestion) {

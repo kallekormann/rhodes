@@ -36,13 +36,23 @@
 }
 
 .chat-bubble--user .chat-bubble__content {
-  background: var(--color-surface);
+  /* Light: white on canvas; dark: elevated grey surface */
+  background: var(--color-bg-elevated);
   border-bottom-right-radius: 0;
 }
 
+[data-theme="dark"] .chat-bubble--user .chat-bubble__content {
+  background: var(--color-surface);
+}
+
 .chat-bubble--rhodes .chat-bubble__content {
-  background: var(--color-accent-subtle);
+  /* Light: brighter lilac than accent-subtle; dark keeps soft accent wash */
+  background: var(--color-accent-muted);
   border-bottom-left-radius: 0;
+}
+
+[data-theme="dark"] .chat-bubble--rhodes .chat-bubble__content {
+  background: var(--color-accent-subtle);
 }
 
 .chat-bubble-showcase {

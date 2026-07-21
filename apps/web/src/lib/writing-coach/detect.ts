@@ -52,7 +52,7 @@ export function insertRhodesSuggestion(
     .chain()
     .insertContentAt(insertAfterPos, {
       type: "rhodesSuggestion",
-      attrs: { label: "Rhodes suggests" },
+      attrs: { label: "Rhodes suggestion" },
       content: [{ type: "text", text: improvedText }],
     })
     .run();

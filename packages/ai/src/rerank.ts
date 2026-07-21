@@ -1,5 +1,5 @@
 import { createOllamaClient } from "./ollama";
-import { OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
+import { resolveOllamaRerankModel } from "@rhodes/shared/constants";
 import type { KnowledgeMatch } from "./rag";
 
 export type RerankVerdict = "keep" | "skip";
@@ -47,7 +47,7 @@ JSON:`;
 
   let raw = "";
   try {
-    raw = await ollama.generate(prompt, OLLAMA_FAST_MODEL);
+    raw = await ollama.generate(prompt, resolveOllamaRerankModel());
   } catch {
     // On model failure, keep high-similarity matches
     const relevant = match.similarity >= 0.75;

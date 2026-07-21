@@ -20,7 +20,7 @@ import type { MetadataFieldValue, MetadataSchemaField, MetadataSchemaGroup } fro
 import type { MetadataFieldType } from "@/lib/metadata/schemas";
 import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
 import type { ActivityNavigateTarget } from "./DocumentHistorySection";
-import { AskComposer, type AskComposerStatus } from "./AskComposer";
+import { AskComposer } from "./AskComposer";
 import { AskReasoningTicker } from "./ask/AskReasoningTicker";
 import { AskSourcesLine } from "./ask/AskSourcesLine";
 import { Button } from "./Button";
@@ -115,6 +115,7 @@ type RightPanelProps = {
   insightsLoading?: boolean;
   insightsError?: string | null;
   insightsQueryText?: string;
+  onRetryInsights?: () => void;
   askPrefill?: string;
   onConsumeAskPrefill?: () => void;
   onInsertCitation?: (input: CitationInsertInput) => void;
@@ -157,6 +158,7 @@ export function RightPanel({
   insightsLoading = false,
   insightsError = null,
   insightsQueryText = "",
+  onRetryInsights,
   askPrefill = "",
   onConsumeAskPrefill,
   onInsertCitation,
@@ -196,6 +198,7 @@ export function RightPanel({
             error={insightsError}
             queryText={insightsQueryText}
             onInsertCitation={onInsertCitation}
+            onRetry={onRetryInsights}
           />
         )}
         {panelTab === "ask" && (
@@ -258,6 +261,7 @@ function InsightsTab({
   error,
   queryText,
   onInsertCitation,
+  onRetry,
 }: {
   workspaceId: string | null;
   insights: InsightMatch[];
@@ -265,6 +269,7 @@ function InsightsTab({
   error: string | null;
   queryText: string;
   onInsertCitation?: (input: CitationInsertInput) => void;
+  onRetry?: () => void;
 }) {
   const [quoteSelection, setQuoteSelection] = useState<{
     insight: InsightMatch;
@@ -395,10 +400,15 @@ function InsightsTab({
     );
   }
 
-  if (error) {
+  if (error && insights.length === 0) {
     return (
       <div className="panel-tab">
         <p className="caption">{error}</p>
+        {onRetry ? (
+          <Button type="button" size="small" variant="secondary" onClick={onRetry}>
+            Retry
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -417,7 +427,17 @@ function InsightsTab({
 
   return (
     <div className="panel-tab panel-tab--insights">
-      {loading && (
+      {error ? (
+        <div className="panel-tab__insights-status-row">
+          <p className="caption panel-tab__insights-status">{error}</p>
+          {onRetry ? (
+            <Button type="button" size="small" variant="ghost" onClick={onRetry}>
+              Retry
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {loading && !error && (
         <p className="caption panel-tab__insights-status">Refreshing matches…</p>
       )}
       <div className="panel-tab__insights-scroll overlay-scrollbar">
@@ -525,7 +545,7 @@ function AskTab({
   onConsumeAskPrefill?: () => void;
 }) {
   const { session } = useApp();
-  const { messages, pending, pendingPhase, reasoningStep, error, sendMessage } =
+  const { messages, pending, pendingPhase, reasoningSteps, error, sendMessage } =
     useAskChat(workspaceId);
   const [draft, setDraft] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -540,7 +560,7 @@ function AskTab({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pending, reasoningStep]);
+  }, [messages, pending, reasoningSteps]);
 
   const handleSend = () => {
     const text = draft.trim();
@@ -548,13 +568,6 @@ function AskTab({
     void sendMessage(text);
     setDraft("");
   };
-
-  const status: AskComposerStatus =
-    pendingPhase === "searching"
-      ? "searching"
-      : pending
-        ? "thinking"
-        : "idle";
 
   const welcomeMessage = engagedToday
     ? `Hi again, ${displayName}. What would you like to explore?`
@@ -580,7 +593,7 @@ function AskTab({
             )}
           </div>
         ))}
-        <AskReasoningTicker step={reasoningStep} phase={pendingPhase} />
+        <AskReasoningTicker steps={reasoningSteps} phase={pendingPhase} />
         {error && <p className="caption">{error}</p>}
         <div ref={messagesEndRef} />
       </div>
@@ -589,7 +602,6 @@ function AskTab({
         value={draft}
         onChange={setDraft}
         onSend={handleSend}
-        status={status}
         pending={pending}
       />
     </div>

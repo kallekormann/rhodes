@@ -266,8 +266,7 @@ export function useEditorSession() {
     setIsDirty(false);
     hydratedDocumentIdRef.current = remote.id;
     setContentSyncToken((token) => token + 1);
-    void refresh({ silent: true });
-  }, [refresh, setDocumentId, setDocumentTitle]);
+  }, [setDocumentId, setDocumentTitle]);
 
   const {
     live: documentLive,

@@ -35,7 +35,7 @@
 }
 
 .field-control--placeholder {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .field-control--plain {
@@ -75,7 +75,7 @@
 
 .field-control__icon {
   flex-shrink: 0;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 
 .field-panel {
@@ -176,7 +176,7 @@
 .field-panel__empty {
   padding: var(--space-sm) 10px;
   font-size: 13px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 
 @keyframes fieldPanelIn {

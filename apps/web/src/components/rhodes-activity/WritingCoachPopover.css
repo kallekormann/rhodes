@@ -18,10 +18,18 @@
 }
 
 .writing-coach-popover__context {
-  margin: 0 0 var(--space-sm);
+  margin: 0 0 var(--space-xs);
   font-size: 13px;
   font-weight: 500;
   color: var(--color-text);
+}
+
+.writing-coach-popover__excerpt {
+  margin: 0 0 var(--space-sm);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 .writing-coach-popover__feedback {

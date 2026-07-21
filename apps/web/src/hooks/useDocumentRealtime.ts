@@ -29,7 +29,8 @@ type UseDocumentRealtimeOptions = {
   onRemoteUpdate: (record: DocumentRecord) => void | Promise<void>;
 };
 
-const FALLBACK_POLL_MS = 1_000;
+/** Fallback when Realtime is down; keep high to avoid GET spam while editing. */
+const FALLBACK_POLL_MS = 15_000;
 
 async function fetchDocumentActivity(
   documentId: string,
@@ -56,11 +57,13 @@ export function useDocumentRealtime({
   const lastAppliedUpdatedAtRef = useRef<string | null>(null);
   const isDirtyRef = useRef(isDirty);
   const isTypingRef = useRef(isTyping);
+  const liveRef = useRef(live);
   const currentUserIdRef = useRef(currentUserId);
   const onRemoteUpdateRef = useRef(onRemoteUpdate);
   const getLocalContentPlainRef = useRef(getLocalContentPlain);
   isDirtyRef.current = isDirty;
   isTypingRef.current = isTyping;
+  liveRef.current = live;
   currentUserIdRef.current = currentUserId;
   onRemoteUpdateRef.current = onRemoteUpdate;
   getLocalContentPlainRef.current = getLocalContentPlain;
@@ -203,8 +206,13 @@ export function useDocumentRealtime({
       });
     })();
 
+    // Prefer Realtime; only poll as a safety net (and skip while subscribed + clean).
     const poll = setInterval(() => {
       void (async () => {
+        if (liveRef.current && !isDirtyRef.current) {
+          return;
+        }
+
         const latest = await fetchLatest();
         if (!latest) return;
 

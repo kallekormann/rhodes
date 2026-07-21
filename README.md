@@ -11,7 +11,7 @@ This repository contains product specs (`docs/`), a UI reference mock (`ui-mock/
 | Docker Desktop | 4 GB RAM allocated | 8 GB RAM allocated |
 | System RAM | 16 GB | 32 GB |
 | Disk | 40 GB free | 80 GB free (Ollama models) |
-| Node.js | 20 LTS | 22 LTS |
+| Node.js | **22 LTS** (required by `@supabase/supabase-js`) | 22 LTS |
 | pnpm | 9.x | latest |
 | Git | 2.x | latest |
 

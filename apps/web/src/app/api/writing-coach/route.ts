@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createOllamaClient, writingCoachPrompt } from "@rhodes/ai";
-import { OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
+import { resolveOllamaWritingCoachModel } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 
 const writingCoachSchema = z.object({
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         contextLabel: parsed.data.context_label,
         text: parsed.data.text,
       }),
-      OLLAMA_FAST_MODEL,
+      resolveOllamaWritingCoachModel(),
     );
 
     const result = parseWritingCoachResult(raw);

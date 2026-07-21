@@ -24,6 +24,10 @@ Track unresolved questions across the Rhodes spec. Update as decisions are made 
 
 **Note on D-012:** `rhodes.quinsy.app` is the **validated launch domain** (Quinsy owns `quinsy.app`). Standalone `rhodes.app` is **not yet acquired** — see O-018. Build all URLs from env vars so a future domain cutover does not require code changes.
 
+## Sequencing note (July 2026)
+
+After Phase 08, preferred order is **08.5 Hardening → 09 Offline → 12 Email → 11 Billing** (billing deferred until invites + product loop feel solid). See [08.5-product-hardening-and-discovery.md](../implementation_plan/08.5-product-hardening-and-discovery.md).
+
 ## Open — product
 
 | ID | Question | Options | Owner |

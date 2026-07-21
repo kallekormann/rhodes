@@ -5,7 +5,7 @@ import {
   whyRelevantPrompt,
   type KnowledgeMatch,
 } from "@rhodes/ai";
-import { OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
+import { resolveOllamaWhyRelevantModel } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         const prompt = whyRelevantPrompt(match, parsed.data.query_text);
         let streamed = "";
 
-        for await (const token of ollama.streamGenerate(prompt, OLLAMA_FAST_MODEL)) {
+        for await (const token of ollama.streamGenerate(prompt, resolveOllamaWhyRelevantModel())) {
           streamed += token;
           send({ type: "token", token });
         }

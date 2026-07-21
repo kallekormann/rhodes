@@ -3,7 +3,8 @@ import { createAdminClient } from "@rhodes/db";
 import { createOllamaClient, librarySummaryPrompt, normalizeLibrarySummary } from "@rhodes/ai";
 import {
   LIBRARY_SUMMARY_EXCERPT_CHARS,
-  OLLAMA_SUMMARY_MODEL,
+  resolveOllamaSummaryModel,
+  resolveOllamaSummaryTimeoutMs,
 } from "@rhodes/shared/constants";
 import {
   LIBRARY_PIPELINE_STAGE,
@@ -18,19 +19,20 @@ export type SummarizeJobData = {
 };
 
 const MAX_RETRIES = 3;
-const SUMMARY_TIMEOUT_MS = Number(process.env.OLLAMA_SUMMARY_TIMEOUT_MS ?? 180_000);
 
 async function generateSummaryWithRetry(excerpt: string): Promise<string> {
   const ollama = createOllamaClient();
   const prompt = librarySummaryPrompt(excerpt);
+  const model = resolveOllamaSummaryModel();
+  const timeoutMs = resolveOllamaSummaryTimeoutMs();
   let lastError: unknown;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
     try {
-      return await ollama.generate(prompt, OLLAMA_SUMMARY_MODEL, {
+      return await ollama.generate(prompt, model, {
         temperature: 0.2,
         numPredict: 180,
-        timeoutMs: SUMMARY_TIMEOUT_MS,
+        timeoutMs,
       });
     } catch (error) {
       lastError = error;
@@ -46,11 +48,12 @@ export async function processSummarizeJob(job: Job<SummarizeJobData>) {
   const { sourceId, excerpt } = job.data;
   const admin = createAdminClient();
   const trimmedExcerpt = excerpt.slice(0, LIBRARY_SUMMARY_EXCERPT_CHARS);
+  const model = resolveOllamaSummaryModel();
 
   console.log("[summarize] start", {
     sourceId,
     excerptChars: trimmedExcerpt.length,
-    model: OLLAMA_SUMMARY_MODEL,
+    model,
   });
 
   const raw = await generateSummaryWithRetry(trimmedExcerpt);

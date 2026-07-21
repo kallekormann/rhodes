@@ -9,7 +9,11 @@ import {
   rerankKnowledgeMatches,
   type KnowledgeMatch,
 } from "@rhodes/ai";
-import { OLLAMA_CHAT_MODEL, OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
+import {
+  askLlmRerankEnabled,
+  resolveOllamaAskFallbackModel,
+  resolveOllamaAskModel,
+} from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -110,8 +114,9 @@ export async function POST(request: Request) {
           })),
         });
 
-        let kept = matches;
-        if (matches.length > 0) {
+        let kept = matches.slice(0, 4);
+        const enableRerank = askLlmRerankEnabled();
+        if (enableRerank && matches.length > 0) {
           const { kept: reranked } = await rerankKnowledgeMatches({
             question: lastUserMessage.content,
             matches: matches.slice(0, 8),
@@ -132,6 +137,30 @@ export async function POST(request: Request) {
             type: "reasoning_done",
             kept_count: kept.length,
             skipped_count: Math.max(0, matches.slice(0, 8).length - kept.length),
+          });
+        } else if (matches.length > 0) {
+          // No LLM rerank: still stream keep/skip so the Ask ticker shows reasoning.
+          const candidates = matches.slice(0, 8);
+          const keptIds = new Set(kept.map((match) => match.item_id));
+          for (const match of candidates) {
+            const keep = keptIds.has(match.item_id);
+            send({
+              type: "reasoning_step",
+              label: `${match.title}${match.location_label ? ` — ${match.location_label}` : ""}`.slice(
+                0,
+                80,
+              ),
+              verdict: keep ? "keep" : "skip",
+              origin_type: match.origin_type,
+              location_label: match.location_label,
+              title: match.title,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 70));
+          }
+          send({
+            type: "reasoning_done",
+            kept_count: kept.length,
+            skipped_count: Math.max(0, candidates.length - kept.length),
           });
         }
 
@@ -154,8 +183,10 @@ export async function POST(request: Request) {
 
         let streamed = false;
         let lastError: Error | null = null;
+        const chatModel = resolveOllamaAskModel();
+        const fastModel = resolveOllamaAskFallbackModel();
 
-        for (const model of [OLLAMA_CHAT_MODEL, OLLAMA_FAST_MODEL]) {
+        for (const model of [...new Set([chatModel, fastModel])]) {
           try {
             for await (const token of ollama.streamGenerate(prompt, model)) {
               streamed = true;
@@ -169,7 +200,7 @@ export async function POST(request: Request) {
             const missingModel =
               lastError.message.includes("404") ||
               lastError.message.toLowerCase().includes("not found");
-            if (!missingModel || model === OLLAMA_FAST_MODEL) {
+            if (!missingModel || model === fastModel) {
               throw lastError;
             }
           }

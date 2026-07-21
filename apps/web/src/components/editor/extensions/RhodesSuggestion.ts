@@ -7,7 +7,7 @@ export const RhodesSuggestion = Node.create({
 
   addAttributes() {
     return {
-      label: { default: "Rhodes suggests" },
+      label: { default: "Rhodes suggestion" },
     };
   },
 

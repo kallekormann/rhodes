@@ -8,7 +8,7 @@
 .input-wrap__icon {
   position: absolute;
   left: 12px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   display: flex;
   pointer-events: none;
 }
@@ -17,7 +17,7 @@
   position: absolute;
   right: 12px;
   font-size: 12px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   pointer-events: none;
 }
 
@@ -36,6 +36,10 @@
     border-color var(--duration-normal) ease,
     box-shadow var(--duration-normal) ease,
     background var(--duration-normal) ease;
+}
+
+.input::placeholder {
+  color: var(--color-text-secondary);
 }
 
 .input-wrap:not(:has(.input-wrap__icon)) .input {

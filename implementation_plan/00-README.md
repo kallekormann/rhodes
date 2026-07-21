@@ -1,8 +1,8 @@
 # Rhodes Implementation Plan — Index
 
 **Status:** accepted  
-**Last updated:** July 11, 2026  
-**Current focus:** Phase 07b — Properties, scope intelligence, and views  
+**Last updated:** July 21, 2026  
+**Current focus:** Phase 08.5 — Product Hardening & Discovery  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -40,9 +40,10 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 05c | [05c-metadata-properties-and-polish.md](05c-metadata-properties-and-polish.md) | Metadata, properties, template fields, signed URLs | ✅ complete |
 | 06 | [06-library-and-ingestion-pipeline.md](06-library-and-ingestion-pipeline.md) | Upload, worker, Tika, embeddings | ✅ complete |
 | 07 | [07-ai-rag-and-insights.md](07-ai-rag-and-insights.md) | Ollama, RAG, Ask, Properties Manage + AI auto-fill | ✅ complete |
-| 07b | [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md) | Properties tab UX, builder, scope views, metadata intelligence | **next** |
-| 07b-ux | [07b-ux-properties-studio.md](07b-ux-properties-studio.md) | **UX design session** — Properties Studio look & behavior (gate before UI polish) | **review** |
-| 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | planned |
+| 07b | [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md) | Properties tab UX, builder, scope views, metadata intelligence | ✅ complete |
+| 07b-ux | [07b-ux-properties-studio.md](07b-ux-properties-studio.md) | **UX design session** — Properties Studio look & behavior | ✅ complete |
+| 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | ✅ complete |
+| 08.5 | [08.5-product-hardening-and-discovery.md](08.5-product-hardening-and-discovery.md) | Polish, Ask/Insights resilience, Cmd+K, discovery | **next** |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
@@ -94,10 +95,12 @@ flowchart LR
   P06 --> P07[Phase07_RAG]
   P07 --> P07b[Phase07b_Properties]
   P07b --> P08[Phase08_Settings]
-  P05 --> P09[Phase09_Offline]
-  P08 --> P10[Phase10_i18n]
-  P08 --> P11[Phase11_Billing]
-  P08 --> P12[Phase12_EmailPrivacy]
+  P08 --> P085[Phase08_5_Hardening]
+  P085 --> P09[Phase09_Offline]
+  P05 --> P09
+  P085 --> P12[Phase12_EmailPrivacy]
+  P12 --> P11[Phase11_Billing]
+  P085 --> P10[Phase10_i18n]
   P12 --> P12b[Phase12b_Topology]
   P12b --> P13[Phase13_VPS]
   P11 --> P13
@@ -108,7 +111,7 @@ flowchart LR
   P14 --> P13
 ```
 
-Phases 09, 10, 11, 12, 14 can run in parallel after Phase 08 (Phase 14 can start after Phase 04 using ui-mock tokens). **Phase 12b runs after Phase 12 and before Phase 13.** Phase 14 deploys with Phase 13.
+After Phase 08: prefer **08.5 → 09 Offline → 12 Email → 11 Billing** (billing is not the next user-value unlock). Phases 10 and 14 can parallel when strings/marketing stabilize. **Phase 12b runs after Phase 12 and before Phase 13.** Phase 14 deploys with Phase 13.
 
 ---
 

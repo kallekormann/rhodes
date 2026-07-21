@@ -17,6 +17,9 @@ export function WritingCoachPopover({
     <div className="writing-coach-popover" role="dialog" aria-label="Rhodes writing suggestion">
       <p className="writing-coach-popover__eyebrow">Rhodes</p>
       <p className="writing-coach-popover__context">{suggestion.contextLabel}</p>
+      {suggestion.sourceExcerpt ? (
+        <p className="writing-coach-popover__excerpt">“{suggestion.sourceExcerpt}”</p>
+      ) : null}
       <p className="writing-coach-popover__feedback">{suggestion.feedback}</p>
       {suggestion.improvedText ? (
         <blockquote className="writing-coach-popover__suggestion">

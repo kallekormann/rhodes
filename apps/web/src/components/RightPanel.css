@@ -32,6 +32,7 @@
   overflow: hidden;
   padding: var(--space-md);
   animation: tabFade 150ms ease;
+  background: var(--color-bg);
 }
 
 /* Properties — no outer padding; panel-shell handles inner scroll padding + action bar */
@@ -53,6 +54,7 @@
   height: 48px;
   border-bottom: 1px solid var(--color-border-subtle);
   flex-shrink: 0;
+  background: var(--color-bg-elevated);
 }
 
 .panel-tab {
@@ -74,10 +76,17 @@
   padding-bottom: var(--space-sm);
 }
 
+.panel-tab__insights-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
 .panel-tab--ask {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
   flex: 1;
   min-height: 0;
   overflow: hidden;

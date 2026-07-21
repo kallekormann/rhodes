@@ -104,6 +104,7 @@ function EditorViewContent() {
     insights,
     loading: insightsLoading,
     error: insightsError,
+    refresh: refreshInsights,
   } = useInsights(
     isTemplateMode ? null : activeScopeId,
     contentPlain,
@@ -522,6 +523,7 @@ function EditorViewContent() {
         insightsLoading={insightsLoading}
         insightsError={insightsError}
         insightsQueryText={contentPlain}
+        onRetryInsights={() => void refreshInsights()}
         askPrefill={askPrefill}
         onConsumeAskPrefill={() => setAskPrefill("")}
         onInsertCitation={isTemplateMode ? undefined : handleInsertCitation}

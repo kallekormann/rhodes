@@ -6,7 +6,10 @@ import {
   whyRelevantPrompt,
   type KnowledgeMatch,
 } from "@rhodes/ai";
-import { OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
+import {
+  resolveOllamaMetadataModel,
+  resolveOllamaWhyRelevantModel,
+} from "@rhodes/shared/constants";
 
 export type WhyRelevantJobData = {
   type: "why-relevant";
@@ -60,7 +63,7 @@ async function processWhyRelevant(job: Job<WhyRelevantJobData>) {
   const ollama = createOllamaClient();
   const text = await ollama.generate(
     whyRelevantPrompt(job.data.match, job.data.queryText),
-    OLLAMA_FAST_MODEL,
+    resolveOllamaWhyRelevantModel(),
   );
   return text.trim();
 }
@@ -107,7 +110,7 @@ async function processExtractDocumentMetadata(
           : null,
       })),
     }),
-    OLLAMA_FAST_MODEL,
+    resolveOllamaMetadataModel(),
   );
 
   const extracted = parseJsonObject(raw);

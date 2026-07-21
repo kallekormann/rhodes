@@ -1,7 +1,11 @@
-import { OLLAMA_EMBED_MODEL } from "@rhodes/shared/constants";
+import {
+  resolveOllamaEmbedModel,
+  resolveOllamaEmbedTimeoutMs,
+  resolveOllamaGenerateTimeoutMs,
+} from "@rhodes/shared/constants";
 
-const EMBED_TIMEOUT_MS = Number(process.env.OLLAMA_EMBED_TIMEOUT_MS ?? 90_000);
-const GENERATE_TIMEOUT_MS = Number(process.env.OLLAMA_GENERATE_TIMEOUT_MS ?? 120_000);
+const EMBED_TIMEOUT_MS = resolveOllamaEmbedTimeoutMs();
+const GENERATE_TIMEOUT_MS = resolveOllamaGenerateTimeoutMs();
 
 export interface OllamaTagsResponse {
   models: Array<{ name: string; size?: number }>;
@@ -58,7 +62,7 @@ export class OllamaClient {
 
   async embed(
     text: string,
-    model = OLLAMA_EMBED_MODEL,
+    model = resolveOllamaEmbedModel(),
   ): Promise<number[]> {
     const [vector] = await this.embedBatch([text], model);
     if (!vector) {
@@ -69,7 +73,7 @@ export class OllamaClient {
 
   async embedBatch(
     texts: string[],
-    model = OLLAMA_EMBED_MODEL,
+    model = resolveOllamaEmbedModel(),
   ): Promise<number[][]> {
     if (texts.length === 0) return [];
 

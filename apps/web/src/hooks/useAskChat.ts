@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { markAskEngagedToday } from "@/lib/ask/engagement";
+import {
+  beginAskOllamaWork,
+  endAskOllamaWork,
+} from "@/lib/ollama-admission";
 import type { AskReasoningStep } from "@/components/ask/AskReasoningTicker";
 import type { AskSourceUsed } from "@/components/ask/AskSourcesLine";
 
@@ -50,7 +54,7 @@ export function useAskChat(workspaceId: string | null) {
   const [messages, setMessages] = useState<AskMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [pendingPhase, setPendingPhase] = useState<AskPendingPhase>("idle");
-  const [reasoningStep, setReasoningStep] = useState<AskReasoningStep | null>(null);
+  const [reasoningSteps, setReasoningSteps] = useState<AskReasoningStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [contextMatches, setContextMatches] = useState<AskContextMatch[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -61,7 +65,7 @@ export function useAskChat(workspaceId: string | null) {
     setMessages([]);
     setPending(false);
     setPendingPhase("idle");
-    setReasoningStep(null);
+    setReasoningSteps([]);
     setError(null);
     setContextMatches([]);
   }, []);
@@ -92,136 +96,141 @@ export function useAskChat(workspaceId: string | null) {
       setMessages(nextMessages);
       setPending(true);
       setPendingPhase("searching");
-      setReasoningStep(null);
+      setReasoningSteps([]);
       setError(null);
       setContextMatches([]);
       markAskEngagedToday();
+      beginAskOllamaWork();
 
-      const response = await fetch("/app/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspace_id: workspaceId,
-          messages: toApiMessages(nextMessages),
-        }),
-        signal: controller.signal,
-      });
+      try {
+        const response = await fetch("/app/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            messages: toApiMessages(nextMessages),
+          }),
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(parseAskError(data.error));
-        setPending(false);
-        setPendingPhase("idle");
-        return;
-      }
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          setError(parseAskError(data.error));
+          return;
+        }
 
-      if (!response.body) {
-        setError("Ask stream unavailable");
-        setPending(false);
-        setPendingPhase("idle");
-        return;
-      }
+        if (!response.body) {
+          setError("Ask stream unavailable");
+          return;
+        }
 
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: "assistant", content: "" },
-      ]);
+        setMessages((prev) => [
+          ...prev,
+          { id: assistantId, role: "assistant", content: "" },
+        ]);
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let streamError: string | null = null;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamError: string | null = null;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n\n");
-        buffer = parts.pop() ?? "";
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
 
-        for (const part of parts) {
-          const line = part.trim();
-          if (!line.startsWith("data:")) continue;
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
 
-          const payload = JSON.parse(line.slice(5).trim()) as {
-            type?: string;
-            token?: string;
-            message?: string;
-            matches?: AskContextMatch[];
-            label?: string;
-            verdict?: "keep" | "skip";
-            sources?: AskSourceUsed[];
-          };
+            const payload = JSON.parse(line.slice(5).trim()) as {
+              type?: string;
+              token?: string;
+              message?: string;
+              matches?: AskContextMatch[];
+              label?: string;
+              verdict?: "keep" | "skip";
+              sources?: AskSourceUsed[];
+            };
 
-          if (payload.type === "context" && Array.isArray(payload.matches)) {
-            setContextMatches(payload.matches);
-            setPendingPhase("reranking");
-          }
+            if (payload.type === "context" && Array.isArray(payload.matches)) {
+              setContextMatches(payload.matches);
+              setPendingPhase("reranking");
+            }
 
-          if (payload.type === "reasoning_step" && payload.label && payload.verdict) {
-            setPendingPhase("reranking");
-            setReasoningStep({
-              label: payload.label,
-              verdict: payload.verdict,
-            });
-          }
+            if (payload.type === "reasoning_step" && payload.label && payload.verdict) {
+              setPendingPhase("reranking");
+              setReasoningSteps((prev) => [
+                ...prev,
+                { label: payload.label!, verdict: payload.verdict! },
+              ]);
+            }
 
-          if (payload.type === "reasoning_done") {
-            setReasoningStep(null);
-            setPendingPhase("generating");
-          }
+            if (payload.type === "reasoning_done") {
+              setPendingPhase("generating");
+            }
 
-          if (payload.type === "token" && payload.token) {
-            setPendingPhase("generating");
-            setReasoningStep(null);
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId
-                  ? { ...message, content: message.content + payload.token }
-                  : message,
-              ),
-            );
-          }
+            if (payload.type === "token" && payload.token) {
+              setPendingPhase("generating");
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, content: message.content + payload.token }
+                    : message,
+                ),
+              );
+            }
 
-          if (payload.type === "sources_used" && Array.isArray(payload.sources)) {
-            sourcesUsed = payload.sources;
-            setMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantId
-                  ? { ...message, sourcesUsed: payload.sources }
-                  : message,
-              ),
-            );
-          }
+            if (payload.type === "sources_used" && Array.isArray(payload.sources)) {
+              sourcesUsed = payload.sources;
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, sourcesUsed: payload.sources }
+                    : message,
+                ),
+              );
+            }
 
-          if (payload.type === "error") {
-            streamError = payload.message ?? "Ask generation failed";
-            setError(streamError);
+            if (payload.type === "error") {
+              streamError = payload.message ?? "Ask generation failed";
+              setError(streamError);
+            }
           }
         }
-      }
 
-      if (streamError) {
-        setMessages((prev) =>
-          prev.filter(
-            (message) =>
-              message.id !== assistantId || message.content.trim().length > 0,
-          ),
-        );
-      } else if (sourcesUsed.length > 0) {
-        setMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantId
-              ? { ...message, sourcesUsed }
-              : message,
-          ),
-        );
+        if (streamError) {
+          setMessages((prev) =>
+            prev.filter(
+              (message) =>
+                message.id !== assistantId || message.content.trim().length > 0,
+            ),
+          );
+        } else if (sourcesUsed.length > 0) {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, sourcesUsed }
+                : message,
+            ),
+          );
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : "Ask failed");
+        }
+      } finally {
+        endAskOllamaWork();
+        setPending(false);
+        setPendingPhase("idle");
+        setReasoningSteps([]);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
       }
-
-      setPending(false);
-      setPendingPhase("idle");
-      setReasoningStep(null);
     },
     [messages, pending, workspaceId],
   );
@@ -230,7 +239,7 @@ export function useAskChat(workspaceId: string | null) {
     messages,
     pending,
     pendingPhase,
-    reasoningStep,
+    reasoningSteps,
     error,
     contextMatches,
     sendMessage,
