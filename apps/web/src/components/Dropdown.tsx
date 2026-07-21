@@ -27,6 +27,7 @@ type DropdownProps = {
   align?: HorizontalAlign | "auto";
   onChange?: (id: string) => void;
   className?: string;
+  "aria-label"?: string;
 };
 
 export function Dropdown({
@@ -40,6 +41,7 @@ export function Dropdown({
   align = "auto",
   onChange,
   className = "",
+  "aria-label": ariaLabel,
 }: DropdownProps) {
   const {
     open,
@@ -92,6 +94,7 @@ export function Dropdown({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-label={ariaLabel}
       >
         {isField ? (
           <>

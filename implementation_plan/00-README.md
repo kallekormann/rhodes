@@ -2,7 +2,7 @@
 
 **Status:** accepted  
 **Last updated:** July 21, 2026  
-**Current focus:** Phase 08.5 — Product Hardening & Discovery  
+**Current focus:** Phase 09 — Offline Sync  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -43,8 +43,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 07b | [07b-properties-scope-and-views.md](07b-properties-scope-and-views.md) | Properties tab UX, builder, scope views, metadata intelligence | ✅ complete |
 | 07b-ux | [07b-ux-properties-studio.md](07b-ux-properties-studio.md) | **UX design session** — Properties Studio look & behavior | ✅ complete |
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | ✅ complete |
-| 08.5 | [08.5-product-hardening-and-discovery.md](08.5-product-hardening-and-discovery.md) | Polish, Ask/Insights resilience, Cmd+K, discovery | **next** |
-| 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | 5–7 days |
+| 08.5 | [08.5-product-hardening-and-discovery.md](08.5-product-hardening-and-discovery.md) | Polish, Ask/Insights resilience, Cmd+K, discovery | ✅ complete |
+| 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | **in progress** |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
 | 12 | [12-email-privacy-and-security.md](12-email-privacy-and-security.md) | Email relay, GDPR, hardening | 4–6 days |

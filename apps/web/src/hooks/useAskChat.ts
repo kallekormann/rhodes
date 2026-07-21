@@ -10,6 +10,21 @@ import type { AskReasoningStep } from "@/components/ask/AskReasoningTicker";
 import type { AskSourceUsed } from "@/components/ask/AskSourcesLine";
 import type { AskChartPayload } from "@/components/charts/ChartFrame";
 import { isToolOnlyQuestion, runMatchingAskTools } from "@/lib/ask/tools";
+import { lockVault, unlockVault } from "@/lib/offline/ask-vault";
+import {
+  countUserMessages,
+  deleteConversation,
+  listConversations,
+  loadConversationMessages,
+  migrateLegacyAskThreads,
+  saveConversation,
+  type ConversationListItem,
+  type PersistedAskMessage,
+} from "@/lib/offline/conversations";
+import {
+  getActiveConversationId,
+  setActiveConversationId,
+} from "@/lib/offline/db";
 
 export type AskMessage = {
   id: string;
@@ -25,6 +40,8 @@ export type AskPendingPhase =
   | "reranking"
   | "generating"
   | "computing";
+
+export type AskChatView = "chat" | "history";
 
 type AskContextMatch = {
   title: string;
@@ -58,7 +75,31 @@ function parseAskError(error: unknown): string {
   return record.formErrors?.[0] ?? fieldMessage ?? "Ask failed";
 }
 
-export function useAskChat(workspaceId: string | null) {
+function toPersistedMessages(messages: AskMessage[]): PersistedAskMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    content: message.content,
+  }));
+}
+
+function clearTransientState(setters: {
+  setPending: (v: boolean) => void;
+  setPendingPhase: (v: AskPendingPhase) => void;
+  setAskMode: (v: "tools" | "knowledge") => void;
+  setReasoningSteps: (v: AskReasoningStep[]) => void;
+  setError: (v: string | null) => void;
+  setContextMatches: (v: AskContextMatch[]) => void;
+}) {
+  setters.setPending(false);
+  setters.setPendingPhase("idle");
+  setters.setAskMode("knowledge");
+  setters.setReasoningSteps([]);
+  setters.setError(null);
+  setters.setContextMatches([]);
+}
+
+export function useAskChat(workspaceId: string | null, userId?: string | null) {
   const [messages, setMessages] = useState<AskMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [pendingPhase, setPendingPhase] = useState<AskPendingPhase>("idle");
@@ -66,23 +107,299 @@ export function useAskChat(workspaceId: string | null) {
   const [reasoningSteps, setReasoningSteps] = useState<AskReasoningStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [contextMatches, setContextMatches] = useState<AskContextMatch[]>([]);
-  const abortRef = useRef<AbortController | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [view, setView] = useState<AskChatView>("chat");
+  const [conversations, setConversations] = useState<ConversationListItem[]>(
+    [],
+  );
+  const [activeConversationId, setActiveConversationIdState] = useState<
+    string | null
+  >(null);
 
-  const reset = useCallback(() => {
+  const abortRef = useRef<AbortController | null>(null);
+  const persistTimerRef = useRef<number | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<AskMessage[]>([]);
+
+  useEffect(() => {
+    activeIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const refreshConversationList = useCallback(async () => {
+    if (!workspaceId || !userId) {
+      setConversations([]);
+      return;
+    }
+    try {
+      const rows = await listConversations(userId, workspaceId, "ask");
+      setConversations(rows);
+    } catch {
+      setConversations([]);
+    }
+  }, [workspaceId, userId]);
+
+  const resetSessionUi = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     setMessages([]);
-    setPending(false);
-    setPendingPhase("idle");
-    setAskMode("knowledge");
-    setReasoningSteps([]);
-    setError(null);
-    setContextMatches([]);
+    setActiveConversationIdState(null);
+    activeIdRef.current = null;
+    setView("chat");
+    setConversations([]);
+    clearTransientState({
+      setPending,
+      setPendingPhase,
+      setAskMode,
+      setReasoningSteps,
+      setError,
+      setContextMatches,
+    });
+    setHydrated(false);
   }, []);
 
   useEffect(() => {
-    reset();
-  }, [workspaceId, reset]);
+    resetSessionUi();
+  }, [workspaceId, userId, resetSessionUi]);
+
+  useEffect(() => {
+    if (!workspaceId || !userId) {
+      setHydrated(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await unlockVault(userId);
+        if (cancelled) return;
+
+        const migratedId = await migrateLegacyAskThreads(userId, workspaceId);
+        if (cancelled) return;
+
+        let activeId =
+          migratedId ?? (await getActiveConversationId(workspaceId, "ask"));
+
+        if (activeId) {
+          try {
+            const stored = await loadConversationMessages(activeId);
+            if (cancelled) return;
+            if (countUserMessages(stored) === 0) {
+              await deleteConversation(activeId);
+              activeId = null;
+              await setActiveConversationId(workspaceId, null, "ask");
+            } else {
+              setActiveConversationIdState(activeId);
+              setMessages(
+                stored.map((message) => ({
+                  id: message.id,
+                  role: message.role,
+                  content: message.content,
+                })),
+              );
+            }
+          } catch {
+            activeId = null;
+            await setActiveConversationId(workspaceId, null, "ask");
+          }
+        }
+
+        if (!cancelled) {
+          await refreshConversationList();
+        }
+      } catch {
+        // IndexedDB / crypto unavailable — Ask still works in-memory.
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, userId, refreshConversationList]);
+
+  useEffect(() => {
+    if (!hydrated || !workspaceId || !userId || pending) return;
+
+    const persisted = toPersistedMessages(messages);
+    const userCount = countUserMessages(persisted);
+
+    if (persistTimerRef.current !== null) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+
+    persistTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (userCount === 0) {
+            if (activeIdRef.current) {
+              await deleteConversation(activeIdRef.current);
+              await setActiveConversationId(workspaceId, null, "ask");
+              setActiveConversationIdState(null);
+              activeIdRef.current = null;
+              await refreshConversationList();
+            }
+            return;
+          }
+
+          let id = activeIdRef.current;
+          if (!id) {
+            id = crypto.randomUUID();
+            setActiveConversationIdState(id);
+            activeIdRef.current = id;
+            await setActiveConversationId(workspaceId, id, "ask");
+          }
+
+          await saveConversation({
+            id,
+            userId,
+            workspaceId,
+            messages: persisted,
+          });
+          await refreshConversationList();
+        } catch {
+          // Private mode / locked vault — ignore persist failures.
+        }
+      })();
+    }, 300);
+
+    return () => {
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [
+    messages,
+    hydrated,
+    workspaceId,
+    userId,
+    pending,
+    refreshConversationList,
+  ]);
+
+  const discardEmptyDraft = useCallback(async () => {
+    if (!workspaceId) return;
+    const current = toPersistedMessages(messagesRef.current);
+    if (countUserMessages(current) > 0) return;
+
+    const id = activeIdRef.current;
+    if (id) {
+      try {
+        await deleteConversation(id);
+        await setActiveConversationId(workspaceId, null, "ask");
+      } catch {
+        // ignore
+      }
+    }
+    setActiveConversationIdState(null);
+    activeIdRef.current = null;
+    setMessages([]);
+  }, [workspaceId]);
+
+  const openHistory = useCallback(async () => {
+    abortRef.current?.abort();
+    await discardEmptyDraft();
+    clearTransientState({
+      setPending,
+      setPendingPhase,
+      setAskMode,
+      setReasoningSteps,
+      setError,
+      setContextMatches,
+    });
+    await refreshConversationList();
+    setView("history");
+  }, [discardEmptyDraft, refreshConversationList]);
+
+  const closeHistory = useCallback(() => {
+    setView("chat");
+  }, []);
+
+  const startNewChat = useCallback(async () => {
+    abortRef.current?.abort();
+    await discardEmptyDraft();
+    clearTransientState({
+      setPending,
+      setPendingPhase,
+      setAskMode,
+      setReasoningSteps,
+      setError,
+      setContextMatches,
+    });
+    setMessages([]);
+    setActiveConversationIdState(null);
+    activeIdRef.current = null;
+    if (workspaceId) {
+      try {
+        await setActiveConversationId(workspaceId, null, "ask");
+      } catch {
+        // ignore
+      }
+    }
+    setView("chat");
+  }, [discardEmptyDraft, workspaceId]);
+
+  const openConversation = useCallback(
+    async (conversationId: string) => {
+      if (!workspaceId) return;
+      abortRef.current?.abort();
+      await discardEmptyDraft();
+      clearTransientState({
+        setPending,
+        setPendingPhase,
+        setAskMode,
+        setReasoningSteps,
+        setError,
+        setContextMatches,
+      });
+
+      try {
+        const stored = await loadConversationMessages(conversationId);
+        setActiveConversationIdState(conversationId);
+        activeIdRef.current = conversationId;
+        setMessages(
+          stored.map((message) => ({
+            id: message.id,
+            role: message.role,
+            content: message.content,
+          })),
+        );
+        await setActiveConversationId(workspaceId, conversationId, "ask");
+        setView("chat");
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not open conversation",
+        );
+        setView("history");
+      }
+    },
+    [discardEmptyDraft, workspaceId],
+  );
+
+  const removeConversation = useCallback(
+    async (conversationId: string) => {
+      try {
+        await deleteConversation(conversationId);
+        if (activeIdRef.current === conversationId) {
+          setActiveConversationIdState(null);
+          activeIdRef.current = null;
+          setMessages([]);
+          if (workspaceId) {
+            await setActiveConversationId(workspaceId, null, "ask");
+          }
+        }
+        await refreshConversationList();
+      } catch {
+        setError("Could not delete conversation");
+      }
+    },
+    [refreshConversationList, workspaceId],
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -104,9 +421,9 @@ export function useAskChat(workspaceId: string | null) {
       let sourcesUsed: AskSourceUsed[] = [];
       let charts: AskChartPayload[] = [];
 
+      setView("chat");
       setMessages(nextMessages);
       setPending(true);
-      // Client-side intent preview so we don't flash "Searching your library…" for 1+1=
       const previewTools = await runMatchingAskTools(text);
       const toolOnlyPreview = isToolOnlyQuestion(text, previewTools);
       setAskMode(toolOnlyPreview ? "tools" : "knowledge");
@@ -148,6 +465,17 @@ export function useAskChat(workspaceId: string | null) {
         const decoder = new TextDecoder();
         let buffer = "";
         let streamError: string | null = null;
+        let generatingWatchdog: ReturnType<typeof setTimeout> | null = null;
+
+        const armGeneratingWatchdog = () => {
+          if (generatingWatchdog) clearTimeout(generatingWatchdog);
+          generatingWatchdog = setTimeout(() => {
+            streamError = "Answer timed out waiting for Rhodes";
+            setError(streamError);
+            void reader.cancel().catch(() => undefined);
+            controller.abort();
+          }, 120_000);
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -193,7 +521,11 @@ export function useAskChat(workspaceId: string | null) {
               );
             }
 
-            if (payload.type === "reasoning_step" && payload.label && payload.verdict) {
+            if (
+              payload.type === "reasoning_step" &&
+              payload.label &&
+              payload.verdict
+            ) {
               setPendingPhase("reranking");
               setReasoningSteps((prev) => [
                 ...prev,
@@ -203,9 +535,14 @@ export function useAskChat(workspaceId: string | null) {
 
             if (payload.type === "reasoning_done") {
               setPendingPhase("generating");
+              armGeneratingWatchdog();
             }
 
             if (payload.type === "token" && payload.token) {
+              if (generatingWatchdog) {
+                clearTimeout(generatingWatchdog);
+                generatingWatchdog = null;
+              }
               setPendingPhase("generating");
               setMessages((prev) =>
                 prev.map((message) =>
@@ -216,7 +553,10 @@ export function useAskChat(workspaceId: string | null) {
               );
             }
 
-            if (payload.type === "sources_used" && Array.isArray(payload.sources)) {
+            if (
+              payload.type === "sources_used" &&
+              Array.isArray(payload.sources)
+            ) {
               sourcesUsed = payload.sources;
               setMessages((prev) =>
                 prev.map((message) =>
@@ -233,6 +573,8 @@ export function useAskChat(workspaceId: string | null) {
             }
           }
         }
+
+        if (generatingWatchdog) clearTimeout(generatingWatchdog);
 
         if (streamError) {
           setMessages((prev) =>
@@ -255,7 +597,14 @@ export function useAskChat(workspaceId: string | null) {
           );
         }
       } catch (err) {
-        if (!controller.signal.aborted) {
+        if (controller.signal.aborted) {
+          setMessages((prev) =>
+            prev.filter(
+              (message) =>
+                message.id !== assistantId || message.content.trim().length > 0,
+            ),
+          );
+        } else {
           setError(err instanceof Error ? err.message : "Ask failed");
         }
       } finally {
@@ -271,6 +620,11 @@ export function useAskChat(workspaceId: string | null) {
     [messages, pending, workspaceId],
   );
 
+  const isBlankChat =
+    view === "chat" &&
+    activeConversationId === null &&
+    countUserMessages(toPersistedMessages(messages)) === 0;
+
   return {
     messages,
     pending,
@@ -279,7 +633,21 @@ export function useAskChat(workspaceId: string | null) {
     reasoningSteps,
     error,
     contextMatches,
+    view,
+    conversations,
+    activeConversationId,
+    isBlankChat,
+    hydrated,
     sendMessage,
-    reset,
+    openHistory,
+    closeHistory,
+    startNewChat,
+    openConversation,
+    deleteConversation: removeConversation,
+    /** Clears React Ask state; call with lockVault on logout. */
+    reset: () => {
+      resetSessionUi();
+      lockVault();
+    },
   };
 }

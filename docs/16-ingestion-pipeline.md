@@ -87,14 +87,25 @@ On document save (debounced):
 
 ### Bulk re-index (metadata upgrade)
 
-Do **not** wipe storage. Re-run in place:
+Do **not** wipe storage. Re-run in place with the Docker stack (Postgres + Redis + worker + Tika + Ollama) running:
 
 ```bash
-pnpm library:reindex          # re-ingest ready library sources
-pnpm documents:reindex        # enqueue document-embed for all docs with content
+# From repo root — worker must be up to process jobs
+pnpm library:reindex          # re-ingest ready library sources (chunk metadata / extractors)
+pnpm documents:reindex        # enqueue document-embed for all docs with content_plain
 ```
 
-Optional filters: `--workspace=<uuid>`, `--limit=N`, `--concurrency=2` (library).
+Optional filters:
+
+| Flag | Applies to | Purpose |
+|------|------------|---------|
+| `--workspace=<uuid>` | both | Limit to one workspace |
+| `--limit=N` | library | Cap how many sources to enqueue |
+| `--concurrency=2` | library | Parallel enqueue (default 2) |
+
+**When to run:** after changing chunk packing, embedding model, or library extractors; after restoring a DB dump that has files but stale chunks; when Ask/Library answers look empty despite `ready` sources.
+
+**Verify soak:** upload a small PDF → status `pending → ready`; Ask a question that should cite it; Cmd+K finds the document by title and the library file by name.
 
 ## Open questions
 

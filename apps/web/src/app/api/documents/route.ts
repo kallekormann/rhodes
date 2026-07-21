@@ -35,6 +35,8 @@ export async function GET(request: Request) {
   const parsed = listDocumentsQuerySchema.safeParse({
     workspace_id: searchParams.get("workspace_id"),
     filter: searchParams.get("filter") ?? "recent",
+    q: searchParams.get("q") ?? undefined,
+    limit: searchParams.get("limit") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -159,7 +161,15 @@ export async function GET(request: Request) {
     "metadata->template_draft.is.null,metadata->template_draft.eq.false",
   );
 
-  if (parsed.data.filter === "recent") {
+  if (parsed.data.q) {
+    // Escape LIKE wildcards so user input is literal
+    const needle = parsed.data.q.replace(/[%_\\]/g, "\\$&");
+    query = query.ilike("title", `%${needle}%`);
+  }
+
+  if (parsed.data.limit) {
+    query = query.limit(parsed.data.limit);
+  } else if (parsed.data.filter === "recent") {
     query = query.limit(50);
   }
 
@@ -173,6 +183,11 @@ export async function GET(request: Request) {
     return withSecurityHeaders(
       NextResponse.json({ error: error.message }, { status: 400 }),
     );
+  }
+
+  // Cmd+K / title search: return lean rows without share enrichment
+  if (parsed.data.q) {
+    return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
   }
 
   const includePersonalUserShares = await workspaceAcceptsPersonalUserShares(

@@ -28,13 +28,14 @@ flowchart LR
 
 ```
 rhodes-db/
-├── documents/{id}     — content, title, updated_at, sync_status
-├── outbox/            — pending mutations queue
-├── ask_threads/{id}   — Ask chat history (client-only; never synced to server)
-└── meta/              — last_sync_cursor, active_space_id, client_id
+├── documents/{id}       — content, title, updated_at, sync_status
+├── outbox/              — pending mutations queue
+├── conversations/{id}   — encrypted Ask history (client-only; never synced)
+├── vault/{userId}       — per-user AES-GCM DEK (device-local)
+└── meta/                — client_id, active_conversation:…
 ```
 
-**Ask threads (privacy-locked):** store user↔Rhodes messages locally only (keyed by user + document and/or workspace). Do **not** sync Ask history to Postgres. Live Ask API calls may send the current question for RAG; durable chat storage stays on-device. See [06-ai-chat.md](06-ai-chat.md).
+**Ask conversations (privacy-locked):** multi-conversation History locally only (workspace-scoped `kind: "ask"`). Message bodies encrypted at rest; do **not** sync Ask history to Postgres. Logout keeps ciphertext and locks the in-memory vault key; account delete wipes local Ask data. Live Ask API calls may send the current question for RAG; durable chat storage stays on-device. See [06-ai-chat.md](06-ai-chat.md).
 
 ### Sync protocol
 

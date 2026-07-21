@@ -1,0 +1,106 @@
+.ask-panel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  margin-bottom: var(--space-sm);
+  min-height: 28px;
+}
+
+.ask-panel__toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ask-panel__history {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-sm);
+}
+
+.ask-panel__history-empty {
+  margin: var(--space-md) 0 0;
+  color: var(--color-text-tertiary);
+}
+
+.ask-panel__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ask-panel__history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) ease;
+}
+
+.ask-panel__history-row:hover {
+  background: var(--color-bg-elevated);
+}
+
+.ask-panel__history-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 2px 8px;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  border-radius: var(--radius-md);
+}
+
+.ask-panel__history-open:hover,
+.ask-panel__history-open:focus-visible {
+  outline: none;
+}
+
+.ask-panel__history-title {
+  grid-column: 1;
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ask-panel__history-meta {
+  grid-column: 2;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.ask-panel__history-preview {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ask-panel__history-delete {
+  flex-shrink: 0;
+  margin-top: 6px;
+  opacity: 0.55;
+}
+
+.ask-panel__history-row:hover .ask-panel__history-delete,
+.ask-panel__history-delete:focus-visible {
+  opacity: 1;
+}

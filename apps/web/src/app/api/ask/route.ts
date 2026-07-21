@@ -45,7 +45,7 @@ function formatSse(data: Record<string, unknown>) {
 async function streamOllamaTokens(
   prompt: string,
   send: (payload: Record<string, unknown>) => void,
-  options?: { preferFast?: boolean },
+  options?: { preferFast?: boolean; signal?: AbortSignal },
 ): Promise<void> {
   const ollama = createOllamaClient();
   const chatModel = resolveOllamaAskModel();
@@ -60,7 +60,12 @@ async function streamOllamaTokens(
 
   for (const model of models) {
     try {
-      for await (const token of ollama.streamGenerate(prompt, model)) {
+      for await (const token of ollama.streamGenerate(prompt, model, {
+        signal: options?.signal,
+      })) {
+        if (options?.signal?.aborted) {
+          throw new Error("Ollama request aborted");
+        }
         streamed = true;
         send({ type: "token", token });
       }
@@ -312,7 +317,7 @@ export async function POST(request: Request) {
           toolResults: toolPrompt || null,
         })}`;
 
-        await streamOllamaTokens(prompt, send);
+        await streamOllamaTokens(prompt, send, { signal: request.signal });
 
         const sources =
           kept.length > 0

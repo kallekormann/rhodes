@@ -55,24 +55,30 @@ export function useCmdKSearch(
 
     void (async () => {
       try {
-        const docFilter = q ? "all" : "recent";
-        const docsPromise = fetch(
-          `/app/api/documents?workspace_id=${encodeURIComponent(workspaceId)}&filter=${docFilter}`,
-          { signal: controller.signal },
-        ).then(async (response) => {
+        const docsParams = new URLSearchParams({
+          workspace_id: workspaceId,
+          limit: String(DOC_LIMIT),
+        });
+        if (q) {
+          docsParams.set("filter", "all");
+          docsParams.set("q", q);
+        } else {
+          docsParams.set("filter", "recent");
+        }
+
+        const docsPromise = fetch(`/app/api/documents?${docsParams}`, {
+          signal: controller.signal,
+        }).then(async (response) => {
           if (!response.ok) return [] as CmdKDocumentHit[];
           const data = (await response.json()) as {
             documents?: Array<{ id: string; title?: string | null }>;
           };
-          let rows = (data.documents ?? []).map((doc) => ({
-            id: doc.id,
-            title: (doc.title ?? "").trim() || "Untitled",
-          }));
-          if (q) {
-            const needle = q.toLowerCase();
-            rows = rows.filter((doc) => doc.title.toLowerCase().includes(needle));
-          }
-          return rows.slice(0, DOC_LIMIT);
+          return (data.documents ?? [])
+            .map((doc) => ({
+              id: doc.id,
+              title: (doc.title ?? "").trim() || "Untitled",
+            }))
+            .slice(0, DOC_LIMIT);
         });
 
         const libraryPromise =
@@ -96,7 +102,7 @@ export function useCmdKSearch(
         if (controller.signal.aborted) return;
         setDocuments(docs);
         setLibrary(lib);
-      } catch (error) {
+      } catch {
         if (controller.signal.aborted) return;
         setDocuments([]);
         setLibrary([]);

@@ -126,7 +126,10 @@ export function DocumentsView() {
   };
 
   const emptyMessage = (() => {
-    if (filter.trim() || propertyFilter !== ANY_PROPERTY) {
+    if (propertyFilter !== ANY_PROPERTY && filterField) {
+      return `No documents with ${filterField.field_label.toLowerCase()} “${formatMetadataOptionLabel(propertyFilter)}”.`;
+    }
+    if (filter.trim()) {
       return "No documents match this search.";
     }
     if (tab === "favorites") {
@@ -200,6 +203,7 @@ export function DocumentsView() {
                   onChange={setFilter}
                   icon={<Search size={18} strokeWidth={1.75} />}
                   className="documents-toolbar__search"
+                  aria-label="Search documents by title"
                 />
                 {filterField && filterOptions.length > 0 && (
                   <Dropdown
@@ -207,6 +211,7 @@ export function DocumentsView() {
                     className="documents-toolbar__property"
                     value={propertyFilter}
                     placeholder={filterField.field_label}
+                    aria-label={`Filter by ${filterField.field_label}`}
                     options={[
                       {
                         id: ANY_PROPERTY,
@@ -245,7 +250,9 @@ export function DocumentsView() {
             ) : error ? (
               <p className="documents-empty caption">{error}</p>
             ) : filtered.length === 0 ? (
-              <p className="documents-empty caption">{emptyMessage}</p>
+              <p className="documents-empty caption" role="status">
+                {emptyMessage}
+              </p>
             ) : (
               groups.map((group) => (
                 <div key={group} className="doc-group">

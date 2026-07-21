@@ -220,6 +220,7 @@ export function LibraryView() {
               onChange={setSearchDraft}
               icon={<Search size={18} strokeWidth={1.75} />}
               className="library-toolbar__search"
+              aria-label="Search library by file name"
             />
             <div className="library-toolbar__filters">
               <Dropdown

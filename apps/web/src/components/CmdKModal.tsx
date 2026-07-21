@@ -179,6 +179,11 @@ export function CmdKModal() {
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCmdK();
+      return;
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       if (items.length === 0) return;
@@ -222,12 +227,22 @@ export function CmdKModal() {
             items[activeIndex] ? `${listId}-${items[activeIndex].id}` : undefined
           }
         />
-        <ul className="cmdk-list" id={listId} role="listbox">
+        <ul
+          className="cmdk-list"
+          id={listId}
+          role="listbox"
+          aria-label="Search results"
+          aria-busy={loading}
+        >
           {loading && items.length === 0 && (
-            <li className="cmdk-list__empty">Searching…</li>
+            <li className="cmdk-list__empty" role="status">
+              Searching…
+            </li>
           )}
           {!loading && items.length === 0 && (
-            <li className="cmdk-list__empty">No matches</li>
+            <li className="cmdk-list__empty" role="status">
+              No matches
+            </li>
           )}
           {items.map((item, index) => {
             const showSection = item.section !== lastSection;

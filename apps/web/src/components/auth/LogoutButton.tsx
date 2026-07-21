@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/Button";
 import { signOutAction } from "@/lib/auth/actions";
+import { lockVault } from "@/lib/offline/ask-vault";
+import { clearSyncedOfflineCache } from "@/lib/offline/db";
 import { createClient } from "@/lib/supabase/client";
 
 export function LogoutButton() {
@@ -16,6 +18,15 @@ export function LogoutButton() {
       onClick={async () => {
         setLoading(true);
         localStorage.removeItem("rhodes:active_workspace");
+
+        // Drop in-memory Ask DEK; keep encrypted conversations on device.
+        lockVault();
+
+        try {
+          await clearSyncedOfflineCache();
+        } catch {
+          // Private mode / blocked IndexedDB — continue sign-out.
+        }
 
         try {
           const supabase = createClient();

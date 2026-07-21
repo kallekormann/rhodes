@@ -32,7 +32,7 @@
 
 ## Open (deferred / Phase 09+)
 
-1. **UX audit** — screen-by-screen checklist + bug-fix sprint
+1. ~~**UX audit** — screen-by-screen checklist + bug-fix sprint~~ → closed in Phase 08.5 Wave B
 2. **Remote cursors** — `UserAvatar` instead of initials in collaboration overlay
 3. **Theme persistence** — `profiles.theme_mode` migration (optional P2)
 4. **Additional scope view catalog** — populate `ADDITIONAL_SCOPE_VIEW_CATALOG` when product defines views

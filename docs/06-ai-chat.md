@@ -79,9 +79,16 @@ Live prompt in `packages/ai/src/prompts.ts` (`askSystemPrompt` / `askUserPrompt`
 
 ### Persistence
 
-**V1:** ephemeral in React state (session only).
+**Client-only (D-013 / Phase 09):** Ask conversations live in IndexedDB as **encrypted** message payloads (AES-GCM). Titles/previews stay plaintext for the History list. **Never** store Ask transcripts in Postgres / `chat_sessions`.
 
-**With Phase 09 offline / IndexedDB (locked):** persist Ask threads **only on the client**. **Must not** store Ask transcripts in Postgres / `chat_sessions`.
+| Event | Local Ask history |
+|-------|-------------------|
+| Reload | Restored (last active conversation + History list) |
+| Logout | **Kept** (ciphertext stays; in-memory vault key cleared) |
+| Account delete | **Wiped** (`wipeAskDataForUser` / `clearOfflineCache`) |
+| Server | Never |
+
+**UX:** blank new chat shows History only; an open conversation shows History + New chat; History list shows New chat plus open/delete rows. Empty drafts (no user messages) are discarded when leaving.
 
 ### Spellcheck (Editor + Writing Coach)
 
@@ -100,8 +107,8 @@ If LLM queue full or timeout:
 
 ## Open questions
 
-- Chat history pinned to document vs workspace-wide in IndexedDB? (prefer document-scoped)
-- Clear Ask IndexedDB on logout / account delete (yes — same as other local cache)
+- Chat history pinned to document vs workspace-wide in IndexedDB? (**Locked:** workspace-scoped `kind: "ask"`; optional `document_id` later)
+- Clear Ask IndexedDB on logout / account delete? (**Locked:** logout keeps ciphertext + locks vault; account delete wipes)
 
 ## Dependencies
 

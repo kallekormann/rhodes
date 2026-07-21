@@ -1,10 +1,12 @@
 # Phase 09 — Offline Sync
 
-**Status:** planned  
+**Status:** in progress  
 **Depends on:** Phase 05  
 **Blocks:** Phase 13  
 **Estimated duration:** 5–7 days  
 **Can parallel with:** Phases 10–12 (after Phase 08 recommended for conflict UX)
+
+**Started:** July 21, 2026 — IndexedDB scaffold (`lib/offline/db.ts`) + encrypted multi-conversation Ask history (never synced). Outbox / document offline sync still open.
 
 ---
 
@@ -14,7 +16,7 @@
 2. Build **outbox sync** protocol: write locally first, push on reconnect.
 3. Handle **conflicts** with LWW + version branch + user notification.
 4. Meet NFR DoD #4: editor writable offline; syncs without data loss.
-5. Persist **Ask chat history client-only** in IndexedDB (never on server — privacy).
+5. Persist **Ask chat history client-only** in IndexedDB — multi-conversation, AES-GCM encrypted payloads, never on server (privacy / D-013).
 
 ---
 
@@ -63,16 +65,18 @@ apps/web/src/
 ## IndexedDB schema
 
 ```
-rhodes-db (version 1)
+rhodes-db (version 2)
 ├── documents/{id}        # { id, workspace_id, title, content, content_plain, updated_at, sync_status }
 ├── outbox/{id}           # { id, document_id, mutation, payload, created_at, retries }
-├── ask_threads/{id}      # client-only Ask history — NEVER synced to server (privacy)
-└── meta/last_sync        # { workspace_id, cursor, client_id }
+├── conversations/{id}    # encrypted Ask history — NEVER synced (privacy)
+├── vault/{userId}        # per-user AES-GCM DEK (JWK) — device-local
+├── ask_threads/{id}      # deprecated v1 plaintext — migrated then deleted
+└── meta/{key}            # client_id, active_conversation:workspace:kind
 ```
 
 **`sync_status`:** `synced` | `pending` | `conflict`
 
-**Ask threads (locked):** Persist Ask conversations in IndexedDB only (user + document/workspace scoped). Do not create a server `chat_sessions` table. Clear on logout / account delete with the rest of the local cache. Spec: [06-ai-chat.md](../docs/06-ai-chat.md), [12-offline-sync.md](../docs/12-offline-sync.md).
+**Ask conversations (locked):** Multi-conversation History in IndexedDB only (`kind: "ask"`). Message bodies AES-GCM ciphertext; titles/previews plaintext for list UX. Unlock DEK on login; **logout locks vault in memory but keeps ciphertext**; **account delete wipes** conversations + vault. Do not create a server `chat_sessions` table. Spec: [06-ai-chat.md](../docs/06-ai-chat.md), [12-offline-sync.md](../docs/12-offline-sync.md).
 
 ---
 
@@ -80,26 +84,11 @@ rhodes-db (version 1)
 
 ### 1. IndexedDB setup
 
-Use [`idb`](https://github.com/jakearchibald/idb) package:
-
-```typescript
-export async function getDB() {
-  return openDB('rhodes-db', 1, {
-    upgrade(db) {
-      db.createObjectStore('documents', { keyPath: 'id' });
-      db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
-      db.createObjectStore('ask_threads', { keyPath: 'id' }); // client-only; never synced
-      db.createObjectStore('meta');
-    },
-  });
-}
-```
-
-Generate `client_id` (UUID) once per browser; store in `meta`.
+Use [`idb`](https://github.com/jakearchibald/idb) package — **done** in [`apps/web/src/lib/offline/db.ts`](../apps/web/src/lib/offline/db.ts) (`rhodes-db` v2: documents, outbox, conversations, vault, meta; legacy `ask_threads` migrated). Ask crypto: [`ask-vault.ts`](../apps/web/src/lib/offline/ask-vault.ts), CRUD: [`conversations.ts`](../apps/web/src/lib/offline/conversations.ts).
 
 ### 1b. Ask chat local persistence
 
-Wire `useAskChat` to load/save threads in `ask_threads` (document-scoped preferred). Never enqueue Ask messages in `outbox`. Clear store on logout.
+**Done:** multi-conversation encrypted History via `useAskChat` + `ask-vault` / `conversations`. Logout calls `lockVault()` + `clearSyncedOfflineCache()` (keeps ciphertext). Account delete uses `wipeAskDataForUser` / `clearOfflineCache`. Charts/sources are not rehydrated (text transcript only). Never enqueue Ask messages in `outbox`.
 
 ### 2. Write path (local-first)
 
@@ -162,8 +151,9 @@ When server `updated_at` > local at push time:
 ### 7. Logout behavior
 
 On logout ([22-authentication-and-accounts.md](../docs/22-authentication-and-accounts.md)):
-- Clear IndexedDB for active space (or entire DB)
-- Prevents data leak to next user on shared machine
+- Clear synced document/outbox cache (`clearSyncedOfflineCache`)
+- **Lock** Ask vault DEK in memory (`lockVault`) — **keep** encrypted conversations + vault JWK on device
+- On account delete: wipe Ask data (`wipeAskDataForUser` / `clearOfflineCache`)
 
 ### 8. Service worker (deferred)
 

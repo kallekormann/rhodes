@@ -25,6 +25,9 @@ export const updateDocumentSchema = z.object({
 export const listDocumentsQuerySchema = z.object({
   workspace_id: z.string().uuid(),
   filter: documentFilterSchema.default("recent"),
+  /** Title search (Cmd+K / discovery). */
+  q: z.string().trim().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export type DocumentFilter = z.infer<typeof documentFilterSchema>;
