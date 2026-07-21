@@ -32,6 +32,7 @@ import {
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
+import { upgradeCopyForFeature } from "@/lib/features/upgrade-copy";
 import { DocumentHistorySection, type ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import "./PropertiesTab.css";
 import "@/components/panel-shell.css";
@@ -224,7 +225,8 @@ export function PropertiesTab({
   onVersionRestored,
   onNavigateToActivity,
 }: PropertiesTabProps) {
-  const { showToast } = useApp();
+  const { showToast, featureGates } = useApp();
+  const canManageProperties = featureGates.can("properties.manage");
 
   const [internalStage, setInternalStage] = useState<PropertiesPanelStage>("view");
   const stage = stageProp ?? internalStage;
@@ -321,7 +323,13 @@ export function PropertiesTab({
     }
   };
 
-  const openManage = () => setStage("manage");
+  const openManage = () => {
+    if (!canManageProperties) {
+      showToast(upgradeCopyForFeature("properties.manage"), "info");
+      return;
+    }
+    setStage("manage");
+  };
 
   const openAdd = (tab: PropertyAddTab = "customSingle") => {
     setAddTab(tab);
@@ -552,7 +560,15 @@ export function PropertiesTab({
     if (mode !== "document") return null;
 
     if (stage === "view") {
-      return <PanelActionBar end={<Button onClick={openManage}>Manage</Button>} />;
+      return (
+        <PanelActionBar
+          end={
+            <Button onClick={openManage} disabled={!canManageProperties}>
+              Manage
+            </Button>
+          }
+        />
+      );
     }
 
     if (stage === "manage") {

@@ -71,6 +71,7 @@ export type DocumentVersionSummary = {
   document_id: string;
   workspace_id: string;
   changed_by: string | null;
+  changed_by_name?: string | null;
   change_summary: string | null;
   created_at: string;
 };

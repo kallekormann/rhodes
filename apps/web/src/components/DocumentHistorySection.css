@@ -145,3 +145,9 @@
   font-size: 11px;
   color: var(--color-text-tertiary);
 }
+
+.document-history__version-author {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}

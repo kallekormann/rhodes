@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { tierVersionHistoryRetention } from "@rhodes/shared/tiers";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { resolveServerTier } from "@/lib/features/server-gates";
 import { extractPlainText } from "@/lib/documents/plain-text";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,6 +22,9 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
+  const tier = resolveServerTier();
+  const retentionLimit = tierVersionHistoryRetention(tier);
+
   const { data, error } = await supabase
     .from("document_versions")
     .select(
@@ -27,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
     )
     .eq("document_id", id)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(retentionLimit);
 
   if (error) {
     return withSecurityHeaders(
@@ -35,7 +40,38 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  return withSecurityHeaders(NextResponse.json({ versions: data ?? [] }));
+  const versions = data ?? [];
+  const authorIds = [
+    ...new Set(
+      versions
+        .map((version) => version.changed_by)
+        .filter((authorId): authorId is string => typeof authorId === "string"),
+    ),
+  ];
+
+  const authorNames = new Map<string, string>();
+  if (authorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", authorIds);
+
+    for (const profile of profiles ?? []) {
+      const label = profile.display_name?.trim();
+      if (label) {
+        authorNames.set(profile.id, label);
+      }
+    }
+  }
+
+  const enriched = versions.map((version) => ({
+    ...version,
+    changed_by_name: version.changed_by
+      ? authorNames.get(version.changed_by) ?? "Workspace member"
+      : null,
+  }));
+
+  return withSecurityHeaders(NextResponse.json({ versions: enriched }));
 }
 
 export async function POST(request: Request, context: RouteContext) {

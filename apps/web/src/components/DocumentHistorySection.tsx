@@ -167,6 +167,11 @@ export function DocumentHistorySection({
                 <time className="document-history__version-time" dateTime={version.created_at}>
                   {formatActivityTimestamp(version.created_at)}
                 </time>
+                {version.changed_by_name && (
+                  <p className="document-history__version-author caption">
+                    {version.changed_by_name}
+                  </p>
+                )}
               </div>
               <Button
                 variant="secondary"

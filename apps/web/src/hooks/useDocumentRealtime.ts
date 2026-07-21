@@ -2,69 +2,112 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  activityActionLabel,
-  formatActivityDetail,
-  type EnrichedActivityRecord,
-} from "@/lib/documents/activity-display";
-import type { DocumentActivityEventType } from "@/lib/documents/activity";
+import type { EnrichedActivityRecord } from "@/lib/documents/activity-display";
 import type { DocumentRecord } from "@/hooks/useDocument";
+import {
+  mapActivityToRemoteNotice,
+  pickLatestOtherActivity,
+  pickLatestOtherActivitySince,
+  type DocumentRemoteNotice,
+} from "@/lib/documents/remote-document-notice";
+import { ensureRealtimeAuth } from "@/lib/supabase/ensure-realtime-auth";
 
 type RemoteDocumentUpdate = {
   updated_at: string;
 };
 
-export type DocumentRemoteConflict = {
-  updatedAt: string;
-  actorId: string | null;
-  actorLabel: string;
-  actionLabel: string;
-  detail: string | null;
-};
-
-export type DocumentAwayNotice = DocumentRemoteConflict;
+export type DocumentRemoteConflict = DocumentRemoteNotice;
+export type DocumentAwayNotice = DocumentRemoteNotice;
 
 type UseDocumentRealtimeOptions = {
   documentId: string | null;
-  currentUserId: string;
   enabled?: boolean;
   isDirty: boolean;
+  isTyping: boolean;
+  currentUserId?: string;
+  getLocalContentPlain?: () => string;
   onRemoteUpdate: (record: DocumentRecord) => void | Promise<void>;
 };
 
-const FALLBACK_POLL_MS = 2_000;
-const OWN_SAVE_GRACE_MS = 3_000;
+const FALLBACK_POLL_MS = 1_000;
 
-function mapActivityEntry(entry: EnrichedActivityRecord): DocumentRemoteConflict {
-  const payload =
-    entry.payload && typeof entry.payload === "object"
-      ? (entry.payload as Record<string, unknown>)
-      : {};
-
-  return {
-    updatedAt: entry.created_at,
-    actorId: entry.actor_id,
-    actorLabel: entry.actor_display_name?.trim() || "Someone",
-    actionLabel: activityActionLabel(entry.event_type as DocumentActivityEventType),
-    detail:
-      formatActivityDetail(entry.event_type as DocumentActivityEventType, payload) ??
-      entry.summary,
-  };
+async function fetchDocumentActivity(
+  documentId: string,
+): Promise<EnrichedActivityRecord[]> {
+  const response = await fetch(`/app/api/documents/${documentId}/activity?limit=20`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return [];
+  return (data.activity as EnrichedActivityRecord[]) ?? [];
 }
 
 export function useDocumentRealtime({
   documentId,
-  currentUserId,
   enabled = true,
   isDirty,
+  isTyping,
+  currentUserId,
+  getLocalContentPlain,
   onRemoteUpdate,
 }: UseDocumentRealtimeOptions) {
   const [live, setLive] = useState(false);
-  const [conflict, setConflict] = useState<DocumentRemoteConflict | null>(null);
+  const [remoteConflict, setRemoteConflict] = useState<DocumentRemoteConflict | null>(
+    null,
+  );
   const lastAppliedUpdatedAtRef = useRef<string | null>(null);
-  const ownSaveGraceUntilRef = useRef(0);
+  const isDirtyRef = useRef(isDirty);
+  const isTypingRef = useRef(isTyping);
+  const currentUserIdRef = useRef(currentUserId);
   const onRemoteUpdateRef = useRef(onRemoteUpdate);
+  const getLocalContentPlainRef = useRef(getLocalContentPlain);
+  isDirtyRef.current = isDirty;
+  isTypingRef.current = isTyping;
+  currentUserIdRef.current = currentUserId;
   onRemoteUpdateRef.current = onRemoteUpdate;
+  getLocalContentPlainRef.current = getLocalContentPlain;
+
+  const dismissConflict = useCallback(() => {
+    setRemoteConflict(null);
+  }, []);
+
+  const buildConflictNotice = useCallback(
+    async (updatedAt: string): Promise<DocumentRemoteConflict> => {
+      if (!documentId) {
+        return {
+          updatedAt,
+          actorId: null,
+          actorLabel: "A collaborator",
+          actionLabel: "edited the document",
+          detail: null,
+        };
+      }
+
+      const entries = await fetchDocumentActivity(documentId);
+      const entry = pickLatestOtherActivity(
+        entries,
+        currentUserIdRef.current ?? "",
+      );
+      if (entry) {
+        return mapActivityToRemoteNotice(entry);
+      }
+
+      return {
+        updatedAt,
+        actorId: null,
+        actorLabel: "A collaborator",
+        actionLabel: "edited the document",
+        detail: null,
+      };
+    },
+    [documentId],
+  );
+
+  const flagConflict = useCallback(
+    async (updatedAt: string) => {
+      const notice = await buildConflictNotice(updatedAt);
+      setRemoteConflict(notice);
+    },
+    [buildConflictNotice],
+  );
 
   const fetchLatest = useCallback(async (): Promise<DocumentRecord | null> => {
     if (!documentId) return null;
@@ -75,72 +118,48 @@ export function useDocumentRealtime({
     return (data.document as DocumentRecord) ?? null;
   }, [documentId]);
 
-  const fetchLatestOtherActivity =
-    useCallback(async (): Promise<DocumentRemoteConflict | null> => {
-      if (!documentId) return null;
-
-      const response = await fetch(`/app/api/documents/${documentId}/activity?limit=5`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) return null;
-
-      const entry = (data.activity as EnrichedActivityRecord[] | undefined)?.find(
-        (row) => row.actor_id && row.actor_id !== currentUserId,
-      );
-      if (!entry) return null;
-      return mapActivityEntry(entry);
-    }, [currentUserId, documentId]);
-
   const applyRemote = useCallback(
-    async (remoteUpdatedAt: string) => {
-      if (Date.now() < ownSaveGraceUntilRef.current) {
-        lastAppliedUpdatedAtRef.current = remoteUpdatedAt;
+    async (remoteUpdatedAt: string, force = false) => {
+      if (!force && remoteUpdatedAt === lastAppliedUpdatedAtRef.current) {
+        return;
+      }
+
+      if (!force && isDirtyRef.current) {
+        if (isTypingRef.current) {
+          return;
+        }
+        await flagConflict(remoteUpdatedAt);
         return;
       }
 
       const latest = await fetchLatest();
       if (!latest) return;
 
-      const notice = await fetchLatestOtherActivity();
-
-      if (isDirty) {
-        if (notice) {
-          setConflict(notice);
-        } else {
-          setConflict({
-            updatedAt: remoteUpdatedAt,
-            actorId: null,
-            actorLabel: "Someone",
-            actionLabel: "edited the document",
-            detail: null,
-          });
-        }
-        return;
-      }
-
       await onRemoteUpdateRef.current(latest);
       lastAppliedUpdatedAtRef.current = latest.updated_at;
-      setConflict(null);
+      setRemoteConflict(null);
     },
-    [fetchLatest, fetchLatestOtherActivity, isDirty],
+    [fetchLatest, flagConflict],
   );
-
-  const dismissConflict = useCallback(() => {
-    setConflict(null);
-  }, []);
 
   const reloadRemote = useCallback(async () => {
     const latest = await fetchLatest();
     if (!latest) return null;
     await onRemoteUpdateRef.current(latest);
     lastAppliedUpdatedAtRef.current = latest.updated_at;
-    setConflict(null);
+    setRemoteConflict(null);
     return latest;
   }, [fetchLatest]);
 
+  const keepLocal = useCallback(() => {
+    if (remoteConflict?.updatedAt) {
+      lastAppliedUpdatedAtRef.current = remoteConflict.updatedAt;
+    }
+    setRemoteConflict(null);
+  }, [remoteConflict?.updatedAt]);
+
   const markSynced = useCallback((updatedAt: string) => {
     lastAppliedUpdatedAtRef.current = updatedAt;
-    ownSaveGraceUntilRef.current = Date.now() + OWN_SAVE_GRACE_MS;
-    setConflict(null);
   }, []);
 
   useEffect(() => {
@@ -171,19 +190,43 @@ export function useDocumentRealtime({
 
           void applyRemote(remoteUpdatedAt);
         },
-      )
-      .subscribe((status) => {
+      );
+
+    void (async () => {
+      await ensureRealtimeAuth(supabase);
+      if (cancelled) return;
+
+      channel.subscribe((status) => {
         if (!cancelled) {
           setLive(status === "SUBSCRIBED");
         }
       });
+    })();
 
     const poll = setInterval(() => {
       void (async () => {
         const latest = await fetchLatest();
         if (!latest) return;
-        if (latest.updated_at === lastAppliedUpdatedAtRef.current) return;
-        await applyRemote(latest.updated_at);
+
+        const remotePlain = latest.content_plain?.trim() ?? "";
+        const localPlain = getLocalContentPlainRef.current?.().trim() ?? "";
+        const timestampMatches =
+          latest.updated_at === lastAppliedUpdatedAtRef.current;
+        const contentDrift =
+          timestampMatches &&
+          localPlain !== remotePlain &&
+          !(isDirtyRef.current && isTypingRef.current);
+
+        if (timestampMatches && !contentDrift) {
+          return;
+        }
+
+        if (contentDrift && isDirtyRef.current) {
+          await flagConflict(latest.updated_at);
+          return;
+        }
+
+        await applyRemote(latest.updated_at, contentDrift);
       })();
     }, FALLBACK_POLL_MS);
 
@@ -193,13 +236,14 @@ export function useDocumentRealtime({
       void supabase.removeChannel(channel);
       setLive(false);
     };
-  }, [applyRemote, documentId, enabled, fetchLatest]);
+  }, [applyRemote, documentId, enabled, fetchLatest, flagConflict]);
 
   return {
     live,
-    conflict,
+    remoteConflict,
     dismissConflict,
     reloadRemote,
+    keepLocal,
     markSynced,
     setBaselineUpdatedAt: (updatedAt: string) => {
       lastAppliedUpdatedAtRef.current = updatedAt;
@@ -209,55 +253,63 @@ export function useDocumentRealtime({
 
 export function useDocumentAwayNotice(
   documentId: string | null,
-  documentUpdatedAt: string | null,
   currentUserId: string,
 ) {
   const [awayNotice, setAwayNotice] = useState<DocumentAwayNotice | null>(null);
-  const checkedDocRef = useRef<string | null>(null);
+  const evaluatedForRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
-    if (!documentId || !documentUpdatedAt || !currentUserId) {
-      setAwayNotice(null);
+    evaluatedForRef.current = null;
+    setAwayNotice(null);
+  }, [documentId]);
+
+  useEffect(() => {
+    if (!documentId || !currentUserId) {
       return;
     }
 
-    if (checkedDocRef.current === documentId) return;
-    checkedDocRef.current = documentId;
-
-    const storageKey = `rhodes:doc-seen:${documentId}`;
-    const previousSeen = sessionStorage.getItem(storageKey);
-    sessionStorage.setItem(storageKey, documentUpdatedAt);
-
-    if (!previousSeen || previousSeen === documentUpdatedAt) {
-      setAwayNotice(null);
+    if (evaluatedForRef.current === documentId) {
       return;
     }
+    evaluatedForRef.current = documentId;
 
     let cancelled = false;
+    const storageKey = `rhodes:doc-seen:${documentId}`;
 
     void (async () => {
-      const response = await fetch(`/app/api/documents/${documentId}/activity?limit=10`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || cancelled) return;
+      const docResponse = await fetch(`/app/api/documents/${documentId}`);
+      const docData = await docResponse.json().catch(() => ({}));
+      if (!docResponse.ok || cancelled) return;
 
-      const entries = (data.activity as EnrichedActivityRecord[]) ?? [];
-      const previousSeenTime = new Date(previousSeen).getTime();
-      const relevant = entries.find(
-        (entry) =>
-          entry.actor_id &&
-          entry.actor_id !== currentUserId &&
-          new Date(entry.created_at).getTime() > previousSeenTime,
+      const updatedAt = (docData.document as DocumentRecord | undefined)?.updated_at;
+      if (!updatedAt) return;
+
+      const previousSeen = sessionStorage.getItem(storageKey);
+      sessionStorage.setItem(storageKey, updatedAt);
+
+      if (!previousSeen || previousSeen === updatedAt) {
+        if (!cancelled) setAwayNotice(null);
+        return;
+      }
+
+      const entries = await fetchDocumentActivity(documentId);
+      const entry = pickLatestOtherActivitySince(
+        entries,
+        previousSeen,
+        currentUserIdRef.current,
       );
 
-      if (!cancelled && relevant) {
-        setAwayNotice(mapActivityEntry(relevant));
+      if (!cancelled) {
+        setAwayNotice(entry ? mapActivityToRemoteNotice(entry) : null);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, documentId, documentUpdatedAt]);
+  }, [currentUserId, documentId]);
 
   return {
     awayNotice,
