@@ -21,6 +21,7 @@ Track unresolved questions across the Rhodes spec. Update as decisions are made 
 | D-010 | LemonSqueezy billing | [25-billing-lemonsqueezy.md](25-billing-lemonsqueezy.md) |
 | D-011 | Custom GDPR export/delete (not third-party lib) | [24-privacy-user-tools.md](24-privacy-user-tools.md) |
 | D-012 | Launch domain: `rhodes.quinsy.app` — marketing at `/`, product at `/app` | [14-marketing-website.md](../implementation_plan/14-marketing-website.md) |
+| D-013 | Ask chat history: IndexedDB only (never server `chat_sessions`) | [06-ai-chat.md](06-ai-chat.md), [12-offline-sync.md](12-offline-sync.md), Phase 09 |
 
 **Note on D-012:** `rhodes.quinsy.app` is the **validated launch domain** (Quinsy owns `quinsy.app`). Standalone `rhodes.app` is **not yet acquired** — see O-018. Build all URLs from env vars so a future domain cutover does not require code changes.
 

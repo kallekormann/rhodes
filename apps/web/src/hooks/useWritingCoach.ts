@@ -6,6 +6,7 @@ import {
   findCoachableBlock,
   insertRhodesSuggestion,
 } from "@/lib/writing-coach/detect";
+import { checkSpelling } from "@/lib/spellcheck/engine";
 
 export type WritingCoachSuggestion = {
   contextLabel: string;
@@ -43,12 +44,18 @@ export function useWritingCoach(enabled: boolean) {
     setLoading(true);
 
     try {
+      const spelling = await checkSpelling(block.text, "en");
       const response = await fetch("/app/api/writing-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           context_label: block.contextLabel,
           text: block.text,
+          spelling_issues: spelling.map((issue) =>
+            issue.suggestions.length > 0
+              ? `${issue.word} → ${issue.suggestions.slice(0, 3).join(", ")}`
+              : issue.word,
+          ),
         }),
       });
 

@@ -45,6 +45,7 @@ import { AskComposerShowcase } from "@/components/AskComposerShowcase";
 import { AskPanelShowcase } from "@/components/AskPanelShowcase";
 import { BubbleMenuShowcase } from "@/components/BubbleMenuShowcase";
 import { ChatMessageBubbleShowcase } from "@/components/ChatMessageBubbleShowcase";
+import { ChartShowcase } from "@/components/charts/ChartShowcase";
 import { PropertiesStudioShowcase } from "@/components/properties/PropertiesStudioShowcase";
 import { ScopeSwitcherShowcase } from "@/components/ScopeSwitcherShowcase";
 import { SlashMenuShowcase } from "@/components/SlashMenuShowcase";
@@ -204,6 +205,15 @@ export function StickerSheetView() {
           You: right aligned, square bottom-right. Rhodes: left aligned, square bottom-left.
         </p>
         <ChatMessageBubbleShowcase />
+      </section>
+
+      <section className="sticker-section">
+        <h2 className="type-sticker-heading">Charts</h2>
+        <p className="type-caption sticker-section__desc">
+          Recharts primitives themed with accent tokens — used in Ask tool replies and future
+          dashboard slices. Line, bar, area, scatter + empty/error frames.
+        </p>
+        <ChartShowcase />
       </section>
 
       <section className="sticker-section">

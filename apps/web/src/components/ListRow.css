@@ -22,6 +22,11 @@
   pointer-events: auto;
 }
 
+.list-row-wrap:has(.list-row__actions):hover .list-row__trailing {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .list-row {
   display: flex;
   align-items: center;
@@ -71,6 +76,11 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--color-text-tertiary);
+}
+
+.list-row__trailing {
+  flex-shrink: 0;
+  transition: opacity var(--duration-normal) ease;
 }
 
 .list-row__actions {

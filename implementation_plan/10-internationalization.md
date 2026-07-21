@@ -13,7 +13,8 @@
 1. Support **5 UI locales**: EN (primary), ES, DE, FR, IT.
 2. Wire language preference from user profile / Settings.
 3. Ensure **LLM responses** respect user and document language.
-4. Meet NFR DoD #5.
+4. Ship **spellcheck dictionary packs** for all 5 locales (engine may land earlier with EN-only; Phase 10 completes ES/DE/FR/IT).
+5. Meet NFR DoD #5.
 
 ---
 
@@ -29,6 +30,7 @@
 - [21-i18n.md](../docs/21-i18n.md)
 - [18-non-functional-requirements.md](../docs/18-non-functional-requirements.md) — DoD #5
 - [23-user-settings-and-spaces.md](../docs/23-user-settings-and-spaces.md) — language setting
+- Ask / Writing Coach spellcheck plan — client `nspell` + locale dicts (EN first in product hardening; remaining locales here)
 
 ---
 
@@ -149,7 +151,21 @@ Pass `profiles.locale` and `documents.detected_language` to Ask and "Why relevan
 
 Login, register, forgot password — all strings translated.
 
-### 8. CI validation
+### 8. Spellcheck dictionaries (ES / DE / FR / IT)
+
+Depends on the client spellcheck engine (`nspell` + Hunspell-compatible dicts) landing with **EN** earlier (Editor underlines + Writing Coach `check_spelling` tool).
+
+**This phase:**
+
+1. Add dictionary assets for `es`, `de`, `fr`, `it` (lazy-load by locale — do not bundle all five into first paint).
+2. Wire active locale from profile / editor `lang` → `check_spelling({ text, locale })` and TipTap spell decorations.
+3. Settings: language change reloads the matching dict; keep a small personal ignore list per locale (local only).
+4. Verify Coach + optional Ask proofread use the same locale as UI/doc.
+5. Document size/licensing of dict packs in README or `docs/21-i18n.md`.
+
+**Exit for spellcheck:** switching Settings language to ES/DE/FR/IT underlines and Coach suggestions use that locale’s dictionary (not EN-only).
+
+### 9. CI validation
 
 ```bash
 # Script: compare keys across locale files
@@ -177,6 +193,7 @@ Fail CI if any locale missing keys.
 - [ ] Toast messages translated
 - [ ] Date formatting respects locale
 - [ ] Ask chat responds in user's locale when question is in that language
+- [ ] Spellcheck: ES/DE/FR/IT dicts load with locale; Editor marks + Writing Coach `check_spelling` respect locale
 - [ ] `validate-i18n.js` passes in CI
 - [ ] Fallback to EN for missing translation key
 
@@ -187,7 +204,8 @@ Fail CI if any locale missing keys.
 1. UI renders in EN, ES, DE, FR, IT.
 2. Language preference persists in profile.
 3. LLM prompts include locale/language instruction.
-4. NFR DoD #5 satisfied.
+4. Spellcheck dictionaries available for all 5 locales (EN may ship earlier; Phase 10 completes the set).
+5. NFR DoD #5 satisfied.
 
 ---
 
@@ -197,6 +215,7 @@ Fail CI if any locale missing keys.
 |------|------------|
 | Missing translations at ship | CI key parity check; fallback to EN |
 | TipTap placeholder i18n | Set via extension config on locale change |
+| Spellcheck dict bundle size | Lazy-load per locale; EN in core chunk |
 | Legal pages (privacy) not translated | V1: EN only for legal; note in settings |
 
 ---
@@ -208,6 +227,7 @@ Fail CI if any locale missing keys.
 - All UI strings extracted
 - Language preference wired
 - LLM locale-aware prompts
+- Spellcheck dictionary packs for `en` / `es` / `de` / `fr` / `it` (lazy-loaded)
 - CI i18n validation script
 
 **Merge:** PR `feature/phase-10-i18n` → `dev` → `main` when exit criteria met.

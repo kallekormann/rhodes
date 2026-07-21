@@ -1,7 +1,7 @@
 "use client";
 
 import { Link2, PanelRightClose } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import type { StoredDocumentComment } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
@@ -12,26 +12,17 @@ import {
 } from "@/lib/insights/format";
 import { openKnowledgeSourcePreview } from "@/lib/library/preview";
 import { PANEL_TAB_OPTIONS } from "@/lib/panel-tabs";
-import { useAskChat } from "@/hooks/useAskChat";
-import { hasAskEngagedToday } from "@/lib/ask/engagement";
 import type { InsightMatch } from "@/hooks/useInsights";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
 import type { MetadataFieldValue, MetadataSchemaField, MetadataSchemaGroup } from "@/lib/metadata/schemas";
 import type { MetadataFieldType } from "@/lib/metadata/schemas";
 import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
 import type { ActivityNavigateTarget } from "./DocumentHistorySection";
-import { AskComposer } from "./AskComposer";
-import { AskReasoningTicker } from "./ask/AskReasoningTicker";
-import { AskSourcesLine } from "./ask/AskSourcesLine";
+import { AskPanel } from "./AskPanel";
 import { Button } from "./Button";
-import { ChatMessageBubble } from "./ChatMessageBubble";
 import { CommentsTab } from "./CommentsTab";
 import { IconButton } from "./IconButton";
 import { TabBar } from "./TabBar";
-import "./AskComposer.css";
-import "./ask/AskReasoningTicker.css";
-import "./ask/AskSourcesLine.css";
-import "./ChatMessageBubble.css";
 import "./RightPanel.css";
 
 type MetadataSchemaWriteResult = { ok: boolean; error?: string };
@@ -202,7 +193,7 @@ export function RightPanel({
           />
         )}
         {panelTab === "ask" && (
-          <AskTab
+          <AskPanel
             workspaceId={workspaceId}
             askPrefill={askPrefill}
             onConsumeAskPrefill={onConsumeAskPrefill}
@@ -531,79 +522,6 @@ function InsightsTab({
           </Button>
         </div>
       )}
-    </div>
-  );
-}
-
-function AskTab({
-  workspaceId,
-  askPrefill,
-  onConsumeAskPrefill,
-}: {
-  workspaceId: string | null;
-  askPrefill?: string;
-  onConsumeAskPrefill?: () => void;
-}) {
-  const { session } = useApp();
-  const { messages, pending, pendingPhase, reasoningSteps, error, sendMessage } =
-    useAskChat(workspaceId);
-  const [draft, setDraft] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const displayName = session.displayName || "there";
-  const engagedToday = hasAskEngagedToday();
-
-  useEffect(() => {
-    if (!askPrefill) return;
-    setDraft(askPrefill);
-    onConsumeAskPrefill?.();
-  }, [askPrefill, onConsumeAskPrefill]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pending, reasoningSteps]);
-
-  const handleSend = () => {
-    const text = draft.trim();
-    if (!text || pending) return;
-    void sendMessage(text);
-    setDraft("");
-  };
-
-  const welcomeMessage = engagedToday
-    ? `Hi again, ${displayName}. What would you like to explore?`
-    : `Hi ${displayName}, I'm Rhodes. Ask me anything. I'll answer using your library sources and documents, with citations when I can.`;
-
-  return (
-    <div className="panel-tab panel-tab--ask">
-      <div className="panel-tab__messages overlay-scrollbar">
-        {messages.length === 0 && (
-          <ChatMessageBubble role="rhodes">
-            <p>{welcomeMessage}</p>
-          </ChatMessageBubble>
-        )}
-        {messages.map((message) => (
-          <div key={message.id} className="panel-tab__message-block">
-            <ChatMessageBubble
-              role={message.role === "assistant" ? "rhodes" : "user"}
-            >
-              <p>{message.content}</p>
-            </ChatMessageBubble>
-            {message.role === "assistant" && message.sourcesUsed && (
-              <AskSourcesLine sources={message.sourcesUsed} />
-            )}
-          </div>
-        ))}
-        <AskReasoningTicker steps={reasoningSteps} phase={pendingPhase} />
-        {error && <p className="caption">{error}</p>}
-        <div ref={messagesEndRef} />
-      </div>
-      <AskComposer
-        className="panel-tab__composer"
-        value={draft}
-        onChange={setDraft}
-        onSend={handleSend}
-        pending={pending}
-      />
     </div>
   );
 }

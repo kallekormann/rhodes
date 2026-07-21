@@ -48,8 +48,22 @@
   transition: background var(--duration-normal) ease;
 }
 
-.cmdk-list__item:hover {
+.cmdk-list__item:hover,
+.cmdk-list__item--active {
   background: var(--color-surface-hover);
+}
+
+.cmdk-list__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmdk-list__empty {
+  padding: 12px var(--space-sm);
+  font-size: 13px;
+  color: var(--color-text-secondary);
 }
 
 @keyframes overlayIn {

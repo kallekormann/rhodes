@@ -38,6 +38,7 @@ import { getTopLevelBlockAtPos, getTopLevelBlockIndexFromPos } from "@/lib/docum
 import { CommentHighlight } from "@/components/editor/extensions/CommentHighlight";
 import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
+import { SpellcheckExtension } from "@/components/editor/extensions/SpellcheckExtension";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
@@ -394,6 +395,7 @@ export function TipTapEditor({
       BlockId,
       RemoteBlockLock,
       CommentHighlight,
+      SpellcheckExtension.configure({ enabled: true, locale: "en" }),
       Extension.create({
         name: "slashCommand",
         addProseMirrorPlugins() {

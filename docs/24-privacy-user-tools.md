@@ -137,7 +137,7 @@ All of the above is **Rhodes application code**.
 ## Open questions
 
 - 7-day grace period for deletion — legal sign-off?
-- Export include AI chat history when added (V1.5)?
+- Client-side export of Ask chat from IndexedDB (optional; never implies server retention)?
 
 ## Dependencies
 

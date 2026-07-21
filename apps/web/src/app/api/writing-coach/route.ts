@@ -7,6 +7,7 @@ import { withSecurityHeaders } from "@/lib/api/security-headers";
 const writingCoachSchema = z.object({
   context_label: z.string().min(1).max(200),
   text: z.string().min(20).max(4000),
+  spelling_issues: z.array(z.string().min(1).max(120)).max(40).optional(),
 });
 
 type WritingCoachResult = {
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       writingCoachPrompt({
         contextLabel: parsed.data.context_label,
         text: parsed.data.text,
+        spellingIssues: parsed.data.spelling_issues,
       }),
       resolveOllamaWritingCoachModel(),
     );

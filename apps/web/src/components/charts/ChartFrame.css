@@ -1,0 +1,41 @@
+.chart-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+}
+
+.chart-frame__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.chart-frame__body {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  padding: 8px 4px 4px;
+}
+
+.chart-frame__status {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.chart-frame__status--error {
+  color: var(--color-error);
+}
+
+.chart-showcase {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}

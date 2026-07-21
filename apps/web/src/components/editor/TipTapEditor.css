@@ -274,6 +274,12 @@
   box-shadow: 0 0 0 1px var(--color-comment-highlight-ring);
 }
 
+.tiptap-editor-body .spellcheck-misspelled {
+  text-decoration: underline wavy var(--color-error);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
 .tiptap-editor-body .rhodes-suggestion {
   margin: var(--space-sm) 0 var(--space-md);
   padding: var(--space-sm) var(--space-md);

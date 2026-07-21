@@ -8,6 +8,8 @@ import {
 } from "@/context/AppContext";
 import { AppHeader } from "@/components/AppHeader";
 import { CmdKModal } from "@/components/CmdKModal";
+import { GlobalAskPanel } from "@/components/GlobalAskPanel";
+import { LibraryUploadHost } from "@/components/LibraryUploadHost";
 import { ToastContainer } from "@/components/Toast";
 
 function AppShellContent({ children }: { children: ReactNode }) {
@@ -17,7 +19,11 @@ function AppShellContent({ children }: { children: ReactNode }) {
   return (
     <div className={`app-shell ${isEditor ? "app-shell--editor" : ""}`}>
       <AppHeader />
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        {children}
+        <GlobalAskPanel />
+      </main>
+      <LibraryUploadHost />
       <CmdKModal />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>

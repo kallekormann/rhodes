@@ -68,6 +68,9 @@ type AppContextValue = {
   cmdKOpen: boolean;
   openCmdK: () => void;
   closeCmdK: () => void;
+  /** Bump to open the system file picker for library upload (Cmd+K Import). */
+  libraryUploadNonce: number;
+  openLibraryUpload: () => void;
   headerHidden: boolean;
   setHeaderHidden: (hidden: boolean) => void;
   insightCount: number;
@@ -147,6 +150,7 @@ export function AppProvider({
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<PanelTab>("insights");
   const [cmdKOpen, setCmdKOpen] = useState(false);
+  const [libraryUploadNonce, setLibraryUploadNonce] = useState(0);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
@@ -448,6 +452,9 @@ export function AppProvider({
   const closePanel = useCallback(() => setPanelOpen(false), []);
   const openCmdK = useCallback(() => setCmdKOpen(true), []);
   const closeCmdK = useCallback(() => setCmdKOpen(false), []);
+  const openLibraryUpload = useCallback(() => {
+    setLibraryUploadNonce((n) => n + 1);
+  }, []);
 
   const isFavorite = useCallback(
     (id: string) => favorites.has(id),
@@ -484,6 +491,8 @@ export function AppProvider({
       cmdKOpen,
       openCmdK,
       closeCmdK,
+      libraryUploadNonce,
+      openLibraryUpload,
       headerHidden,
       setHeaderHidden,
       insightCount,
@@ -533,6 +542,8 @@ export function AppProvider({
       cmdKOpen,
       openCmdK,
       closeCmdK,
+      libraryUploadNonce,
+      openLibraryUpload,
       headerHidden,
       showBubble,
       documentTitle,

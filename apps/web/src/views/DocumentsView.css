@@ -27,9 +27,22 @@
   margin-bottom: var(--space-lg);
 }
 
+.documents-toolbar__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 0;
+}
+
 .documents-toolbar__search {
   flex: 1;
-  max-width: 360px;
+  max-width: 280px;
+}
+
+.documents-toolbar__property {
+  flex-shrink: 0;
+  width: 160px;
 }
 
 .documents-toolbar__tabs {
@@ -75,6 +88,15 @@
   .documents-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .documents-toolbar__filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .documents-toolbar__property {
+    width: 100%;
   }
 
   .documents-toolbar__search {

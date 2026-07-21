@@ -14,6 +14,7 @@
 2. Build **outbox sync** protocol: write locally first, push on reconnect.
 3. Handle **conflicts** with LWW + version branch + user notification.
 4. Meet NFR DoD #4: editor writable offline; syncs without data loss.
+5. Persist **Ask chat history client-only** in IndexedDB (never on server — privacy).
 
 ---
 
@@ -65,10 +66,13 @@ apps/web/src/
 rhodes-db (version 1)
 ├── documents/{id}        # { id, workspace_id, title, content, content_plain, updated_at, sync_status }
 ├── outbox/{id}           # { id, document_id, mutation, payload, created_at, retries }
+├── ask_threads/{id}      # client-only Ask history — NEVER synced to server (privacy)
 └── meta/last_sync        # { workspace_id, cursor, client_id }
 ```
 
 **`sync_status`:** `synced` | `pending` | `conflict`
+
+**Ask threads (locked):** Persist Ask conversations in IndexedDB only (user + document/workspace scoped). Do not create a server `chat_sessions` table. Clear on logout / account delete with the rest of the local cache. Spec: [06-ai-chat.md](../docs/06-ai-chat.md), [12-offline-sync.md](../docs/12-offline-sync.md).
 
 ---
 
@@ -84,6 +88,7 @@ export async function getDB() {
     upgrade(db) {
       db.createObjectStore('documents', { keyPath: 'id' });
       db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true });
+      db.createObjectStore('ask_threads', { keyPath: 'id' }); // client-only; never synced
       db.createObjectStore('meta');
     },
   });
@@ -91,6 +96,10 @@ export async function getDB() {
 ```
 
 Generate `client_id` (UUID) once per browser; store in `meta`.
+
+### 1b. Ask chat local persistence
+
+Wire `useAskChat` to load/save threads in `ask_threads` (document-scoped preferred). Never enqueue Ask messages in `outbox`. Clear store on logout.
 
 ### 2. Write path (local-first)
 

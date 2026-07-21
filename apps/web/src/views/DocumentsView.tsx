@@ -14,13 +14,24 @@ import {
   isDocumentArchived,
   withArchived,
 } from "@/lib/documents/metadata";
+import {
+  documentMatchesMetadataFilter,
+  formatMetadataOptionLabel,
+  pickDocumentsFilterField,
+} from "@/lib/metadata/filter-documents";
+import {
+  parseSchemaOptions,
+  readUserMetadataValue,
+} from "@/lib/metadata/schemas";
 import { useDocuments } from "@/hooks/useDocuments";
+import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import { useTemplates } from "@/hooks/useTemplates";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { Dialog } from "@/components/Dialog";
 import { Divider } from "@/components/Divider";
+import { Dropdown } from "@/components/Dropdown";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
 import { Input } from "@/components/Input";
 import { ItemList, ListRow } from "@/components/ListRow";
@@ -31,6 +42,8 @@ import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
 import "./DocumentsView.css";
 
 type DocTab = DocumentFilter;
+
+const ANY_PROPERTY = "__any__";
 
 export function DocumentsView() {
   const {
@@ -45,6 +58,7 @@ export function DocumentsView() {
   } = useApp();
   const [tab, setTab] = useState<DocTab>("recent");
   const [filter, setFilter] = useState("");
+  const [propertyFilter, setPropertyFilter] = useState(ANY_PROPERTY);
   const [shareDocId, setShareDocId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
@@ -61,6 +75,13 @@ export function DocumentsView() {
     createDocument,
   } = useDocuments(workspaceId, tab);
 
+  const { schemas } = useMetadataSchemas(workspaceId);
+  const filterField = useMemo(() => pickDocumentsFilterField(schemas), [schemas]);
+  const filterOptions = useMemo(
+    () => (filterField ? parseSchemaOptions(filterField.options) ?? [] : []),
+    [filterField],
+  );
+
   const { templates, loading: templatesLoading } = useTemplates(workspaceId, "all");
   const overviewTemplates = useMemo(
     () => pickOverviewTemplates(templates).map(templateRecordToUi),
@@ -69,10 +90,15 @@ export function DocumentsView() {
 
   const filtered = useMemo(
     () =>
-      documents.filter((doc) =>
-        doc.title.toLowerCase().includes(filter.toLowerCase()),
-      ),
-    [documents, filter],
+      documents.filter((doc) => {
+        if (!doc.title.toLowerCase().includes(filter.toLowerCase())) return false;
+        return documentMatchesMetadataFilter(
+          doc,
+          filterField?.field_key ?? "",
+          propertyFilter === ANY_PROPERTY ? null : propertyFilter,
+        );
+      }),
+    [documents, filter, filterField, propertyFilter],
   );
 
   const groups = useMemo(() => {
@@ -100,6 +126,9 @@ export function DocumentsView() {
   };
 
   const emptyMessage = (() => {
+    if (filter.trim() || propertyFilter !== ANY_PROPERTY) {
+      return "No documents match this search.";
+    }
     if (tab === "favorites") {
       return "No favorite documents yet. Open a document and mark it as Favorite.";
     }
@@ -164,13 +193,34 @@ export function DocumentsView() {
 
           <section className="documents-section">
             <div className="documents-toolbar">
-              <Input
-                placeholder="Search documents…"
-                value={filter}
-                onChange={setFilter}
-                icon={<Search size={18} strokeWidth={1.75} />}
-                className="documents-toolbar__search"
-              />
+              <div className="documents-toolbar__filters">
+                <Input
+                  placeholder="Search documents…"
+                  value={filter}
+                  onChange={setFilter}
+                  icon={<Search size={18} strokeWidth={1.75} />}
+                  className="documents-toolbar__search"
+                />
+                {filterField && filterOptions.length > 0 && (
+                  <Dropdown
+                    variant="field"
+                    className="documents-toolbar__property"
+                    value={propertyFilter}
+                    placeholder={filterField.field_label}
+                    options={[
+                      {
+                        id: ANY_PROPERTY,
+                        label: `Any ${filterField.field_label.toLowerCase()}`,
+                      },
+                      ...filterOptions.map((option) => ({
+                        id: option,
+                        label: formatMetadataOptionLabel(option),
+                      })),
+                    ]}
+                    onChange={setPropertyFilter}
+                  />
+                )}
+              </div>
               <div className="documents-toolbar__tabs">
                 <SegmentedControl
                   options={[
@@ -205,6 +255,19 @@ export function DocumentsView() {
                       .filter((doc) => getDateGroup(doc.updated_at) === group)
                       .map((doc) => {
                         const archived = isDocumentArchived(doc.metadata);
+                        const statusValue =
+                          filterField != null
+                            ? readUserMetadataValue(
+                                doc.metadata,
+                                filterField.field_key,
+                              )
+                            : null;
+                        const statusVariant =
+                          statusValue === "done"
+                            ? "success"
+                            : statusValue === "in_progress"
+                              ? "progress"
+                              : "draft";
                         return (
                           <ListRow
                             key={doc.id}
@@ -219,6 +282,11 @@ export function DocumentsView() {
                             trailing={
                               archived ? (
                                 <StatusPill variant="draft" label="Archived" />
+                              ) : statusValue ? (
+                                <StatusPill
+                                  variant={statusVariant}
+                                  label={formatMetadataOptionLabel(statusValue)}
+                                />
                               ) : null
                             }
                             footer={

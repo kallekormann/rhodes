@@ -15,6 +15,14 @@ import {
   resolveOllamaAskModel,
 } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import {
+  formatToolNarration,
+  formatToolResultsForPrompt,
+  isToolOnlyQuestion,
+  runMatchingAskTools,
+} from "@/lib/ask/tools";
+import { streamTextAsTokens } from "@/lib/ask/tools/stream-text";
+import { buildWorkspaceAskContext } from "@/lib/ask/workspace-context";
 import { createClient } from "@/lib/supabase/server";
 
 const askSchema = z.object({
@@ -32,6 +40,46 @@ const askSchema = z.object({
 
 function formatSse(data: Record<string, unknown>) {
   return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+async function streamOllamaTokens(
+  prompt: string,
+  send: (payload: Record<string, unknown>) => void,
+  options?: { preferFast?: boolean },
+): Promise<void> {
+  const ollama = createOllamaClient();
+  const chatModel = resolveOllamaAskModel();
+  const fastModel = resolveOllamaAskFallbackModel();
+  // Tool narrations: fast model first. Knowledge answers: chat model first.
+  const models = options?.preferFast
+    ? [...new Set([fastModel, chatModel])]
+    : [...new Set([chatModel, fastModel])];
+
+  let streamed = false;
+  let lastError: Error | null = null;
+
+  for (const model of models) {
+    try {
+      for await (const token of ollama.streamGenerate(prompt, model)) {
+        streamed = true;
+        send({ type: "token", token });
+      }
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError =
+        error instanceof Error ? error : new Error("Ask generation failed");
+      const missingModel =
+        lastError.message.includes("404") ||
+        lastError.message.toLowerCase().includes("not found");
+      if (!missingModel || model === models[models.length - 1]) {
+        throw lastError;
+      }
+    }
+  }
+
+  if (lastError) throw lastError;
+  if (!streamed) throw new Error("Ask generation returned no tokens");
 }
 
 export async function POST(request: Request) {
@@ -75,6 +123,72 @@ export async function POST(request: Request) {
     );
   }
 
+  // Pure calc: skip overview + RAG + Ollama — narrate + soft-stream for chat feel.
+  const toolResults = await runMatchingAskTools(lastUserMessage.content);
+  const toolOnly = isToolOnlyQuestion(lastUserMessage.content, toolResults);
+
+  if (toolOnly) {
+    const charts = toolResults
+      .filter((result) => result.ok && result.chart)
+      .map((result) => result.chart!);
+    const reply = formatToolNarration(toolResults);
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const send = (payload: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(formatSse(payload)));
+        };
+
+        try {
+          send({
+            type: "context",
+            matches: [],
+            has_workspace_overview: false,
+            tools_run: toolResults.map((result) => ({
+              tool: result.tool,
+              ok: result.ok,
+              summary: result.summary,
+            })),
+            fast_path: "tools",
+          });
+          if (charts.length > 0) {
+            send({ type: "charts", charts });
+          }
+          await streamTextAsTokens(reply, send, {
+            // Longer replies (A/B walkthrough) stream a bit faster; short math stays readable.
+            delayMs: reply.length > 280 ? 10 : 16,
+          });
+          send({ type: "sources_used", sources: [] });
+          send({ type: "done" });
+          controller.close();
+        } catch (error) {
+          send({
+            type: "error",
+            message:
+              error instanceof Error ? error.message : "Ask generation failed",
+          });
+          controller.close();
+        }
+      },
+    });
+
+    return withSecurityHeaders(
+      new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      }),
+    );
+  }
+
+  const workspaceOverview = await buildWorkspaceAskContext(
+    supabase,
+    parsed.data.workspace_id,
+  );
+
   let matches: KnowledgeMatch[] = [];
   try {
     matches = await retrieveWorkspaceKnowledge({
@@ -104,6 +218,11 @@ export async function POST(request: Request) {
       };
 
       try {
+        const toolPrompt = formatToolResultsForPrompt(toolResults);
+        const charts = toolResults
+          .filter((result) => result.ok && result.chart)
+          .map((result) => result.chart!);
+
         send({
           type: "context",
           matches: matches.slice(0, 6).map((match) => ({
@@ -112,7 +231,17 @@ export async function POST(request: Request) {
             origin_type: match.origin_type,
             location_label: match.location_label,
           })),
+          has_workspace_overview: workspaceOverview.hasContent,
+          tools_run: toolResults.map((result) => ({
+            tool: result.tool,
+            ok: result.ok,
+            summary: result.summary,
+          })),
         });
+
+        if (charts.length > 0) {
+          send({ type: "charts", charts });
+        }
 
         let kept = matches.slice(0, 4);
         const enableRerank = askLlmRerankEnabled();
@@ -164,7 +293,8 @@ export async function POST(request: Request) {
           });
         }
 
-        if (kept.length === 0) {
+        const hasTools = toolResults.some((result) => result.ok);
+        if (kept.length === 0 && !workspaceOverview.hasContent && !hasTools) {
           send({
             type: "token",
             token: ASK_NO_CONTEXT_REPLY,
@@ -175,53 +305,34 @@ export async function POST(request: Request) {
           return;
         }
 
-        const ollama = createOllamaClient();
         const prompt = `${askSystemPrompt()}\n\n${askUserPrompt({
           question: lastUserMessage.content,
           matches: kept,
+          workspaceOverview: workspaceOverview.overviewText,
+          toolResults: toolPrompt || null,
         })}`;
 
-        let streamed = false;
-        let lastError: Error | null = null;
-        const chatModel = resolveOllamaAskModel();
-        const fastModel = resolveOllamaAskFallbackModel();
+        await streamOllamaTokens(prompt, send);
 
-        for (const model of [...new Set([chatModel, fastModel])]) {
-          try {
-            for await (const token of ollama.streamGenerate(prompt, model)) {
-              streamed = true;
-              send({ type: "token", token });
-            }
-            lastError = null;
-            break;
-          } catch (error) {
-            lastError =
-              error instanceof Error ? error : new Error("Ask generation failed");
-            const missingModel =
-              lastError.message.includes("404") ||
-              lastError.message.toLowerCase().includes("not found");
-            if (!missingModel || model === fastModel) {
-              throw lastError;
-            }
-          }
-        }
-
-        if (lastError) {
-          throw lastError;
-        }
-
-        if (!streamed) {
-          throw new Error("Ask generation returned no tokens");
-        }
-
-        send({
-          type: "sources_used",
-          sources: kept.map((match) => ({
-            title: match.title,
-            location_label: match.location_label,
-            origin_type: match.origin_type,
-          })),
-        });
+        const sources =
+          kept.length > 0
+            ? kept.map((match) => ({
+                title: match.title,
+                location_label: match.location_label,
+                origin_type: match.origin_type,
+              }))
+            : hasTools
+              ? []
+              : workspaceOverview.hasContent
+                ? [
+                    {
+                      title: "Workspace overview",
+                      location_label: null,
+                      origin_type: "overview",
+                    },
+                  ]
+                : [];
+        send({ type: "sources_used", sources });
         send({ type: "done" });
         controller.close();
       } catch (error) {

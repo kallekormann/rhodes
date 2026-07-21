@@ -39,7 +39,7 @@ export function ListRow({
           )}
         </div>
         {badge && <span className="list-row__badge">{badge}</span>}
-        {trailing}
+        {trailing && <div className="list-row__trailing">{trailing}</div>}
       </button>
       {actions && <div className="list-row__actions">{actions}</div>}
       {footer}

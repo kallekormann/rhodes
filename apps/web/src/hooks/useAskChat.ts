@@ -8,15 +8,23 @@ import {
 } from "@/lib/ollama-admission";
 import type { AskReasoningStep } from "@/components/ask/AskReasoningTicker";
 import type { AskSourceUsed } from "@/components/ask/AskSourcesLine";
+import type { AskChartPayload } from "@/components/charts/ChartFrame";
+import { isToolOnlyQuestion, runMatchingAskTools } from "@/lib/ask/tools";
 
 export type AskMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   sourcesUsed?: AskSourceUsed[];
+  charts?: AskChartPayload[];
 };
 
-export type AskPendingPhase = "idle" | "searching" | "reranking" | "generating";
+export type AskPendingPhase =
+  | "idle"
+  | "searching"
+  | "reranking"
+  | "generating"
+  | "computing";
 
 type AskContextMatch = {
   title: string;
@@ -54,6 +62,7 @@ export function useAskChat(workspaceId: string | null) {
   const [messages, setMessages] = useState<AskMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [pendingPhase, setPendingPhase] = useState<AskPendingPhase>("idle");
+  const [askMode, setAskMode] = useState<"tools" | "knowledge">("knowledge");
   const [reasoningSteps, setReasoningSteps] = useState<AskReasoningStep[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [contextMatches, setContextMatches] = useState<AskContextMatch[]>([]);
@@ -65,6 +74,7 @@ export function useAskChat(workspaceId: string | null) {
     setMessages([]);
     setPending(false);
     setPendingPhase("idle");
+    setAskMode("knowledge");
     setReasoningSteps([]);
     setError(null);
     setContextMatches([]);
@@ -92,15 +102,20 @@ export function useAskChat(workspaceId: string | null) {
       const assistantId = `a-${Date.now()}`;
       const nextMessages = [...messages, userMessage];
       let sourcesUsed: AskSourceUsed[] = [];
+      let charts: AskChartPayload[] = [];
 
       setMessages(nextMessages);
       setPending(true);
-      setPendingPhase("searching");
+      // Client-side intent preview so we don't flash "Searching your library…" for 1+1=
+      const previewTools = await runMatchingAskTools(text);
+      const toolOnlyPreview = isToolOnlyQuestion(text, previewTools);
+      setAskMode(toolOnlyPreview ? "tools" : "knowledge");
+      setPendingPhase(toolOnlyPreview ? "computing" : "searching");
       setReasoningSteps([]);
       setError(null);
       setContextMatches([]);
       markAskEngagedToday();
-      beginAskOllamaWork();
+      if (!toolOnlyPreview) beginAskOllamaWork();
 
       try {
         const response = await fetch("/app/api/ask", {
@@ -154,11 +169,28 @@ export function useAskChat(workspaceId: string | null) {
               label?: string;
               verdict?: "keep" | "skip";
               sources?: AskSourceUsed[];
+              charts?: AskChartPayload[];
+              fast_path?: string;
             };
 
-            if (payload.type === "context" && Array.isArray(payload.matches)) {
-              setContextMatches(payload.matches);
-              setPendingPhase("reranking");
+            if (payload.type === "context") {
+              if (payload.fast_path === "tools") {
+                setPendingPhase("computing");
+              } else if (Array.isArray(payload.matches)) {
+                setContextMatches(payload.matches);
+                setPendingPhase("reranking");
+              }
+            }
+
+            if (payload.type === "charts" && Array.isArray(payload.charts)) {
+              charts = payload.charts;
+              setMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantId
+                    ? { ...message, charts: payload.charts }
+                    : message,
+                ),
+              );
             }
 
             if (payload.type === "reasoning_step" && payload.label && payload.verdict) {
@@ -209,11 +241,15 @@ export function useAskChat(workspaceId: string | null) {
                 message.id !== assistantId || message.content.trim().length > 0,
             ),
           );
-        } else if (sourcesUsed.length > 0) {
+        } else if (sourcesUsed.length > 0 || charts.length > 0) {
           setMessages((prev) =>
             prev.map((message) =>
               message.id === assistantId
-                ? { ...message, sourcesUsed }
+                ? {
+                    ...message,
+                    ...(sourcesUsed.length > 0 ? { sourcesUsed } : {}),
+                    ...(charts.length > 0 ? { charts } : {}),
+                  }
                 : message,
             ),
           );
@@ -223,7 +259,7 @@ export function useAskChat(workspaceId: string | null) {
           setError(err instanceof Error ? err.message : "Ask failed");
         }
       } finally {
-        endAskOllamaWork();
+        if (!toolOnlyPreview) endAskOllamaWork();
         setPending(false);
         setPendingPhase("idle");
         setReasoningSteps([]);
@@ -239,6 +275,7 @@ export function useAskChat(workspaceId: string | null) {
     messages,
     pending,
     pendingPhase,
+    askMode,
     reasoningSteps,
     error,
     contextMatches,
