@@ -1,6 +1,6 @@
 # Phase 08 — Settings, Teams, Metadata, and Templates
 
-**Status:** in progress  
+**Status:** complete  
 **Depends on:** Phase 07b  
 **Blocks:** Phases 09–12  
 **Estimated duration:** 7–10 days
@@ -21,18 +21,21 @@
 - Properties panel v2 / metadata schema groups (migrations `00020`–`00021`, properties studio components)
 - Comments + block drag in TipTap; writing coach activity rail (partial)
 - Settings overlay (monolithic): Profile, Security, Preferences, Spaces, Team sections
+- Settings IA split: avatar → user settings (`?mode=user`); scope menu → scope settings (`?mode=scope`)
+- Share read/edit ACL: API `permission` + `can_write`; SharePopover selector; editor read-only gating
+- API tier enforcement: `server-gates.ts`, `upgrade-copy.ts`, workspace/template/metadata POST gates
+- RLS audit + hardening (migration `00042`); Phase 08 cases in `packages/db/tests/rls.test.js`
+- `enabled_views` column (migration `00041`); `ScopeCreateWizard` shell; workspaces POST wiring
+- Version history: author name + tier retention cap; conflict banner wired; `properties.manage` UI gate
 
 ---
 
-## Open (Phase 8 completion — see plan)
+## Open (deferred / Phase 09+)
 
-1. **Live shared documents** — share write ACL + Supabase realtime sync (fixes "copy" perception)
-2. **Document activity log** + version history API/UI (History section at bottom of Properties tab)
-3. **Avatars** — upload + `UserAvatar` sm/md/lg app-wide
-4. **Settings IA split** — header avatar → user settings; scope menu → team settings
-5. **Tier enforcement** — add `basic` tier, centralize upgrade copy, API + UI gates, default `MOCK_TIER=free`
-6. **Scope view infrastructure** + stepped `ScopeCreateWizard` (`enabled_views` stores additional views only; catalog TBD)
-7. **UX audit** — screen-by-screen checklist + bug-fix sprint
+1. **UX audit** — screen-by-screen checklist + bug-fix sprint
+2. **Remote cursors** — `UserAvatar` instead of initials in collaboration overlay
+3. **Theme persistence** — `profiles.theme_mode` migration (optional P2)
+4. **Additional scope view catalog** — populate `ADDITIONAL_SCOPE_VIEW_CATALOG` when product defines views
 
 **Wave 0 artifacts:** [`tier-matrix.md`](../packages/shared/src/tier-matrix.md) (user-maintained), minimal `scope-views.ts`, sync `tiers.ts` from matrix.
 
