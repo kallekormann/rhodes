@@ -31,6 +31,7 @@ import {
   readDefaultScopeId,
   writeDefaultScopeId,
 } from "@/lib/workspaces/scope";
+import { getSettingsReturnPath } from "@/lib/settings-return";
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
@@ -182,7 +183,6 @@ export function SettingsView() {
   const router = useRouter();
   const {
     session,
-    setView,
     themeMode,
     setThemeMode,
     scopes,
@@ -621,8 +621,13 @@ export function SettingsView() {
   return (
     <div className="settings-view">
       <div className="settings-view__topbar">
-        <NavLink icon={ArrowLeft} onClick={() => setView("editor")}>
-          {mode === "user" ? "Account settings" : "Scope settings"}
+        <NavLink
+          icon={ArrowLeft}
+          onClick={() => {
+            router.replace(getSettingsReturnPath("/documents"));
+          }}
+        >
+          Back
         </NavLink>
       </div>
 

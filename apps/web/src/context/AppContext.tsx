@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { initialFavoriteIds } from "@/data/documents";
 import {
   canCreatePersonalSpace,
@@ -18,9 +18,10 @@ import {
 } from "@/data/scopes";
 import { useDocuments } from "@/hooks/useDocuments";
 import { buildFeatureGates } from "@/lib/features/gates";
+import { pathToView, viewToPath } from "@/lib/navigation";
+import { rememberLastAppPath } from "@/lib/settings-return";
 import { canWriteInScope } from "@/lib/workspaces/permissions";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
-import { pathToView, viewToPath } from "@/lib/navigation";
 
 export type AppView =
   | "editor"
@@ -139,6 +140,7 @@ export function AppProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [view, setViewState] = useState<AppView>(() => pathToView(pathname));
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [theme, setThemeState] = useState<Theme>("light");
@@ -190,6 +192,11 @@ export function AppProvider({
   useEffect(() => {
     setViewState(pathToView(pathname));
   }, [pathname]);
+
+  useEffect(() => {
+    const search = searchParams.toString();
+    rememberLastAppPath(search ? `${pathname}?${search}` : pathname);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     const mode = readStoredThemeMode();
