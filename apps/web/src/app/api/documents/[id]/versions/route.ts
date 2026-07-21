@@ -79,6 +79,14 @@ export async function POST(request: Request, context: RouteContext) {
   const body = await request.json().catch(() => ({}));
   const changeSummary =
     typeof body?.change_summary === "string" ? body.change_summary.trim() : "";
+  const overrideContent =
+    body?.content && typeof body.content === "object"
+      ? (body.content as Record<string, unknown>)
+      : null;
+  const overridePlain =
+    typeof body?.content_plain === "string" ? body.content_plain : null;
+  const isConflictBranch =
+    changeSummary.toLowerCase().startsWith("conflict") || Boolean(overrideContent);
 
   const supabase = await createClient();
   const {
@@ -106,29 +114,34 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const { data: recent } = await supabase
-    .from("document_versions")
-    .select("created_at")
-    .eq("document_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  if (!isConflictBranch) {
+    const { data: recent } = await supabase
+      .from("document_versions")
+      .select("created_at")
+      .eq("document_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (recent?.created_at) {
-    const elapsed = Date.now() - new Date(recent.created_at).getTime();
-    if (elapsed < VERSION_THROTTLE_MS && !changeSummary) {
-      return withSecurityHeaders(
-        NextResponse.json(
-          { error: "Version throttle — wait before saving another snapshot" },
-          { status: 429 },
-        ),
-      );
+    if (recent?.created_at) {
+      const elapsed = Date.now() - new Date(recent.created_at).getTime();
+      if (elapsed < VERSION_THROTTLE_MS && !changeSummary) {
+        return withSecurityHeaders(
+          NextResponse.json(
+            { error: "Version throttle — wait before saving another snapshot" },
+            { status: 429 },
+          ),
+        );
+      }
     }
   }
 
-  const content = document.content as Record<string, unknown>;
+  const content =
+    overrideContent ?? (document.content as Record<string, unknown>);
   const contentPlain =
-    (document.content_plain as string | null) ?? extractPlainText(content).trim();
+    overridePlain ??
+    (document.content_plain as string | null) ??
+    extractPlainText(content).trim();
 
   const { data: version, error } = await supabase
     .from("document_versions")

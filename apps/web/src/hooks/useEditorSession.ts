@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { getScopeMetaLabel } from "@/data/scopes";
@@ -26,6 +26,15 @@ import {
 import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { isDocumentId } from "@/lib/documents/ids";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
+import { diffDocumentBlocks } from "@/lib/documents/block-diff";
+import {
+  applyTakeTheirs,
+  forcePushMine,
+  rememberConflictTheirs,
+  saveConflictVersionBranch,
+} from "@/lib/offline/conflict-resolve";
+import { loadConflictServerDocument } from "@/lib/offline/conflict-store";
+import { subscribeSyncEngine } from "@/lib/offline/sync-engine";
 import {
   buildTemplateMetadata,
   parseTemplateMetadata,
@@ -33,7 +42,11 @@ import {
 } from "@/lib/templates/metadata";
 import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
-import { useDocumentRealtime, useDocumentAwayNotice } from "@/hooks/useDocumentRealtime";
+import {
+  useDocumentRealtime,
+  useDocumentAwayNotice,
+  type DocumentRemoteConflict,
+} from "@/hooks/useDocumentRealtime";
 import { useDocumentPresence } from "@/hooks/useDocumentPresence";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import type { Editor } from "@tiptap/react";
@@ -273,7 +286,7 @@ export function useEditorSession() {
     remoteConflict,
     dismissConflict,
     reloadRemote,
-    keepLocal,
+    keepLocal: dismissKeepLocal,
     markSynced,
     setBaselineUpdatedAt,
   } = useDocumentRealtime({
@@ -285,6 +298,213 @@ export function useEditorSession() {
     getLocalContentPlain: () => contentPlain,
     onRemoteUpdate: applyRemoteDocument,
   });
+
+  const [offlineConflictNotice, setOfflineConflictNotice] =
+    useState<DocumentRemoteConflict | null>(null);
+  const [conflictTheirs, setConflictTheirs] = useState<DocumentRecord | null>(
+    null,
+  );
+  const [conflictReviewOpen, setConflictReviewOpen] = useState(false);
+  const [conflictResolving, setConflictResolving] = useState(false);
+
+  const activeConflict = remoteConflict ?? offlineConflictNotice;
+
+  useEffect(() => {
+    if (!document?.id || isEditingTemplate) return;
+    return subscribeSyncEngine((event) => {
+      if (event.documentId !== document.id) return;
+      if (event.type === "conflict" && event.conflict?.serverDocument) {
+        const theirs = event.conflict.serverDocument as DocumentRecord;
+        setConflictTheirs(theirs);
+        setOfflineConflictNotice({
+          updatedAt: theirs.updated_at ?? new Date().toISOString(),
+          actorId: null,
+          actorLabel: "A collaborator",
+          actionLabel: "updated the document elsewhere",
+          detail: "Your offline or concurrent edits conflict with the server copy.",
+        });
+      }
+      if (event.type === "status" && event.status === "synced") {
+        setOfflineConflictNotice(null);
+        setConflictTheirs(null);
+        setConflictReviewOpen(false);
+      }
+    });
+  }, [document?.id, isEditingTemplate]);
+
+  useEffect(() => {
+    if (!remoteConflict || !document?.id) return;
+    let cancelled = false;
+    void (async () => {
+      const cached = await loadConflictServerDocument(document.id);
+      if (cancelled) return;
+      if (cached) {
+        setConflictTheirs(cached);
+        return;
+      }
+      const response = await fetch(`/app/api/documents/${document.id}`);
+      const data = await response.json().catch(() => ({}));
+      if (cancelled || !response.ok) return;
+      const theirs = data.document as DocumentRecord;
+      setConflictTheirs(theirs);
+      void rememberConflictTheirs(document.id, theirs);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteConflict, document?.id]);
+
+  useEffect(() => {
+    if (!document?.id || isEditingTemplate) return;
+    let cancelled = false;
+    void loadConflictServerDocument(document.id).then((cached) => {
+      if (cancelled || !cached) return;
+      setConflictTheirs(cached);
+      setOfflineConflictNotice((prev) =>
+        prev ?? {
+          updatedAt: cached.updated_at,
+          actorId: null,
+          actorLabel: "A collaborator",
+          actionLabel: "updated the document elsewhere",
+          detail: "Resolve the sync conflict to continue saving.",
+        },
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [document?.id, isEditingTemplate]);
+
+  const conflictBlockDiffs = useMemo(() => {
+    if (!conflictTheirs) return [];
+    return diffDocumentBlocks(
+      latestContentRef.current as Record<string, unknown>,
+      conflictTheirs.content,
+    );
+  }, [conflictTheirs, editorContent]);
+
+  const clearConflictUi = useCallback(() => {
+    dismissConflict();
+    dismissKeepLocal();
+    setOfflineConflictNotice(null);
+    setConflictTheirs(null);
+    setConflictReviewOpen(false);
+  }, [dismissConflict, dismissKeepLocal]);
+
+  const keepLocal = useCallback(async () => {
+    if (!document?.id || !conflictTheirs) {
+      clearConflictUi();
+      return;
+    }
+    setConflictResolving(true);
+    try {
+      const branch = await saveConflictVersionBranch({
+        documentId: document.id,
+        content: conflictTheirs.content,
+        contentPlain: conflictTheirs.content_plain,
+        changeSummary: "Conflict: collaborator's version",
+      });
+      if (!branch.ok) {
+        showToast(branch.error ?? "Couldn't save their version to History", "error");
+        return;
+      }
+
+      const mineContent =
+        (latestContentRef.current as Record<string, unknown>) ??
+        document.content;
+      const result = await forcePushMine({
+        documentId: document.id,
+        mine: {
+          title: documentTitle || document.title,
+          content: mineContent,
+          content_plain: contentPlain || document.content_plain,
+          metadata: document.metadata,
+        },
+        expectedUpdatedAt: conflictTheirs.updated_at,
+        workspaceId: document.workspace_id,
+        createdAt: document.created_at,
+      });
+
+      if (!result.ok || !result.document) {
+        showToast(result.error ?? "Couldn't keep your version", "error");
+        return;
+      }
+
+      markSynced(result.document.updated_at);
+      setIsDirty(false);
+      await refresh({ silent: true });
+      clearConflictUi();
+      showToast("Kept your version. Theirs was saved to History.", "success");
+    } finally {
+      setConflictResolving(false);
+    }
+  }, [
+    clearConflictUi,
+    conflictTheirs,
+    contentPlain,
+    document,
+    documentTitle,
+    markSynced,
+    refresh,
+    showToast,
+  ]);
+
+  const takeTheirs = useCallback(async () => {
+    if (!document?.id) {
+      void reloadRemote();
+      clearConflictUi();
+      return;
+    }
+
+    setConflictResolving(true);
+    try {
+      let theirs = conflictTheirs;
+      if (!theirs) {
+        const response = await fetch(`/app/api/documents/${document.id}`);
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) theirs = data.document as DocumentRecord;
+      }
+      if (!theirs) {
+        showToast("Couldn't load their version", "error");
+        return;
+      }
+
+      const mineContent =
+        (latestContentRef.current as Record<string, unknown>) ??
+        document.content;
+      const branch = await saveConflictVersionBranch({
+        documentId: document.id,
+        content: mineContent,
+        contentPlain: contentPlain || document.content_plain,
+        changeSummary: "Conflict: your local edits",
+      });
+      if (!branch.ok) {
+        showToast(branch.error ?? "Couldn't save your version to History", "error");
+        return;
+      }
+
+      await applyTakeTheirs({ documentId: document.id, theirs });
+      await applyRemoteDocument(theirs);
+      markSynced(theirs.updated_at);
+      clearConflictUi();
+      showToast("Loaded their version. Yours was saved to History.", "success");
+    } finally {
+      setConflictResolving(false);
+    }
+  }, [
+    applyRemoteDocument,
+    clearConflictUi,
+    conflictTheirs,
+    contentPlain,
+    document,
+    markSynced,
+    reloadRemote,
+    showToast,
+  ]);
+
+  const toggleConflictReview = useCallback(() => {
+    setConflictReviewOpen((open) => !open);
+  }, []);
 
   const { awayNotice, dismissAwayNotice } = useDocumentAwayNotice(
     isEditingTemplate ? null : (document?.id ?? null),
@@ -882,9 +1102,15 @@ export function useEditorSession() {
       }
     },
     documentLive,
-    remoteConflict,
-    dismissConflict,
+    remoteConflict: activeConflict,
+    dismissConflict: clearConflictUi,
     keepLocal,
+    takeTheirs,
+    conflictResolving,
+    conflictReviewOpen,
+    toggleConflictReview,
+    conflictTheirs,
+    conflictBlockDiffs,
     awayNotice,
     dismissAwayNotice,
     reloadRemoteDocument: reloadRemote,

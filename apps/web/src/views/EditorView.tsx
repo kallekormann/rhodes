@@ -7,6 +7,7 @@ import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
 import { DocumentRemoteConflictBanner } from "@/components/DocumentRemoteConflictBanner";
+import { DocumentConflictReview } from "@/components/DocumentConflictReview";
 import type { Editor } from "@tiptap/react";
 import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
@@ -88,6 +89,12 @@ function EditorViewContent() {
     dismissAwayNotice,
     remoteConflict,
     keepLocal,
+    takeTheirs,
+    conflictResolving,
+    conflictReviewOpen,
+    toggleConflictReview,
+    conflictTheirs,
+    conflictBlockDiffs,
     reloadRemoteDocument,
     contentSyncToken,
     lockedBlockId,
@@ -310,7 +317,10 @@ function EditorViewContent() {
                     <span className="editor-content__meta-sep" aria-hidden="true">
                       ·
                     </span>
-                    <SyncStatusIndicator documentId={documentId} />
+                    <SyncStatusIndicator
+                      documentId={documentId}
+                      workspaceId={workspaceId}
+                    />
                   </>
                 )}
               </div>
@@ -424,8 +434,18 @@ function EditorViewContent() {
                 {remoteConflict && (
                   <DocumentRemoteConflictBanner
                     conflict={remoteConflict}
-                    onReload={() => void reloadRemoteDocument()}
-                    onKeepLocal={keepLocal}
+                    resolving={conflictResolving}
+                    reviewOpen={conflictReviewOpen}
+                    onReview={toggleConflictReview}
+                    onKeepMine={() => void keepLocal()}
+                    onTakeTheirs={() => void takeTheirs()}
+                  />
+                )}
+                {remoteConflict && conflictReviewOpen && conflictTheirs && (
+                  <DocumentConflictReview
+                    theirsContent={conflictTheirs.content}
+                    diffs={conflictBlockDiffs}
+                    onClose={toggleConflictReview}
                   />
                 )}
                 {!editorEditable && (

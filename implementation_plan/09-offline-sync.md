@@ -8,7 +8,8 @@
 
 **Started:** July 21, 2026 — IndexedDB scaffold + encrypted Ask history.  
 **Wave A (branch `feature/phase-09-offline-wave-a`):** document local-first outbox + push + `expected_updated_at` 409 + online/sync indicator.  
-**Conflict review (shared/team docs):** Keep mine / Take theirs / Review — no silent LWW overwrite; block-level merge = Wave B/C (see plan). CRDT/Yjs still O-007 V2.
+**Wave B (same branch):** Keep mine / Take theirs / Review + block-diff list; conflict version branches; workspace pull `since` cursor.  
+**Wave C (later):** per-block accept + write-third-variant merge card. CRDT/Yjs still O-007 V2.
 
 ---
 
@@ -98,13 +99,19 @@ Use [`idb`](https://github.com/jakearchibald/idb) package — **done** in [`apps
 
 ### 3. Sync engine
 
-**Done (Wave A — push only):** FIFO outbox drain; network errors stop and retry on `online` ([`useOnlineStatus`](../apps/web/src/hooks/useOnlineStatus.ts)); 409 → local `sync_status = conflict` (outbox kept for Wave B resolver). Pull/`since` cursor still open.
+**Done (Wave A — push):** FIFO outbox drain; network errors stop and retry on `online`; 409 → conflict + store theirs snapshot.  
+**Done (Wave B — pull):** [`pullWorkspaceDocuments`](../apps/web/src/lib/offline/sync-engine.ts) with `GET /api/documents?since=` cursor; skips docs with pending/conflict local state.
 
 ### 4. Conflict resolution
 
-**Locked product direction (not fully built in Wave A):** shared/team docs stay in IndexedDB. On conflict, user chooses Keep mine / Take theirs / Review (extend [`DocumentRemoteConflictBanner`](../apps/web/src/components/DocumentRemoteConflictBanner.tsx)) — never silent overwrite. Wave B: Review + block-diff via `blockId`. Wave C: per-block accept + optional “write third variant” card. Until then: 409 marks conflict + sync indicator; existing realtime Keep mine / Reload remains for live remote edits.
+**Done (Wave B):** Shared/team docs stay in IndexedDB. On realtime dirty conflict or outbox 409:
+- Banner: **Review** | **Keep mine** | **Take theirs** ([`DocumentRemoteConflictBanner`](../apps/web/src/components/DocumentRemoteConflictBanner.tsx))
+- Review: block-diff list (`blockId`) + read-only TipTap of theirs ([`DocumentConflictReview`](../apps/web/src/components/DocumentConflictReview.tsx))
+- Keep mine → version-branch theirs → force-push mine with `expected_updated_at = theirs`
+- Take theirs → version-branch mine → load server into editor, clear outbox
+- Versions POST accepts optional content override for conflict branches
 
-Per [12-offline-sync.md](../docs/12-offline-sync.md) version-branch toast remains the recovery path when choosing Keep/Take.
+**Wave C:** per-block Use mine/Use theirs + optional write-third-variant card.
 
 ### 5. Online/offline detection
 

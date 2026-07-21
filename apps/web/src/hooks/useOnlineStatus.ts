@@ -1,17 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { pushOutbox } from "@/lib/offline/sync-engine";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pullWorkspaceDocuments, pushOutbox } from "@/lib/offline/sync-engine";
 
-export function useOnlineStatus() {
+export function useOnlineStatus(workspaceId?: string | null) {
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
+
+  const retrySync = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.onLine) return;
+    void (async () => {
+      await pushOutbox();
+      const ws = workspaceIdRef.current;
+      if (ws) await pullWorkspaceDocuments(ws);
+    })();
+  }, []);
 
   useEffect(() => {
     const onOnline = () => {
       setOnline(true);
-      void pushOutbox();
+      retrySync();
     };
     const onOffline = () => setOnline(false);
 
@@ -21,12 +32,7 @@ export function useOnlineStatus() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, []);
-
-  const retrySync = useCallback(() => {
-    if (!navigator.onLine) return;
-    void pushOutbox();
-  }, []);
+  }, [retrySync]);
 
   return { online, retrySync };
 }

@@ -11,10 +11,14 @@ import "./SyncStatusIndicator.css";
 
 type SyncStatusIndicatorProps = {
   documentId: string | null;
+  workspaceId?: string | null;
 };
 
-export function SyncStatusIndicator({ documentId }: SyncStatusIndicatorProps) {
-  const { online } = useOnlineStatus();
+export function SyncStatusIndicator({
+  documentId,
+  workspaceId,
+}: SyncStatusIndicatorProps) {
+  const { online } = useOnlineStatus(workspaceId);
   const [status, setStatus] = useState<OfflineSyncStatus | null>(null);
 
   useEffect(() => {

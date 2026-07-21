@@ -30,6 +30,8 @@ export const listDocumentsQuerySchema = z.object({
   /** Title search (Cmd+K / discovery). */
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
+  /** Pull cursor — documents with updated_at strictly after this ISO timestamp. */
+  since: z.string().min(1).optional(),
 });
 
 export type DocumentFilter = z.infer<typeof documentFilterSchema>;

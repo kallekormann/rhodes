@@ -7,14 +7,20 @@ import "./DocumentRemoteConflictBanner.css";
 
 type DocumentRemoteConflictBannerProps = {
   conflict: DocumentRemoteConflict;
-  onReload: () => void;
-  onKeepLocal: () => void;
+  resolving?: boolean;
+  onKeepMine: () => void;
+  onTakeTheirs: () => void;
+  onReview: () => void;
+  reviewOpen?: boolean;
 };
 
 export function DocumentRemoteConflictBanner({
   conflict,
-  onReload,
-  onKeepLocal,
+  resolving = false,
+  onKeepMine,
+  onTakeTheirs,
+  onReview,
+  reviewOpen = false,
 }: DocumentRemoteConflictBannerProps) {
   const label = conflict.actorLabel?.trim() || "A collaborator";
   const changeDetail = formatRemoteNoticeDetail(conflict);
@@ -28,13 +34,35 @@ export function DocumentRemoteConflictBanner({
         {changeDetail && (
           <p className="document-remote-conflict__detail">{changeDetail}</p>
         )}
+        <p className="document-remote-conflict__detail">
+          Choose whose version stays live. The other is saved to History.
+        </p>
       </div>
       <div className="document-remote-conflict__actions">
-        <Button variant="secondary" size="small" onClick={onKeepLocal}>
+        <Button
+          variant="secondary"
+          size="small"
+          disabled={resolving}
+          onClick={onReview}
+        >
+          {reviewOpen ? "Hide review" : "Review"}
+        </Button>
+        <Button
+          variant="secondary"
+          size="small"
+          disabled={resolving}
+          loading={resolving}
+          onClick={onKeepMine}
+        >
           Keep mine
         </Button>
-        <Button variant="primary" size="small" onClick={onReload}>
-          Reload
+        <Button
+          variant="primary"
+          size="small"
+          disabled={resolving}
+          onClick={onTakeTheirs}
+        >
+          Take theirs
         </Button>
       </div>
     </div>

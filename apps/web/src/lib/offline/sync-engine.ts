@@ -7,12 +7,15 @@ import {
   putOfflineDocument,
   setOfflineDocumentStatus,
 } from "@/lib/offline/documents-cache";
+import { rememberConflictTheirs } from "@/lib/offline/conflict-resolve";
 import {
   listOutbox,
   removeOutboxEntry,
   type DocumentPatchPayload,
 } from "@/lib/offline/outbox";
 import type { OfflineSyncStatus } from "@/lib/offline/db";
+import { getOfflineDB } from "@/lib/offline/db";
+import type { DocumentRecord } from "@/hooks/useDocument";
 
 export type SyncConflictPayload = {
   documentId: string;
@@ -96,12 +99,20 @@ export async function pushOutbox(): Promise<{
 
       if (response.status === 409) {
         const data = await response.json().catch(() => ({}));
-        await setOfflineDocumentStatus(entry.document_id, "conflict");
+        const serverDocument =
+          (data.document as Record<string, unknown>) ??
+          (data as Record<string, unknown>);
+        try {
+          await rememberConflictTheirs(
+            entry.document_id,
+            serverDocument as DocumentRecord,
+          );
+        } catch {
+          await setOfflineDocumentStatus(entry.document_id, "conflict");
+        }
         const conflict: SyncConflictPayload = {
           documentId: entry.document_id,
-          serverDocument:
-            (data.document as Record<string, unknown>) ??
-            (data as Record<string, unknown>),
+          serverDocument,
         };
         conflicts.push(conflict);
         emit({
@@ -180,4 +191,83 @@ export async function getDocumentSyncStatus(
 ): Promise<OfflineSyncStatus | null> {
   const row = await getOfflineDocument(documentId);
   return row?.sync_status ?? null;
+}
+
+function pullCursorKey(workspaceId: string) {
+  return `last_sync_cursor:${workspaceId}`;
+}
+
+/**
+ * Pull remote document updates newer than the workspace cursor.
+ * Skips docs that have pending/conflict local state.
+ */
+export async function pullWorkspaceDocuments(
+  workspaceId: string,
+): Promise<{ pulled: number }> {
+  if (typeof window === "undefined" || !navigator.onLine) {
+    return { pulled: 0 };
+  }
+
+  const db = await getOfflineDB();
+  const sinceRaw = await db.get("meta", pullCursorKey(workspaceId));
+  const since = typeof sinceRaw === "string" ? sinceRaw : null;
+
+  const params = new URLSearchParams({
+    workspace_id: workspaceId,
+    filter: "all",
+    limit: "50",
+  });
+  if (since) params.set("since", since);
+
+  let response: Response;
+  try {
+    response = await fetch(`/app/api/documents?${params.toString()}`);
+  } catch {
+    return { pulled: 0 };
+  }
+
+  if (!response.ok) return { pulled: 0 };
+  const data = await response.json().catch(() => ({}));
+  const documents = (data.documents as DocumentRecord[]) ?? [];
+  let pulled = 0;
+  let newest = since;
+
+  for (const remote of documents) {
+    const local = await getOfflineDocument(remote.id);
+    if (
+      local &&
+      (local.sync_status === "pending" || local.sync_status === "conflict")
+    ) {
+      continue;
+    }
+
+    await putOfflineDocument(
+      toOfflineRecord(remote),
+    );
+    pulled += 1;
+    if (!newest || remote.updated_at > newest) {
+      newest = remote.updated_at;
+    }
+  }
+
+  if (newest) {
+    await db.put("meta", newest, pullCursorKey(workspaceId));
+  }
+
+  return { pulled };
+}
+
+function toOfflineRecord(remote: DocumentRecord) {
+  return {
+    id: remote.id,
+    workspace_id: remote.workspace_id,
+    title: remote.title,
+    content: remote.content,
+    content_plain: remote.content_plain,
+    metadata: remote.metadata,
+    server_updated_at: remote.updated_at,
+    updated_at: remote.updated_at,
+    created_at: remote.created_at,
+    sync_status: "synced" as const,
+  };
 }
