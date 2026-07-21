@@ -20,6 +20,8 @@ export async function enqueueDocumentEmbed(input: {
         jobId: `doc-embed-${input.documentId}`,
         removeOnComplete: 100,
         removeOnFail: 50,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
       },
     );
   } finally {

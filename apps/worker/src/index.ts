@@ -8,12 +8,17 @@ import {
   LIBRARY_SUMMARIZE_QUEUE,
   LLM_QUEUE,
 } from "@rhodes/shared/constants";
+import { libraryFailureMetadata } from "@rhodes/shared/library-failure";
 import { connection } from "./connection";
 import { processEmbedDocumentJob } from "./jobs/embed-document";
 import { processEmbedJob } from "./jobs/embed";
 import { processIngestJob } from "./jobs/ingest";
 import { processLlmJob } from "./jobs/llm-generate";
 import { processSummarizeJob } from "./jobs/summarize";
+import {
+  LIBRARY_PIPELINE_STAGE,
+  setLibraryPipelineStage,
+} from "./lib/library-source";
 
 const heartbeatQueue = new Queue("heartbeat", { connection });
 
@@ -95,6 +100,12 @@ for (const worker of [
         .from("library_sources")
         .update({ embedding_status: "failed" })
         .eq("id", sourceId);
+      await setLibraryPipelineStage(
+        admin,
+        sourceId,
+        LIBRARY_PIPELINE_STAGE.FAILED,
+        libraryFailureMetadata(error),
+      );
     } catch (markError) {
       console.error(`[worker] could not mark source failed`, sourceId, markError);
     }
@@ -116,7 +127,30 @@ console.log(
   "[worker] started library ingest, embed, summarize, document-embed, and llm workers",
 );
 
+process.on("uncaughtException", (error) => {
+  console.error("[worker] uncaughtException", error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[worker] unhandledRejection", reason);
+  process.exit(1);
+});
+
 process.on("SIGINT", async () => {
+  await Promise.all([
+    ingestWorker.close(),
+    embedWorker.close(),
+    summarizeWorker.close(),
+    documentEmbedWorker.close(),
+    llmWorker.close(),
+    heartbeatWorker.close(),
+    heartbeatQueue.close(),
+  ]);
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
   await Promise.all([
     ingestWorker.close(),
     embedWorker.close(),

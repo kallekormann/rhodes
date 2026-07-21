@@ -1,25 +1,13 @@
-import { extractTextWithTika } from "./tika";
+import { extractLibraryDocument } from "./extractors/router";
 
-const PLAIN_TEXT_MIME_TYPES = new Set([
-  "text/plain",
-  "text/markdown",
-  "text/x-markdown",
-]);
-
-function decodeUtf8Text(bytes: Uint8Array): string {
-  return new TextDecoder("utf-8", { fatal: false })
-    .decode(bytes)
-    .replace(/\u0000/g, "")
-    .trim();
-}
-
+/** @deprecated Prefer extractLibraryDocument — kept for callers expecting plain text. */
 export async function extractLibraryText(
   bytes: Uint8Array,
   mimeType: string,
+  fileName?: string | null,
 ): Promise<string> {
-  if (PLAIN_TEXT_MIME_TYPES.has(mimeType)) {
-    return decodeUtf8Text(bytes);
-  }
-
-  return extractTextWithTika(bytes, mimeType);
+  const extracted = await extractLibraryDocument(bytes, mimeType, fileName);
+  return extracted.full_text;
 }
+
+export { extractLibraryDocument };

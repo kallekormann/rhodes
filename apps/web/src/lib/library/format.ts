@@ -1,8 +1,10 @@
 export function formatLibraryFileSize(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return "—";
+  if (bytes == null || Number.isNaN(bytes)) return "—";
+  if (bytes <= 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const mb = bytes / (1024 * 1024);
+  return mb >= 100 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
 }
 
 export function formatLibraryDate(iso: string): string {

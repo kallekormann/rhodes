@@ -11,6 +11,8 @@ export type InsightMatch = {
   page_ref: number | null;
   similarity: number;
   relevance_percent: number;
+  location_label?: string;
+  chunk_metadata?: Record<string, unknown> | null;
 };
 
 export function useInsights(

@@ -1,4 +1,10 @@
 import type { LibraryEmbeddingStatus } from "./schemas";
+import {
+  isLibraryFailureCode,
+  libraryFailurePrimaryAction,
+  reasonForLibraryFailure,
+  type LibraryFailureCode,
+} from "@rhodes/shared/library-failure";
 
 export type LibraryPipelineStage =
   | "queued"
@@ -25,6 +31,24 @@ export function readPipelineStage(
   return null;
 }
 
+export function readLibraryFailureCode(
+  metadata: Record<string, unknown> | null | undefined,
+): LibraryFailureCode | null {
+  const code = metadata?.failure_code;
+  return isLibraryFailureCode(code) ? code : null;
+}
+
+export function readLibraryFailureMessage(
+  metadata: Record<string, unknown> | null | undefined,
+): string | null {
+  const code = readLibraryFailureCode(metadata);
+  const stored =
+    typeof metadata?.last_error === "string" ? metadata.last_error.trim() : "";
+  if (code) return reasonForLibraryFailure(code, stored || null);
+  if (stored) return stored;
+  return null;
+}
+
 export function librarySourceStatusToPill(input: {
   embedding_status: LibraryEmbeddingStatus;
   summary?: string | null;
@@ -39,6 +63,14 @@ export function librarySourceStatusToPill(input: {
     return { variant: "error", label: "Failed" };
   }
 
+  // Trust embedding_status=ready over a stale pipeline_stage (e.g. indexing).
+  if (input.embedding_status === "ready") {
+    if (stage === "analyzing") {
+      return { variant: "progress", label: "Analyzing…" };
+    }
+    return { variant: "success", label: "Ready" };
+  }
+
   if (stage === "reading") {
     return { variant: "progress", label: "Reading file…" };
   }
@@ -49,13 +81,6 @@ export function librarySourceStatusToPill(input: {
 
   if (stage === "analyzing") {
     return { variant: "progress", label: "Analyzing…" };
-  }
-
-  if (input.embedding_status === "ready") {
-    if (!input.summary && stage !== "ready") {
-      return { variant: "progress", label: "Analyzing…" };
-    }
-    return { variant: "success", label: "Ready" };
   }
 
   if (stage === "queued" || input.embedding_status === "pending") {
@@ -73,10 +98,24 @@ export function librarySourceIsInFlight(input: {
   embedding_status: LibraryEmbeddingStatus;
   metadata?: Record<string, unknown> | null;
 }): boolean {
-  if (input.embedding_status === "pending" || input.embedding_status === "processing") {
+  if (
+    input.embedding_status === "pending" ||
+    input.embedding_status === "processing"
+  ) {
     return true;
   }
 
-  const stage = readPipelineStage(input.metadata);
-  return stage === "queued" || stage === "reading" || stage === "indexing" || stage === "analyzing";
+  if (input.embedding_status === "ready") {
+    return readPipelineStage(input.metadata) === "analyzing";
+  }
+
+  return false;
+}
+
+export function librarySourceFailureCta(input: {
+  embedding_status: LibraryEmbeddingStatus;
+  metadata?: Record<string, unknown> | null;
+}): { action: "retry" | "replace" | "remove"; label: string } | null {
+  if (input.embedding_status !== "failed") return null;
+  return libraryFailurePrimaryAction(readLibraryFailureCode(input.metadata));
 }

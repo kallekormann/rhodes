@@ -1,0 +1,12 @@
+.ask-sources-line {
+  margin: 0;
+  padding: 0 var(--space-xs);
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-muted, #6b7280);
+  line-height: 1.45;
+}
+
+.ask-sources-line__prefix {
+  font-weight: 600;
+  color: var(--color-text, inherit);
+}

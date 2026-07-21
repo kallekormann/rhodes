@@ -14,6 +14,14 @@ export function CitationBlockView({
   const excerptRef = useRef<HTMLDivElement>(null);
   const preview = citationPreviewInput(node.attrs);
   const sourceTitle = String(node.attrs.sourceTitle ?? "").trim() || "Source";
+  const locationLabel = String(node.attrs.locationLabel ?? "").trim();
+  const page =
+    typeof node.attrs.page === "number" ? node.attrs.page : null;
+  const chipLabel = locationLabel
+    ? `${sourceTitle} · ${locationLabel}`
+    : page != null
+      ? `${sourceTitle} · p.${page}`
+      : sourceTitle;
   const previewUrl = preview ? knowledgeSourcePreviewUrl(preview) : null;
 
   useEffect(() => {
@@ -43,10 +51,10 @@ export function CitationBlockView({
             if (preview) openKnowledgeSourcePreview(preview);
           }}
         >
-          {sourceTitle}
+          {chipLabel}
         </a>
       ) : (
-        <div className="editor-citation__chip">{sourceTitle}</div>
+        <div className="editor-citation__chip">{chipLabel}</div>
       )}
       <div
         ref={excerptRef}

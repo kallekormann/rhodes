@@ -596,7 +596,7 @@ services:
   redis:
     container_name: rhodes-redis
     image: redis:7-alpine
-    restart: unless-stopped
+    restart: always
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -609,7 +609,7 @@ services:
   ollama:
     container_name: rhodes-ollama
     image: ollama/ollama:latest
-    restart: unless-stopped
+    restart: always
     volumes:
       - ollama-data:/root/.ollama
     healthcheck:
@@ -622,13 +622,60 @@ services:
   tika:
     container_name: rhodes-tika
     image: apache/tika:latest-full
-    restart: unless-stopped
+    restart: always
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:9998/tika || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # BullMQ worker — library ingest/embed, document embed, LLM jobs.
+  # Dev: docker-compose.dev.yml mounts the monorepo and runs tsx watch.
+  # Prod: build apps/worker/Dockerfile (Phase 13).
+  worker:
+    container_name: rhodes-worker
+    image: node:22-bookworm
+    restart: always
+    working_dir: /app
+    depends_on:
+      redis:
+        condition: service_healthy
+      tika:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      RHODES_IN_DOCKER: "1"
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      TIKA_URL: http://tika:9998
+      OLLAMA_HOST: http://ollama:11434
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      RHODES_DATA_DIR: /app/.data
+      RHODES_LIBRARY_DATA_DIR: /app/.data/library-files
+      RHODES_DOCUMENT_IMAGES_DATA_DIR: /app/.data/document-images
+    volumes:
+      - ../.data:/app/.data
+    # Default command replaced in docker-compose.dev.yml for hot reload.
+    # Prod should use: build + CMD from apps/worker/Dockerfile
+    command:
+      [
+        "bash",
+        "-c",
+        "echo 'Worker image needs docker-compose.dev.yml (tsx) or a built Dockerfile. See apps/worker/Dockerfile.' && sleep infinity",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"const u=process.env.REDIS_URL||'redis://redis:6379'; require('net').connect(Number(new URL(u).port||6379), new URL(u).hostname,()=>process.exit(0)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
 volumes:
   db-config:

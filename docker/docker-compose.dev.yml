@@ -58,3 +58,33 @@ services:
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  # Hot-reload worker: mount monorepo, run tsx watch. restart: always from base compose.
+  worker:
+    working_dir: /app
+    volumes:
+      - ..:/app
+      - ../.data:/app/.data
+      - worker-node-modules:/app/node_modules
+      - worker-app-node-modules:/app/apps/worker/node_modules
+    environment:
+      RHODES_IN_DOCKER: "1"
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      TIKA_URL: http://tika:9998
+      OLLAMA_HOST: http://ollama:11434
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      RHODES_DATA_DIR: /app/.data
+      RHODES_LIBRARY_DATA_DIR: /app/.data/library-files
+      RHODES_DOCUMENT_IMAGES_DATA_DIR: /app/.data/document-images
+    command:
+      [
+        "bash",
+        "-c",
+        "corepack enable && corepack prepare pnpm@10.27.0 --activate && pnpm install --filter @rhodes/worker... && pnpm --filter @rhodes/worker dev",
+      ]
+
+volumes:
+  worker-node-modules:
+  worker-app-node-modules:

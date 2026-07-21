@@ -6,6 +6,7 @@ import {
   ASK_NO_CONTEXT_REPLY,
   createOllamaClient,
   retrieveWorkspaceKnowledge,
+  rerankKnowledgeMatches,
   type KnowledgeMatch,
 } from "@rhodes/ai";
 import { OLLAMA_CHAT_MODEL, OLLAMA_FAST_MODEL } from "@rhodes/shared/constants";
@@ -105,14 +106,41 @@ export async function POST(request: Request) {
             title: match.title,
             page_ref: match.page_ref,
             origin_type: match.origin_type,
+            location_label: match.location_label,
           })),
         });
 
-        if (matches.length === 0) {
+        let kept = matches;
+        if (matches.length > 0) {
+          const { kept: reranked } = await rerankKnowledgeMatches({
+            question: lastUserMessage.content,
+            matches: matches.slice(0, 8),
+            concurrency: 3,
+            onStep: async (step) => {
+              send({
+                type: "reasoning_step",
+                label: step.label,
+                verdict: step.verdict,
+                origin_type: step.origin_type,
+                location_label: step.location_label,
+                title: step.title,
+              });
+            },
+          });
+          kept = reranked;
+          send({
+            type: "reasoning_done",
+            kept_count: kept.length,
+            skipped_count: Math.max(0, matches.slice(0, 8).length - kept.length),
+          });
+        }
+
+        if (kept.length === 0) {
           send({
             type: "token",
             token: ASK_NO_CONTEXT_REPLY,
           });
+          send({ type: "sources_used", sources: [] });
           send({ type: "done" });
           controller.close();
           return;
@@ -121,7 +149,7 @@ export async function POST(request: Request) {
         const ollama = createOllamaClient();
         const prompt = `${askSystemPrompt()}\n\n${askUserPrompt({
           question: lastUserMessage.content,
-          matches,
+          matches: kept,
         })}`;
 
         let streamed = false;
@@ -155,6 +183,14 @@ export async function POST(request: Request) {
           throw new Error("Ask generation returned no tokens");
         }
 
+        send({
+          type: "sources_used",
+          sources: kept.map((match) => ({
+            title: match.title,
+            location_label: match.location_label,
+            origin_type: match.origin_type,
+          })),
+        });
         send({ type: "done" });
         controller.close();
       } catch (error) {

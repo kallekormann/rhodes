@@ -9,7 +9,10 @@
     "./tiers": "./src/tiers.ts",
     "./team-roles": "./src/team-roles.ts",
     "./features": "./src/features.ts",
-    "./scope-views": "./src/scope-views.ts"
+    "./scope-views": "./src/scope-views.ts",
+    "./chunk-metadata": "./src/chunk-metadata.ts",
+    "./citation-location": "./src/citation-location.ts",
+    "./library-failure": "./src/library-failure.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,0 +1,24 @@
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.pagination-bar__status {
+  margin: 0;
+  text-align: center;
+  flex: 1;
+}
+
+@media (max-width: 520px) {
+  .pagination-bar {
+    flex-wrap: wrap;
+  }
+
+  .pagination-bar__status {
+    order: -1;
+    flex: 1 1 100%;
+  }
+}

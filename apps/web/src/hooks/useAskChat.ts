@@ -2,17 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { markAskEngagedToday } from "@/lib/ask/engagement";
+import type { AskReasoningStep } from "@/components/ask/AskReasoningTicker";
+import type { AskSourceUsed } from "@/components/ask/AskSourcesLine";
 
 export type AskMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  sourcesUsed?: AskSourceUsed[];
 };
+
+export type AskPendingPhase = "idle" | "searching" | "reranking" | "generating";
 
 type AskContextMatch = {
   title: string;
   page_ref: number | null;
   origin_type: string;
+  location_label?: string;
 };
 
 function toApiMessages(messages: AskMessage[]) {
@@ -43,6 +49,8 @@ function parseAskError(error: unknown): string {
 export function useAskChat(workspaceId: string | null) {
   const [messages, setMessages] = useState<AskMessage[]>([]);
   const [pending, setPending] = useState(false);
+  const [pendingPhase, setPendingPhase] = useState<AskPendingPhase>("idle");
+  const [reasoningStep, setReasoningStep] = useState<AskReasoningStep | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contextMatches, setContextMatches] = useState<AskContextMatch[]>([]);
   const abortRef = useRef<AbortController | null>(null);
@@ -52,6 +60,8 @@ export function useAskChat(workspaceId: string | null) {
     abortRef.current = null;
     setMessages([]);
     setPending(false);
+    setPendingPhase("idle");
+    setReasoningStep(null);
     setError(null);
     setContextMatches([]);
   }, []);
@@ -77,9 +87,12 @@ export function useAskChat(workspaceId: string | null) {
 
       const assistantId = `a-${Date.now()}`;
       const nextMessages = [...messages, userMessage];
+      let sourcesUsed: AskSourceUsed[] = [];
 
       setMessages(nextMessages);
       setPending(true);
+      setPendingPhase("searching");
+      setReasoningStep(null);
       setError(null);
       setContextMatches([]);
       markAskEngagedToday();
@@ -98,12 +111,14 @@ export function useAskChat(workspaceId: string | null) {
         const data = await response.json().catch(() => ({}));
         setError(parseAskError(data.error));
         setPending(false);
+        setPendingPhase("idle");
         return;
       }
 
       if (!response.body) {
         setError("Ask stream unavailable");
         setPending(false);
+        setPendingPhase("idle");
         return;
       }
 
@@ -134,17 +149,47 @@ export function useAskChat(workspaceId: string | null) {
             token?: string;
             message?: string;
             matches?: AskContextMatch[];
+            label?: string;
+            verdict?: "keep" | "skip";
+            sources?: AskSourceUsed[];
           };
 
           if (payload.type === "context" && Array.isArray(payload.matches)) {
             setContextMatches(payload.matches);
+            setPendingPhase("reranking");
+          }
+
+          if (payload.type === "reasoning_step" && payload.label && payload.verdict) {
+            setPendingPhase("reranking");
+            setReasoningStep({
+              label: payload.label,
+              verdict: payload.verdict,
+            });
+          }
+
+          if (payload.type === "reasoning_done") {
+            setReasoningStep(null);
+            setPendingPhase("generating");
           }
 
           if (payload.type === "token" && payload.token) {
+            setPendingPhase("generating");
+            setReasoningStep(null);
             setMessages((prev) =>
               prev.map((message) =>
                 message.id === assistantId
                   ? { ...message, content: message.content + payload.token }
+                  : message,
+              ),
+            );
+          }
+
+          if (payload.type === "sources_used" && Array.isArray(payload.sources)) {
+            sourcesUsed = payload.sources;
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === assistantId
+                  ? { ...message, sourcesUsed: payload.sources }
                   : message,
               ),
             );
@@ -164,9 +209,19 @@ export function useAskChat(workspaceId: string | null) {
               message.id !== assistantId || message.content.trim().length > 0,
           ),
         );
+      } else if (sourcesUsed.length > 0) {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? { ...message, sourcesUsed }
+              : message,
+          ),
+        );
       }
 
       setPending(false);
+      setPendingPhase("idle");
+      setReasoningStep(null);
     },
     [messages, pending, workspaceId],
   );
@@ -174,6 +229,8 @@ export function useAskChat(workspaceId: string | null) {
   return {
     messages,
     pending,
+    pendingPhase,
+    reasoningStep,
     error,
     contextMatches,
     sendMessage,

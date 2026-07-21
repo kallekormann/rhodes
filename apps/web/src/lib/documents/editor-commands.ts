@@ -63,6 +63,8 @@ export type CitationInsertInput = {
   sourceTitle: string;
   page: number | null;
   excerpt: string;
+  locationLabel?: string;
+  locationMetadata?: Record<string, unknown> | null;
   placement?: CitationPlacement;
   /** Recent writing context — used to pick a related block when placement is related-block. */
   queryContext?: string;
@@ -78,6 +80,8 @@ export function insertCitation(editor: Editor, input: CitationInsertInput) {
       originType: input.originType ?? "source_chunk",
       sourceTitle: input.sourceTitle,
       page: input.page,
+      locationLabel: input.locationLabel ?? "",
+      locationMetadata: input.locationMetadata ?? null,
       excerpt: input.excerpt,
     },
   };

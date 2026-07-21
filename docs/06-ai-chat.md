@@ -22,10 +22,12 @@ Add an **optional chat mode** accessible from the insight sidebar or Cmd+K — s
 
 ### Chat behavior
 
-1. User message → embed query → `match_workspace_knowledge` (top 10)
-2. Build context window from chunks (max 4000 tokens)
-3. Stream response from `llama3.1:8b-instruct-q4_K_M`
-4. Display inline citations `[Source: filename, p.3]`
+1. User message → embed query → `match_workspace_knowledge` (top ~8–10)
+2. **LLM rerank** each candidate (`llama3.2:3b`) with a short human label + keep/skip
+3. Stream SSE `reasoning_step` / `reasoning_done` so Ask UI shows ephemeral “looking at…” lines
+4. Build answer prompt from **kept** chunks only; stream tokens from `llama3.1:8b`
+5. Emit `sources_used` (✓ sources) for a persistent sources line under the reply
+6. Location labels come from `chunk_metadata` (page / section / sheet / heading path)
 
 ### System prompt (EN template)
 
@@ -43,16 +45,16 @@ Locale-specific variants in `prompts/{locale}/chat-system.md`.
 | Rule | Enforcement |
 |------|-------------|
 | Single workspace | `target_workspace_id` from active space — never cross-space |
-| No general knowledge | System prompt + empty retrieval → refuse |
+| No general knowledge | System prompt + empty retrieval / all rerank-skip → refuse |
 | No code execution | Text generation only |
 | Rate limit | 20 messages/user/hour on Free; unlimited Pro |
 
 ### UI
 
-- Chat panel replaces insight list in right sidebar (same width states)
-- Message bubbles minimal — no avatars, monospace for citations
-- Streaming cursor while generating
-- "Thinking…" after 2s if no token yet (CPU latency)
+- Chat panel in right sidebar Ask tab — **sticky composer**; only the message list scrolls
+- Ephemeral reasoning ticker in the thread (replaced each step); persistent sources line after answer
+- Message bubbles minimal — no avatars
+- Composer status: searching → thinking while generating
 
 ### Persistence
 

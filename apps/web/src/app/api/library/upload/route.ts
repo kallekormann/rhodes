@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@rhodes/db";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { assertLibraryUploadAllowed } from "@/lib/library/account-quota";
 import { saveLocalLibraryFile } from "@/lib/library/local-storage";
 import { enqueueLibraryIngest } from "@/lib/library/queue";
 import {
@@ -65,6 +66,18 @@ export async function POST(request: Request) {
   if (!allowed) {
     return withSecurityHeaders(
       NextResponse.json({ error: "Forbidden" }, { status: 403 }),
+    );
+  }
+
+  const quotaCheck = await assertLibraryUploadAllowed({
+    workspaceId,
+    uploaderUserId: user.id,
+    fileSize: file.size,
+  });
+
+  if (!quotaCheck.ok) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: quotaCheck.error }, { status: quotaCheck.status }),
     );
   }
 

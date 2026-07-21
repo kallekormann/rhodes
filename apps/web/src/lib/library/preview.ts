@@ -2,6 +2,14 @@ export function isLibraryOrigin(originType: string | null | undefined): boolean 
   return originType === "source_chunk" || originType === "library";
 }
 
+export function isDocumentOrigin(originType: string | null | undefined): boolean {
+  return (
+    originType === "document" ||
+    originType === "document_chunk" ||
+    originType === "workspace_document"
+  );
+}
+
 export function libraryServeUrl(sourceRefId: string, page?: number | null): string {
   const base = `/app/api/library/${encodeURIComponent(sourceRefId)}/serve`;
   if (page == null) return base;

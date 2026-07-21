@@ -16,6 +16,7 @@ import { RadioGroup } from "@/components/Radio";
 import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
 import { ProfileAvatarField } from "@/components/settings/ProfileAvatarField";
+import { LibraryStorageQuota } from "@/components/settings/LibraryStorageQuota";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
 import { Toggle } from "@/components/Toggle";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -37,6 +38,7 @@ const USER_SECTIONS = [
   "Profile",
   "Security",
   "Preferences",
+  "Storage",
   "Billing",
   "Privacy",
 ] as const;
@@ -911,6 +913,17 @@ export function SettingsView() {
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {section === "Storage" && (
+            <div className="settings-section">
+              <GroupLabel>Library storage</GroupLabel>
+              <p className="caption settings-section__intro">
+                File storage for scopes you own (personal and team). Uploads by
+                invited members in your teams count toward this total.
+              </p>
+              <LibraryStorageQuota />
             </div>
           )}
 

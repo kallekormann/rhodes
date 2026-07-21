@@ -44,6 +44,7 @@ Track unresolved questions across the Rhodes spec. Update as decisions are made 
 | O-008 | OCR for scanned PDFs? | Tesseract sidecar / V2 | |
 | O-009 | Resend vs AWS SES for MVP? | Resend (DX) / SES (EU) | Both valid |
 | O-010 | PWA / Service Worker install? | V1.5 / No | Offline enhancement |
+| O-019 | Library originals on VPS: managed S3 + BYO architecture | See [27-library-file-storage-vps.md](27-library-file-storage-vps.md) | **Blocking before prod VPS cutover** |
 
 ## Open — design (deferred session)
 

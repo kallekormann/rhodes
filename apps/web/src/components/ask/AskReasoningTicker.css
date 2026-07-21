@@ -1,0 +1,43 @@
+.ask-reasoning-ticker {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle, color-mix(in srgb, var(--color-border) 25%, transparent));
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-text-muted, var(--color-text));
+  line-height: 1.4;
+}
+
+.ask-reasoning-ticker__spinner {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.3rem;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent, #6b4eff);
+  flex-shrink: 0;
+  animation: ask-reasoning-spin 0.7s linear infinite;
+}
+
+.ask-reasoning-ticker__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.ask-reasoning-ticker__verdict {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--color-success, #1a7f37);
+}
+
+.ask-reasoning-ticker__verdict--skip {
+  color: var(--color-text-muted, #888);
+}
+
+@keyframes ask-reasoning-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

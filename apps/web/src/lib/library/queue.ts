@@ -20,9 +20,13 @@ async function addOrReplaceJob<T>(
 ) {
   const existing = await queue.getJob(jobId);
   if (existing) {
-    const state = await existing.getState();
-    if (state !== "completed") {
+    try {
       await existing.remove();
+    } catch {
+      return queue.add(name, data, {
+        ...options,
+        jobId: `${jobId}-${Date.now()}`,
+      });
     }
   }
 
@@ -40,6 +44,8 @@ export async function enqueueLibraryIngest(input: {
     await addOrReplaceJob(queue, "process-file", input, `ingest-${input.sourceId}`, {
       removeOnComplete: 100,
       removeOnFail: 50,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 },
     });
   } finally {
     await queue.close();
@@ -58,6 +64,8 @@ export async function enqueueLibraryIngestRetry(input: {
       jobId: `ingest-${input.sourceId}-${Date.now()}`,
       removeOnComplete: 100,
       removeOnFail: 50,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 5_000 },
     });
   } finally {
     await queue.close();

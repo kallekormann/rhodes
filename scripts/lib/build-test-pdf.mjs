@@ -5,7 +5,9 @@ function escapePdfString(value) {
 }
 
 function pageContent(pageNumber) {
-  const line = escapePdfString(`Rhodes library QA page ${pageNumber}. `.repeat(8).trim());
+  const line = escapePdfString(
+    `Rhodes library QA page ${pageNumber}. `.repeat(8).trim(),
+  );
   const stream = `BT /F1 11 Tf 72 720 Td (${line}) Tj ET`;
   return { stream, length: Buffer.byteLength(stream, "utf8") };
 }
@@ -13,7 +15,9 @@ function pageContent(pageNumber) {
 export function buildTestPdf(pageCount = 1) {
   const pages = Math.max(1, Math.min(pageCount, 30));
   const fontObjId = 3 + pages * 2;
-  const kidRefs = Array.from({ length: pages }, (_, i) => `${3 + i * 2} 0 R`).join(" ");
+  const kidRefs = Array.from({ length: pages }, (_, i) => `${3 + i * 2} 0 R`).join(
+    " ",
+  );
 
   const objects = [];
   const append = (body) => {
@@ -34,8 +38,10 @@ export function buildTestPdf(pageCount = 1) {
 
   append("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
 
+  // Offsets must be relative to the start of the file (including the header).
+  const header = "%PDF-1.4\n";
   const offsets = [];
-  let body = "";
+  let body = header;
   for (let i = 0; i < objects.length; i += 1) {
     offsets.push(Buffer.byteLength(body, "utf8"));
     body += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
@@ -47,6 +53,6 @@ export function buildTestPdf(pageCount = 1) {
     xref += `${String(off).padStart(10, "0")} 00000 n \n`;
   }
 
-  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(`%PDF-1.4\n${body}${xref}${trailer}`, "utf8");
+  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(`${body}${xref}${trailer}`, "utf8");
 }

@@ -8,8 +8,11 @@ import {
 } from "@rhodes/shared/constants";
 import { addOrReplaceJob } from "../lib/queue-job";
 import {
+  clearLibraryFailureMetadata,
+  libraryFailureMetadata,
+} from "@rhodes/shared/library-failure";
+import {
   LIBRARY_PIPELINE_STAGE,
-  mergeSourceMetadata,
   setLibraryPipelineStage,
 } from "../lib/library-source";
 import { connection } from "../connection";
@@ -46,7 +49,11 @@ async function embedWithRetry(texts: string[]): Promise<number[][]> {
   throw lastError instanceof Error ? lastError : new Error("Embedding failed");
 }
 
-async function enqueueSummarizeJob(sourceId: string, workspaceId: string) {
+/** Returns true if a summarize job was enqueued. */
+async function enqueueSummarizeJob(
+  sourceId: string,
+  workspaceId: string,
+): Promise<boolean> {
   const admin = createAdminClient();
   const { data: source, error } = await admin
     .from("library_sources")
@@ -58,7 +65,7 @@ async function enqueueSummarizeJob(sourceId: string, workspaceId: string) {
     throw new Error(error.message);
   }
 
-  if (!source || source.summary) return;
+  if (!source || source.summary) return false;
 
   const metadata =
     source.metadata && typeof source.metadata === "object"
@@ -69,9 +76,11 @@ async function enqueueSummarizeJob(sourceId: string, workspaceId: string) {
       ? metadata.extracted_text_excerpt
       : "";
 
-  if (!excerpt.trim()) return;
+  if (!excerpt.trim()) return false;
 
-  await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.ANALYZING);
+  await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.ANALYZING, {
+    ...clearLibraryFailureMetadata(),
+  });
 
   await addOrReplaceJob(
     summarizeQueue,
@@ -85,6 +94,7 @@ async function enqueueSummarizeJob(sourceId: string, workspaceId: string) {
       backoff: { type: "exponential", delay: 15_000 },
     },
   );
+  return true;
 }
 
 export async function processEmbedJob(job: Job<EmbedJobData>) {
@@ -95,7 +105,7 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
   try {
     const { data: chunks, error: loadError } = await admin
       .from("library_source_chunks")
-      .select("id, content_chunk")
+      .select("id, content_chunk, chunk_metadata")
       .eq("source_id", sourceId)
       .is("embedding", null)
       .order("chunk_index", { ascending: true });
@@ -107,7 +117,17 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
     const pending = chunks ?? [];
     for (let i = 0; i < pending.length; i += BATCH_SIZE) {
       const batch = pending.slice(i, i + BATCH_SIZE);
-      const vectors = await embedWithRetry(batch.map((chunk) => chunk.content_chunk));
+      const texts = batch.map((chunk) => {
+        const meta =
+          chunk.chunk_metadata && typeof chunk.chunk_metadata === "object"
+            ? (chunk.chunk_metadata as { display?: { reasoning_label?: string } })
+            : null;
+        const prefix = meta?.display?.reasoning_label?.trim();
+        return prefix
+          ? `${prefix}\n${chunk.content_chunk}`
+          : chunk.content_chunk;
+      });
+      const vectors = await embedWithRetry(texts);
 
       await Promise.all(
         batch.map(async (chunk, index) => {
@@ -144,7 +164,15 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
         .update({ embedding_status: "ready" })
         .eq("id", sourceId);
 
-      await enqueueSummarizeJob(sourceId, workspaceId);
+      const summarizing = await enqueueSummarizeJob(sourceId, workspaceId);
+      if (!summarizing) {
+        await setLibraryPipelineStage(
+          admin,
+          sourceId,
+          LIBRARY_PIPELINE_STAGE.READY,
+          clearLibraryFailureMetadata(),
+        );
+      }
     }
 
     console.log("[embed] done", {
@@ -157,9 +185,12 @@ export async function processEmbedJob(job: Job<EmbedJobData>) {
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", sourceId);
-    await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.FAILED).catch(
-      () => {},
-    );
+    await setLibraryPipelineStage(
+      admin,
+      sourceId,
+      LIBRARY_PIPELINE_STAGE.FAILED,
+      libraryFailureMetadata(error),
+    ).catch(() => {});
     throw error;
   }
 }

@@ -41,9 +41,12 @@ export function buildRagContext(matches: KnowledgeMatch[]): string {
 
   return matches
     .map((match, index) => {
-      const page =
-        match.page_ref != null ? `, p.${match.page_ref}` : "";
-      return `[${index + 1}] Source: ${match.title}${page}
+      const location = match.location_label
+        ? `, ${match.location_label}`
+        : match.page_ref != null
+          ? `, p.${match.page_ref}`
+          : "";
+      return `[${index + 1}] Source: ${match.title}${location}
 Type: ${match.origin_type}
 Excerpt: ${match.matched_text.slice(0, 1200)}`;
     })

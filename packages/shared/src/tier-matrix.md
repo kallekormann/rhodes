@@ -17,7 +17,7 @@ Human-readable source of truth for subscription tiers. Code limits live in [`tie
 |-------|------|-------|-----|------|
 | Personal scopes | 1 | 5 | Unlimited | Unlimited |
 | Team scopes | 0 | 0 | 3 | Unlimited |
-| Library storage | 500 MB | 2 GB | 5 GB | 50 GB |
+| Library storage | 100 MB | 1 GB | 5 GB | 50 GB |
 | Max file size | 2 MB | 5 MB | 10 MB | 30 MB |
 | Allowed file types | txt, md, docx | + pdf, docx, epub | + pdf, docx, ppt, epub | + pdf, docx, ppt, epub |
 | Templates create | No | Yes | Yes | Yes |
@@ -57,6 +57,25 @@ When the full catalog exists, each additional view may also have its own `minTie
 ## Dev override
 
 `NEXT_PUBLIC_MOCK_TIER=free|basic|pro|team` in `apps/web/.env.local` (see `.env.example`). Defaults to `free` after Wave 4 enforcement audit.
+
+### Library quota env overrides (server)
+
+Optional MB overrides (unset = table above):
+
+```bash
+RHODES_LIBRARY_STORAGE_MB_FREE=100
+RHODES_LIBRARY_STORAGE_MB_BASIC=1024
+RHODES_LIBRARY_STORAGE_MB_PRO=5120
+RHODES_LIBRARY_STORAGE_MB_TEAM=51200
+RHODES_LIBRARY_MAX_FILE_MB_FREE=2
+RHODES_LIBRARY_MAX_FILE_MB_BASIC=5
+RHODES_LIBRARY_MAX_FILE_MB_PRO=10
+RHODES_LIBRARY_MAX_FILE_MB_TEAM=30
+```
+
+Storage quota is **account-owner** scoped: sum of library file bytes across all workspaces the account owns (personal + team). Invited members uploading into a team spend the **owner’s** quota. UI meter lives in User settings.
+
+Chunk/embedding cost is not shown; packing + per-file chunk caps keep indexed expansion bounded. See [docs/27-library-file-storage-vps.md](../../docs/27-library-file-storage-vps.md) for VPS object-storage / BYO.
 
 ## Notes
 

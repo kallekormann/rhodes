@@ -15,7 +15,8 @@
     "@rhodes/db": "workspace:*",
     "@rhodes/shared": "workspace:*",
     "bullmq": "^5.41.5",
-    "ioredis": "^5.6.0"
+    "ioredis": "^5.6.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

@@ -107,6 +107,7 @@ OLLAMA_NUM_PARALLEL=2
 
 - Dedicated VPS for Supabase at scale vs single node?
 - Coolify vs raw Docker Compose for reproducibility?
+- **Library originals on VPS:** managed S3-compatible vs volume-only — and BYO bucket for enterprise? See [27-library-file-storage-vps.md](27-library-file-storage-vps.md) (blocking before production cutover).
 
 ## Dependencies
 

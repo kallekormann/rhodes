@@ -21,6 +21,9 @@ function loadEnvFile(filePath: string) {
 }
 
 function remapDockerHostnames() {
+  // Inside Compose the service names (redis, tika, ollama) are correct.
+  if (process.env.RHODES_IN_DOCKER === "1") return;
+
   if (process.env.REDIS_URL?.startsWith("redis://redis:")) {
     process.env.REDIS_URL = "redis://localhost:6379";
   }
@@ -41,7 +44,10 @@ function remapDockerHostnames() {
 
   process.env.RHODES_DATA_DIR ??= path.join(rootDir, ".data");
   process.env.RHODES_LIBRARY_DATA_DIR ??= path.join(rootDir, ".data/library-files");
-  process.env.RHODES_DOCUMENT_IMAGES_DATA_DIR ??= path.join(rootDir, ".data/document-images");
+  process.env.RHODES_DOCUMENT_IMAGES_DATA_DIR ??= path.join(
+    rootDir,
+    ".data/document-images",
+  );
 }
 
 loadEnvFile(path.join(rootDir, "docker/.env"));

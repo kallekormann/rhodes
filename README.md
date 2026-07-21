@@ -58,6 +58,9 @@ App: http://localhost:3001/app — Health: http://localhost:3001/app/api/health
 | `./scripts/pull-models.sh` | Pull required Ollama models |
 | `./scripts/generate-keys.sh` | Generate Supabase secrets and API keys |
 | `./scripts/sync-web-env.sh` | Copy public Supabase vars into `apps/web/.env.local` |
+| `pnpm library:reindex` | Re-ingest library sources (chunk metadata upgrade) |
+| `pnpm documents:reindex` | Re-chunk workspace documents into `document_chunks` |
+| `pnpm worker:dev` | Run BullMQ worker on the host (or use Compose `worker`) |
 
 ## Mac: native Ollama (optional)
 

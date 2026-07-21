@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import {
+  clearLibraryFailureMetadata,
+} from "@rhodes/shared/library-failure";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { enqueueLibraryIngestRetry } from "@/lib/library/queue";
 import { createClient } from "@/lib/supabase/server";
@@ -6,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 type RouteContext = { params: Promise<{ id: string }> };
 
 const SOURCE_FIELDS =
-  "id, workspace_id, file_name, file_path, file_type, embedding_status";
+  "id, workspace_id, file_name, file_path, file_type, embedding_status, metadata";
 
 export async function POST(_request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -45,15 +48,28 @@ export async function POST(_request: Request, context: RouteContext) {
 
   await supabase.from("library_source_chunks").delete().eq("source_id", id);
 
+  const currentMeta =
+    source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata)
+      ? (source.metadata as Record<string, unknown>)
+      : {};
+
+  const nextMetadata = {
+    ...currentMeta,
+    ...clearLibraryFailureMetadata(),
+    pipeline_stage: "queued",
+    pipeline_updated_at: new Date().toISOString(),
+  };
+
   const { data: updated, error: updateError } = await supabase
     .from("library_sources")
     .update({
       embedding_status: "pending",
       summary: null,
+      metadata: nextMetadata,
     })
     .eq("id", id)
     .select(
-      "id, workspace_id, uploaded_by, file_name, file_path, file_type, summary, embedding_status, created_at",
+      "id, workspace_id, uploaded_by, file_name, file_path, file_type, summary, embedding_status, metadata, created_at",
     )
     .single();
 

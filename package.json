@@ -14,10 +14,13 @@
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
     "library:requeue": "node scripts/requeue-library.js",
+    "library:reindex": "node scripts/reindex-library-metadata.mjs",
+    "documents:reindex": "node scripts/reindex-document-chunks.mjs",
     "qa:library": "pnpm --filter @rhodes/worker exec tsx ../../scripts/qa-library-pipeline.mjs",
     "qa:phase07": "pnpm --filter @rhodes/worker exec tsx ../../scripts/qa-phase07-rag.mjs",
     "db:test:rls": "node packages/db/tests/rls.test.js",
-    "db:types": "node -e \"console.log('Configure supabase CLI against local stack, then: supabase gen types typescript --local > packages/db/src/types.ts')\""
+    "db:types": "node -e \"console.log('Configure supabase CLI against local stack, then: supabase gen types typescript --local > packages/db/src/types.ts')\"",
+    "worker:dev": "./scripts/dev-worker.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.49.8",

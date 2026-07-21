@@ -35,9 +35,13 @@ function redisConnection() {
 async function addOrReplaceJob(queue, name, data, jobId, options = {}) {
   const existing = await queue.getJob(jobId);
   if (existing) {
-    const state = await existing.getState();
-    if (state !== "completed") {
+    try {
       await existing.remove();
+    } catch {
+      return queue.add(name, data, {
+        ...options,
+        jobId: `${jobId}-${Date.now()}`,
+      });
     }
   }
   return queue.add(name, data, { ...options, jobId });

@@ -9,6 +9,7 @@ import {
   LIBRARY_PIPELINE_STAGE,
   setLibraryPipelineStage,
 } from "../lib/library-source";
+import { clearLibraryFailureMetadata } from "@rhodes/shared/library-failure";
 
 export type SummarizeJobData = {
   sourceId: string;
@@ -57,10 +58,21 @@ export async function processSummarizeJob(job: Job<SummarizeJobData>) {
   const summary = normalizeLibrarySummary(raw);
   if (!summary) {
     console.warn("[summarize] empty summary", { sourceId });
+    await setLibraryPipelineStage(
+      admin,
+      sourceId,
+      LIBRARY_PIPELINE_STAGE.READY,
+      clearLibraryFailureMetadata(),
+    );
     return;
   }
 
   await admin.from("library_sources").update({ summary }).eq("id", sourceId);
-  await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.READY);
+  await setLibraryPipelineStage(
+    admin,
+    sourceId,
+    LIBRARY_PIPELINE_STAGE.READY,
+    clearLibraryFailureMetadata(),
+  );
   console.log("[summarize] done", { sourceId, ms: Date.now() - started });
 }

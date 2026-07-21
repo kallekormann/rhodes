@@ -81,5 +81,17 @@ export function formatInsightExcerpt(
 }
 
 export function insightOriginLabel(originType: string): string {
-  return originType === "document" ? "Document" : "Library";
+  if (originType === "document" || originType === "document_chunk") {
+    return "Document";
+  }
+  return "Library";
+}
+
+export function insightLocationLabel(insight: {
+  location_label?: string | null;
+  page_ref?: number | null;
+}): string {
+  if (insight.location_label?.trim()) return insight.location_label.trim();
+  if (insight.page_ref != null) return `p.${insight.page_ref}`;
+  return "";
 }

@@ -46,14 +46,16 @@ flowchart TD
 
 | Parameter | Value |
 |-----------|-------|
-| Chunk size | 512 tokens (~2000 chars) |
-| Overlap | 64 tokens |
-| Page boundary | Prefer splits at page breaks for `page_number` |
+| Chunk size | ~2000 chars (`LIBRARY_CHUNK_CHARS`) |
+| Overlap | ~256 chars |
+| Metadata | `chunk_metadata` JSONB (file type, citation locator, heading path, display labels) |
+
+Per-format extractors prefer structure-aware segments (PDF pages, DOCX paragraphs, PPT slides, XLS sheet rows, MD headings) before generic splitting. Locators are format-specific — page numbers only where the format has pages.
 
 ### Embedding
 
 - Batch up to 32 chunks per Ollama request
-- Store in `library_source_chunks` with `vector(768)`
+- Store in `library_source_chunks` with `vector(768)` + `chunk_metadata`
 - Update `embedding_status` → `processing` → `ready`
 
 ### Summary
@@ -73,12 +75,26 @@ Full pipeline for typical PDF (<20 pages): **<15 seconds** on 8 vCPU.
 | Tika timeout | `embedding_status = failed`; user toast "Could not read file" |
 | Ollama OOM | Requeue with backoff |
 | Partial embed | Mark ready with warning; retry failed chunks nightly |
+| Worker crash | Docker `restart: always` + BullMQ stall reclaim (job attempts ×3) |
 
-### Document re-index (active docs)
+### Document chunks (workspace docs)
+
+TipTap content → structured segments → `document_chunks` (same metadata shape as library). Whole-doc `documents.embedding` remains as a secondary signal.
 
 On document save (debounced):
 1. Update `content_plain`
-2. If diff >15% → single-doc embed job (not full pipeline)
+2. If diff >15% → `document-embed` job rewrites `document_chunks`
+
+### Bulk re-index (metadata upgrade)
+
+Do **not** wipe storage. Re-run in place:
+
+```bash
+pnpm library:reindex          # re-ingest ready library sources
+pnpm documents:reindex        # enqueue document-embed for all docs with content
+```
+
+Optional filters: `--workspace=<uuid>`, `--limit=N`, `--concurrency=2` (library).
 
 ## Open questions
 

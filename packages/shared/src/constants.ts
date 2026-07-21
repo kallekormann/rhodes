@@ -29,5 +29,9 @@ export const CONTENT_REEMBED_THRESHOLD = 0.15 as const;
 
 export const LIBRARY_CHUNK_CHARS = 2000 as const;
 export const LIBRARY_CHUNK_OVERLAP_CHARS = 256 as const;
+/** Soft ceiling per library file after packing; grow chunk size before truncating. */
+export const LIBRARY_MAX_CHUNKS_PER_FILE = 400 as const;
 export const LIBRARY_SUMMARY_EXCERPT_CHARS = 2000 as const;
+/** Absolute safety ceiling; tier max-file limits are usually lower. */
 export const LIBRARY_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+

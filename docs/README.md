@@ -56,6 +56,7 @@ This folder is the **canonical specification** for building Rhodes. The incubato
 | Doc | Topic |
 |-----|-------|
 | [13-infrastructure-vps.md](13-infrastructure-vps.md) | Coolify, Hetzner, CPU-only, storage |
+| [27-library-file-storage-vps.md](27-library-file-storage-vps.md) | **Open:** VPS object storage + BYO bucket architecture |
 | [14-email-delivery.md](14-email-delivery.md) | Resend/SES relay, IP protection |
 | [15-security-and-privacy.md](15-security-and-privacy.md) | Auth, encryption, GDPR |
 | [16-ingestion-pipeline.md](16-ingestion-pipeline.md) | Tika, chunking, worker queue |

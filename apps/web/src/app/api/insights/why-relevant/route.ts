@@ -12,10 +12,14 @@ import { createClient } from "@/lib/supabase/server";
 const matchSchema = z.object({
   origin_type: z.string(),
   item_id: z.string().uuid(),
+  source_ref_id: z.string().uuid().optional(),
   title: z.string(),
   matched_text: z.string(),
   page_ref: z.number().nullable(),
   similarity: z.number(),
+  location_label: z.string().optional(),
+  chunk_metadata: z.record(z.unknown()).nullable().optional(),
+  relevance_percent: z.number().optional(),
 });
 
 const whyRelevantSchema = z.object({

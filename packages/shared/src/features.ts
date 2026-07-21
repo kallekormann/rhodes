@@ -1,6 +1,7 @@
 import type { BillingTier, GatedView, TierFeature } from "./tiers";
 import {
   getTierLimits,
+  resolveTierLimits,
   tierAllowsFeature,
   tierAllowsView,
   tierFeatureLimit,
@@ -62,6 +63,7 @@ export function createFeatureGateContext(input: {
 
 export {
   getTierLimits,
+  resolveTierLimits,
   tierAllowsFeature,
   tierAllowsView,
   tierFeatureLimit,

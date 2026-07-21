@@ -16,6 +16,8 @@ export const CitationBlock = Node.create({
       originType: { default: "source_chunk" },
       sourceTitle: { default: "" },
       page: { default: null },
+      locationLabel: { default: "" },
+      locationMetadata: { default: null },
       excerpt: { default: "" },
     };
   },

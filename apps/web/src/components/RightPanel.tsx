@@ -7,6 +7,7 @@ import type { StoredDocumentComment } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
 import {
   formatInsightExcerpt,
+  insightLocationLabel,
   insightOriginLabel,
 } from "@/lib/insights/format";
 import { openKnowledgeSourcePreview } from "@/lib/library/preview";
@@ -20,12 +21,16 @@ import type { MetadataFieldType } from "@/lib/metadata/schemas";
 import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
 import type { ActivityNavigateTarget } from "./DocumentHistorySection";
 import { AskComposer, type AskComposerStatus } from "./AskComposer";
+import { AskReasoningTicker } from "./ask/AskReasoningTicker";
+import { AskSourcesLine } from "./ask/AskSourcesLine";
 import { Button } from "./Button";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import { CommentsTab } from "./CommentsTab";
 import { IconButton } from "./IconButton";
 import { TabBar } from "./TabBar";
 import "./AskComposer.css";
+import "./ask/AskReasoningTicker.css";
+import "./ask/AskSourcesLine.css";
 import "./ChatMessageBubble.css";
 import "./RightPanel.css";
 
@@ -367,6 +372,8 @@ function InsightsTab({
     originType: insight.origin_type,
     sourceTitle: insight.title,
     page: insight.page_ref,
+    locationLabel: insight.location_label ?? insightLocationLabel(insight),
+    locationMetadata: insight.chunk_metadata ?? null,
     excerpt,
     placement,
     queryContext: queryText,
@@ -418,6 +425,7 @@ function InsightsTab({
           const whyKey = `${insight.item_id}-${insight.origin_type}`;
           const whyState = whyByKey[whyKey];
           const excerpt = formatInsightExcerpt(insight.matched_text, queryText);
+          const location = insightLocationLabel(insight);
 
           return (
             <article
@@ -437,7 +445,7 @@ function InsightsTab({
                   </button>
                   <span className="insight-card__origin">
                     {insightOriginLabel(insight.origin_type)}
-                    {insight.page_ref != null ? ` · p.${insight.page_ref}` : ""}
+                    {location ? ` · ${location}` : ""}
                   </span>
                 </div>
                 <p className="insight-card__reason">{excerpt}</p>
@@ -517,7 +525,8 @@ function AskTab({
   onConsumeAskPrefill?: () => void;
 }) {
   const { session } = useApp();
-  const { messages, pending, error, sendMessage } = useAskChat(workspaceId);
+  const { messages, pending, pendingPhase, reasoningStep, error, sendMessage } =
+    useAskChat(workspaceId);
   const [draft, setDraft] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const displayName = session.displayName || "there";
@@ -531,7 +540,7 @@ function AskTab({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pending]);
+  }, [messages, pending, reasoningStep]);
 
   const handleSend = () => {
     const text = draft.trim();
@@ -540,7 +549,12 @@ function AskTab({
     setDraft("");
   };
 
-  const status: AskComposerStatus = pending ? "thinking" : "idle";
+  const status: AskComposerStatus =
+    pendingPhase === "searching"
+      ? "searching"
+      : pending
+        ? "thinking"
+        : "idle";
 
   const welcomeMessage = engagedToday
     ? `Hi again, ${displayName}. What would you like to explore?`
@@ -548,20 +562,25 @@ function AskTab({
 
   return (
     <div className="panel-tab panel-tab--ask">
-      <div className="panel-tab__messages">
+      <div className="panel-tab__messages overlay-scrollbar">
         {messages.length === 0 && (
           <ChatMessageBubble role="rhodes">
             <p>{welcomeMessage}</p>
           </ChatMessageBubble>
         )}
         {messages.map((message) => (
-          <ChatMessageBubble
-            key={message.id}
-            role={message.role === "assistant" ? "rhodes" : "user"}
-          >
-            <p>{message.content}</p>
-          </ChatMessageBubble>
+          <div key={message.id} className="panel-tab__message-block">
+            <ChatMessageBubble
+              role={message.role === "assistant" ? "rhodes" : "user"}
+            >
+              <p>{message.content}</p>
+            </ChatMessageBubble>
+            {message.role === "assistant" && message.sourcesUsed && (
+              <AskSourcesLine sources={message.sourcesUsed} />
+            )}
+          </div>
         ))}
+        <AskReasoningTicker step={reasoningStep} phase={pendingPhase} />
         {error && <p className="caption">{error}</p>}
         <div ref={messagesEndRef} />
       </div>

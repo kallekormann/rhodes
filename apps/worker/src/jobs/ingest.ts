@@ -5,7 +5,9 @@ import {
   EMBEDDING_MODEL,
   LIBRARY_EMBED_QUEUE,
 } from "@rhodes/shared/constants";
-import { chunkText } from "../lib/chunker";
+import { libraryFailureMetadata } from "@rhodes/shared/library-failure";
+import { extractLibraryDocument } from "../lib/extract";
+import { segmentsToChunks } from "../lib/extractors/segment-chunker";
 import {
   LIBRARY_PIPELINE_STAGE,
   mergeSourceMetadata,
@@ -13,7 +15,6 @@ import {
 } from "../lib/library-source";
 import { addOrReplaceJob } from "../lib/queue-job";
 import { downloadLibraryFile } from "../lib/storage";
-import { extractLibraryText } from "../lib/extract";
 import { connection } from "../connection";
 
 export type IngestJobData = {
@@ -40,16 +41,24 @@ export async function processIngestJob(job: Job<IngestJobData>) {
   await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.READING);
 
   try {
+    const { data: sourceRow } = await admin
+      .from("library_sources")
+      .select("file_name")
+      .eq("id", sourceId)
+      .maybeSingle();
+
+    const fileName = sourceRow?.file_name ?? filePath.split("/").pop() ?? "file";
     const bytes = await downloadLibraryFile(filePath);
-    const extractedText = await extractLibraryText(bytes, mimeType);
+    const extracted = await extractLibraryDocument(bytes, mimeType, fileName);
+    const { chunks, truncated } = segmentsToChunks(extracted, {
+      sourceId,
+      sourceTitle: fileName,
+    });
 
-    if (!extractedText) {
-      throw new Error("No text extracted from file");
-    }
-
-    const chunks = chunkText(extractedText);
     if (chunks.length === 0) {
-      throw new Error("No chunks produced from extracted text");
+      throw new Error(
+        `No extractable text from ${fileName} (extractor produced empty content)`,
+      );
     }
 
     await admin.from("library_source_chunks").delete().eq("source_id", sourceId);
@@ -61,6 +70,9 @@ export async function processIngestJob(job: Job<IngestJobData>) {
         chunk_index: chunk.chunkIndex,
         page_number: chunk.pageNumber,
         content_chunk: chunk.content,
+        content_hash: chunk.contentHash,
+        token_estimate: chunk.tokenEstimate,
+        chunk_metadata: chunk.chunkMetadata,
         embedding_model_version: EMBEDDING_MODEL,
       })),
     );
@@ -69,12 +81,15 @@ export async function processIngestJob(job: Job<IngestJobData>) {
       throw new Error(insertError.message);
     }
 
-    const excerpt = extractedText.slice(0, 4000);
+    const excerpt = extracted.full_text.slice(0, 4000);
     await mergeSourceMetadata(admin, sourceId, {
       extracted_text_excerpt: excerpt,
       chunk_count: chunks.length,
+      truncated,
       pipeline_stage: LIBRARY_PIPELINE_STAGE.INDEXING,
       pipeline_updated_at: new Date().toISOString(),
+      extractor: extracted.extractor,
+      ...(extracted.source_metadata ?? {}),
     });
 
     await addOrReplaceJob(
@@ -82,12 +97,18 @@ export async function processIngestJob(job: Job<IngestJobData>) {
       "embed-chunks",
       { sourceId, workspaceId },
       `embed-${sourceId}`,
-      { removeOnComplete: 100, removeOnFail: 50 },
+      {
+        removeOnComplete: 100,
+        removeOnFail: 50,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5_000 },
+      },
     );
 
     console.log("[ingest] done", {
       sourceId,
       chunks: chunks.length,
+      extractor: extracted.extractor,
       ms: Date.now() - started,
     });
   } catch (error) {
@@ -95,9 +116,12 @@ export async function processIngestJob(job: Job<IngestJobData>) {
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", sourceId);
-    await setLibraryPipelineStage(admin, sourceId, LIBRARY_PIPELINE_STAGE.FAILED).catch(
-      () => {},
-    );
+    await setLibraryPipelineStage(
+      admin,
+      sourceId,
+      LIBRARY_PIPELINE_STAGE.FAILED,
+      libraryFailureMetadata(error),
+    ).catch(() => {});
     throw error;
   }
 }
