@@ -6,7 +6,7 @@ import { type Scope } from "@/data/scopes";
 import { useApp } from "@/context/AppContext";
 import { ScopeMenu } from "./ScopeMenu";
 import { ScopeTrigger } from "./ScopeTrigger";
-import { ScopeCreateModal } from "./ScopeCreateModal";
+import { ScopeCreateWizard } from "./ScopeCreateWizard";
 import "./ScopeSwitcher.css";
 
 type CreateKind = "personal" | "team" | null;
@@ -58,9 +58,9 @@ export function ScopeSwitcher() {
     setCreateKind(kind);
   };
 
-  const handleCreate = (name: string) => {
-    if (createKind === "personal") createPersonalSpace(name);
-    if (createKind === "team") createTeamSpace(name);
+  const handleCreate = (input: { name: string; enabledViews: string[] }) => {
+    if (createKind === "personal") createPersonalSpace(input.name, input.enabledViews);
+    if (createKind === "team") createTeamSpace(input.name, input.enabledViews);
     setCreateKind(null);
   };
 
@@ -88,23 +88,22 @@ export function ScopeSwitcher() {
             onCreateTeam={() => openCreate("team")}
             onManage={() => {
               setOpen(false);
-              router.push("/settings?section=Scopes");
+              const section = activeScope.type === "team" ? "Team" : "Scopes";
+              router.push(`/settings?mode=scope&section=${section}`);
             }}
           />
         )}
       </div>
 
-      <ScopeCreateModal
+      <ScopeCreateWizard
         open={createKind === "personal"}
-        title="New personal scope"
-        placeholder="e.g. Book draft, Research notes"
+        kind="personal"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}
       />
-      <ScopeCreateModal
+      <ScopeCreateWizard
         open={createKind === "team"}
-        title="New team scope"
-        placeholder="e.g. Growth Engine"
+        kind="team"
         onClose={() => setCreateKind(null)}
         onSubmit={handleCreate}
       />

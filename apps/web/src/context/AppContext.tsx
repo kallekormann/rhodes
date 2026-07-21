@@ -85,8 +85,8 @@ type AppContextValue = {
   ensureWorkspace: () => Promise<Scope | null>;
   refreshScopes: () => Promise<void>;
   setActiveScope: (scopeId: string) => void;
-  createPersonalSpace: (name: string) => Promise<void>;
-  createTeamSpace: (name: string) => Promise<void>;
+  createPersonalSpace: (name: string, enabledViews?: string[]) => Promise<void>;
+  createTeamSpace: (name: string, enabledViews?: string[]) => Promise<void>;
   updateDisplayName: (name: string) => void;
   updateAvatarUrl: (avatarUrl: string | null) => void;
   canCreatePersonalSpace: boolean;
@@ -108,6 +108,7 @@ const FALLBACK_SCOPE: Scope = {
   type: "private",
   role: "owner",
   createdAt: new Date(0).toISOString(),
+  enabledViewsCount: 0,
 };
 
 function readStoredThemeMode(): ThemeMode {
@@ -273,7 +274,7 @@ export function AppProvider({
   }, [session.userId, refreshScopes, setActiveScopeId, showToast]);
 
   const createScope = useCallback(
-    async (name: string, isTeam: boolean) => {
+    async (name: string, isTeam: boolean, enabledViews: string[] = []) => {
       try {
         const response = await fetch("/app/api/workspaces", {
           method: "POST",
@@ -281,6 +282,7 @@ export function AppProvider({
           body: JSON.stringify({
             name,
             is_team_workspace: isTeam,
+            enabled_views: enabledViews,
           }),
         });
 
@@ -309,12 +311,12 @@ export function AppProvider({
   );
 
   const createPersonalSpace = useCallback(
-    (name: string) => createScope(name, false),
+    (name: string, enabledViews: string[] = []) => createScope(name, false, enabledViews),
     [createScope],
   );
 
   const createTeamSpace = useCallback(
-    (name: string) => createScope(name, true),
+    (name: string, enabledViews: string[] = []) => createScope(name, true, enabledViews),
     [createScope],
   );
 

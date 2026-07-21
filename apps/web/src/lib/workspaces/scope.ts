@@ -8,6 +8,7 @@ type WorkspaceRow = {
   name: string;
   is_team_workspace: boolean;
   created_at: string;
+  enabled_views?: string[] | null;
 };
 
 type MembershipRow = {
@@ -38,6 +39,7 @@ export function membershipToScope(row: MembershipRow): Scope | null {
     type: workspace.is_team_workspace ? "team" : "private",
     role,
     createdAt: workspace.created_at,
+    enabledViewsCount: workspace.enabled_views?.length ?? 0,
   };
 }
 

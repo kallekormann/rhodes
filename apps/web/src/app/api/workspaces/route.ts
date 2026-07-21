@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import {
+  assertCanCreateWorkspace,
+  resolveServerTier,
+} from "@/lib/features/server-gates";
 import { createClient } from "@/lib/supabase/server";
 import { createWorkspaceSchema } from "@/lib/workspaces/schemas";
+import { validateAdditionalScopeViewSelection } from "@rhodes/shared/scope-views";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -31,6 +36,29 @@ export async function POST(request: Request) {
     );
   }
 
+  const tier = resolveServerTier();
+  const scopeGate = await assertCanCreateWorkspace(
+    supabase,
+    user.id,
+    tier,
+    parsed.data.is_team_workspace,
+  );
+  if (!scopeGate.ok) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: scopeGate.message }, { status: 403 }),
+    );
+  }
+
+  const viewsValidation = validateAdditionalScopeViewSelection(
+    tier,
+    parsed.data.enabled_views ?? [],
+  );
+  if (!viewsValidation.ok) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: viewsValidation.reason }, { status: 400 }),
+    );
+  }
+
   const { data: workspaceId, error } = await supabase.rpc("create_user_workspace", {
     ws_name: parsed.data.name,
     is_team: parsed.data.is_team_workspace,
@@ -46,7 +74,7 @@ export async function POST(request: Request) {
 
   const { data: workspace, error: fetchError } = await supabase
     .from("workspaces")
-    .select("id, name, is_team_workspace")
+    .select("id, name, is_team_workspace, enabled_views")
     .eq("id", workspaceId)
     .single();
 
@@ -59,6 +87,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const enabledViews = parsed.data.enabled_views ?? [];
+  if (enabledViews.length > 0) {
+    const { error: viewsError } = await supabase
+      .from("workspaces")
+      .update({ enabled_views: enabledViews })
+      .eq("id", workspaceId);
+
+    if (viewsError) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: viewsError.message }, { status: 400 }),
+      );
+    }
+  }
+
   return withSecurityHeaders(
     NextResponse.json({
       workspace: {
@@ -66,6 +108,7 @@ export async function POST(request: Request) {
         name: workspace.name,
         type: workspace.is_team_workspace ? "team" : "private",
         role: "owner",
+        enabled_views: enabledViews,
       },
     }),
   );

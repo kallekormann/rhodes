@@ -20,6 +20,7 @@ type WorkspaceRow = {
   name: string;
   is_team_workspace: boolean;
   created_at: string;
+  enabled_views?: string[] | null;
 };
 
 type UseWorkspacesResult = {
@@ -91,7 +92,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       throw new Error(membershipError.message);
     }
 
-    let rows = memberships ?? [];
+    let rows: MembershipRow[] = memberships ?? [];
 
     if (rows.length === 0 && allowBootstrap) {
       const bootstrapped = await bootstrapWorkspace();
@@ -102,7 +103,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
         if (retry.error) {
           throw new Error(retry.error.message);
         }
-        rows = retry.data ?? [];
+        rows = (retry.data ?? []) as MembershipRow[];
       }
     }
 
@@ -113,7 +114,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
     const { data: workspaces, error: workspaceError } = await supabase
       .from("workspaces")
-      .select("id, name, is_team_workspace, created_at")
+      .select("id, name, is_team_workspace, created_at, enabled_views")
       .in("id", workspaceIds);
 
     if (workspaceError) {
