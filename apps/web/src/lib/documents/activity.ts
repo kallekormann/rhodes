@@ -90,7 +90,10 @@ export async function recordDocumentActivity(
     actor_id: input.actorId,
     event_type: input.eventType,
     summary,
-    payload,
+    payload: {
+      ...payload,
+      actor_display_name: input.actorDisplayName,
+    },
   });
 
   if (error) {

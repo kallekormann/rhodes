@@ -201,15 +201,17 @@ export function RightPanel({
           />
         )}
         {panelTab === "comments" && (
-          <CommentsTab
-            comments={comments}
-            selectedCommentId={selectedCommentId}
-            hoverCommentId={hoverCommentId}
-            onSelectComment={onSelectComment ?? (() => {})}
-            onHoverComment={onHoverComment ?? (() => {})}
-            onAddReply={onAddReply ?? (() => {})}
-            onRemoveComment={onRemoveComment ?? (() => {})}
-          />
+          <div className="panel-tab panel-tab--comments overlay-scrollbar">
+            <CommentsTab
+              comments={comments}
+              selectedCommentId={selectedCommentId}
+              hoverCommentId={hoverCommentId}
+              onSelectComment={onSelectComment ?? (() => {})}
+              onHoverComment={onHoverComment ?? (() => {})}
+              onAddReply={onAddReply ?? (() => {})}
+              onRemoveComment={onRemoveComment ?? (() => {})}
+            />
+          </div>
         )}
         {panelTab === "properties" && (
           <PropertiesTab

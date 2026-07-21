@@ -15,6 +15,8 @@ export type StoredDocumentComment = {
   anchorText: string;
   text: string;
   author: string;
+  authorId?: string;
+  authorAvatarUrl?: string | null;
   createdAt: string;
 };
 
@@ -168,6 +170,8 @@ export function createDocumentComment(input: {
   anchorText: string;
   text: string;
   author: string;
+  authorId?: string;
+  authorAvatarUrl?: string | null;
 }): StoredDocumentComment {
   return {
     id: crypto.randomUUID(),
@@ -179,6 +183,8 @@ export function createDocumentComment(input: {
     anchorText: input.anchorText,
     text: input.text,
     author: input.author,
+    authorId: input.authorId,
+    authorAvatarUrl: input.authorAvatarUrl ?? null,
     createdAt: new Date().toISOString(),
   };
 }

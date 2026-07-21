@@ -4,6 +4,8 @@ import { MessageSquarePlus } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/Button";
 import { CommentAnswerComposer } from "@/components/CommentAnswerComposer";
+import { UserAvatar } from "@/components/UserAvatar";
+import { useApp } from "@/context/AppContext";
 import {
   getCommentReplies,
   getRootComments,
@@ -29,8 +31,33 @@ function formatCreatedAt(createdAt: string) {
     : created.toLocaleString();
 }
 
+function resolveCommentAuthorId(
+  comment: StoredDocumentComment,
+  currentUserId: string,
+  currentUserName: string,
+): string | undefined {
+  if (comment.authorId) return comment.authorId;
+  if (comment.author === currentUserName) return currentUserId;
+  return undefined;
+}
+
+function resolveCommentAvatarUrl(
+  comment: StoredDocumentComment,
+  currentUserId: string,
+  currentUserAvatarUrl: string | null,
+  currentUserName: string,
+): string | null {
+  if (comment.authorAvatarUrl) return comment.authorAvatarUrl;
+  const authorId = resolveCommentAuthorId(comment, currentUserId, currentUserName);
+  if (authorId === currentUserId) return currentUserAvatarUrl;
+  return null;
+}
+
 type ThreadMessageProps = {
   comment: StoredDocumentComment;
+  currentUserId: string;
+  currentUserAvatarUrl: string | null;
+  currentUserName: string;
   emphasized: boolean;
   headerAction?: ReactNode;
   onSelect: () => void;
@@ -40,12 +67,23 @@ type ThreadMessageProps = {
 
 function ThreadMessage({
   comment,
+  currentUserId,
+  currentUserAvatarUrl,
+  currentUserName,
   emphasized,
   headerAction,
   onSelect,
   onHover,
   onHoverEnd,
 }: ThreadMessageProps) {
+  const authorId = resolveCommentAuthorId(comment, currentUserId, currentUserName);
+  const avatarUrl = resolveCommentAvatarUrl(
+    comment,
+    currentUserId,
+    currentUserAvatarUrl,
+    currentUserName,
+  );
+
   return (
     <div
       className={`comments-tab__message ${emphasized ? "comments-tab__message--emphasized" : ""}`}
@@ -63,10 +101,19 @@ function ThreadMessage({
     >
       <header className="comments-tab__message-header">
         <div className="comments-tab__message-identity">
-          <span className="comments-tab__message-author">{comment.author}</span>
-          <span className="comments-tab__message-date">
-            {formatCreatedAt(comment.createdAt)}
-          </span>
+          <UserAvatar
+            name={comment.author}
+            userId={authorId}
+            src={avatarUrl}
+            size="sm"
+            className="comments-tab__message-avatar"
+          />
+          <div className="comments-tab__message-meta">
+            <span className="comments-tab__message-author">{comment.author}</span>
+            <span className="comments-tab__message-date">
+              {formatCreatedAt(comment.createdAt)}
+            </span>
+          </div>
         </div>
         {headerAction}
       </header>
@@ -84,6 +131,7 @@ export function CommentsTab({
   onAddReply,
   onRemoveComment,
 }: CommentsTabProps) {
+  const { session } = useApp();
   const selectedRef = useRef<HTMLDivElement | null>(null);
   const [answeringId, setAnsweringId] = useState<string | null>(null);
   const [answerDraft, setAnswerDraft] = useState("");
@@ -143,6 +191,9 @@ export function CommentsTab({
             <div className="comments-tab__thread">
               <ThreadMessage
                 comment={comment}
+                currentUserId={session.userId}
+                currentUserAvatarUrl={session.avatarUrl}
+                currentUserName={session.displayName}
                 emphasized={emphasizedCommentId === comment.id}
                 headerAction={
                   <Button
@@ -168,6 +219,9 @@ export function CommentsTab({
                 <ThreadMessage
                   key={reply.id}
                   comment={reply}
+                  currentUserId={session.userId}
+                  currentUserAvatarUrl={session.avatarUrl}
+                  currentUserName={session.displayName}
                   emphasized={emphasizedCommentId === reply.id}
                   onSelect={() => onSelectComment(reply.id)}
                   onHover={() => onHoverComment(reply.id)}

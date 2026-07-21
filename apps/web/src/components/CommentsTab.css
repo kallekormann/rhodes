@@ -89,9 +89,20 @@
 
 .comments-tab__message-identity {
   display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.comments-tab__message-meta {
+  display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.comments-tab__message-avatar {
+  flex-shrink: 0;
 }
 
 .comments-tab__message-author {

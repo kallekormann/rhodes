@@ -46,42 +46,39 @@ export async function GET(request: Request, context: RouteContext) {
 
   let profileById = new Map<string, { display_name: string; avatar_url: string | null }>();
   if (actorIds.length > 0) {
-    const { data: names } = await supabase.rpc(
-      "user_display_names_for_document_shares",
-      { user_ids: actorIds },
-    );
-    if (Array.isArray(names)) {
-      profileById = new Map(
-        names.map(
-          (row: {
-            id: string;
-            display_name: string;
-            avatar_url?: string | null;
-          }) => [
-            row.id,
-            {
-              display_name: row.display_name,
-              avatar_url: row.avatar_url ?? null,
-            },
-          ],
-        ),
-      );
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, display_name, avatar_url")
+      .in("id", actorIds);
+
+    for (const profile of profiles ?? []) {
+      profileById.set(profile.id, {
+        display_name:
+          profile.display_name?.trim() ||
+          profile.id.slice(0, 8),
+        avatar_url: profile.avatar_url ?? null,
+      });
     }
 
     const missingActorIds = actorIds.filter((actorId) => !profileById.has(actorId));
     if (missingActorIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url")
-        .in("id", missingActorIds);
-
-      for (const profile of profiles ?? []) {
-        profileById.set(profile.id, {
-          display_name:
-            profile.display_name?.trim() ||
-            profile.id.slice(0, 8),
-          avatar_url: profile.avatar_url ?? null,
-        });
+      const { data: names } = await supabase.rpc(
+        "user_display_names_for_document_activity",
+        { user_ids: missingActorIds, document_id: id },
+      );
+      if (Array.isArray(names)) {
+        for (const row of names as Array<{
+          id: string;
+          display_name: string;
+          avatar_url?: string | null;
+        }>) {
+          if (!profileById.has(row.id)) {
+            profileById.set(row.id, {
+              display_name: row.display_name,
+              avatar_url: row.avatar_url ?? null,
+            });
+          }
+        }
       }
     }
   }

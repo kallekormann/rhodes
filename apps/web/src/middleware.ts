@@ -43,7 +43,9 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
-    pathname.includes(".")
+    pathname.includes(".") ||
+    pathname.startsWith("/app/supabase/") ||
+    pathname.startsWith("/supabase/")
   ) {
     return NextResponse.next();
   }

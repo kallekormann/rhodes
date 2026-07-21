@@ -21,9 +21,20 @@ import { filterSlashItems } from "@/components/editorSlash";
 import { CitationBlock } from "@/components/editor/extensions/CitationBlock";
 import { RhodesSuggestion } from "@/components/editor/extensions/RhodesSuggestion";
 import { BlockId } from "@/components/editor/extensions/BlockId";
-import { RemoteBlockLock } from "@/components/editor/extensions/RemoteBlockLock";
-import { ensureEditorBlockIds, readBlockId, resolveCommentBlock } from "@/lib/documents/block-ids";
-import { getTopLevelBlockAtPos } from "@/lib/documents/block-drag";
+import { DocumentCollaborationOverlay } from "@/components/editor/DocumentCollaborationOverlay";
+import {
+  RemoteBlockLock,
+  remoteCollaborationKey,
+  type RemoteCollaborationMeta,
+} from "@/components/editor/extensions/RemoteBlockLock";
+import type { RemoteCollaboratorCursor } from "@/components/editor/extensions/remote-cursor-decorations";
+import {
+  BLOCK_ID_TRANSACTION_META,
+  ensureEditorBlockIds,
+  readBlockId,
+  resolveCommentBlock,
+} from "@/lib/documents/block-ids";
+import { getTopLevelBlockAtPos, getTopLevelBlockIndexFromPos } from "@/lib/documents/block-drag";
 import { CommentHighlight } from "@/components/editor/extensions/CommentHighlight";
 import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
@@ -56,7 +67,10 @@ type TipTapEditorProps = {
   contentSyncToken?: number;
   editable?: boolean;
   lockedBlockId?: string | null;
+  lockedBlockIndex?: number | null;
+  lockedSelectionFrom?: number | null;
   lockedByName?: string | null;
+  remoteCursors?: RemoteCollaboratorCursor[];
   documentId?: string | null;
   workspaceId?: string | null;
   comments?: StoredDocumentComment[];
@@ -81,7 +95,8 @@ type TipTapEditorProps = {
   ) => void;
   onBlur?: (editor: Editor) => void;
   onRegisterEditor?: (editor: Editor | null) => void;
-  onActiveBlockChange?: (blockId: string | null) => void;
+  onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
+  onSelectionChange?: (from: number, to: number) => void;
 };
 
 type SlashState = {
@@ -166,7 +181,10 @@ export function TipTapEditor({
   contentSyncToken = 0,
   editable = true,
   lockedBlockId = null,
+  lockedBlockIndex = null,
+  lockedSelectionFrom = null,
   lockedByName = null,
+  remoteCursors = [],
   documentId,
   workspaceId,
   comments = [],
@@ -183,11 +201,14 @@ export function TipTapEditor({
   onBlur,
   onRegisterEditor,
   onActiveBlockChange,
+  onSelectionChange,
 }: TipTapEditorProps) {
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
   const onActiveBlockChangeRef = useRef(onActiveBlockChange);
   onActiveBlockChangeRef.current = onActiveBlockChange;
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
   const onBlurRef = useRef(onBlur);
   onBlurRef.current = onBlur;
   const onCommentHighlightClickRef = useRef(onCommentHighlightClick);
@@ -371,10 +392,7 @@ export function TipTapEditor({
       CitationBlock,
       RhodesSuggestion,
       BlockId,
-      RemoteBlockLock.configure({
-        lockedBlockId: null,
-        lockedByName: null,
-      }),
+      RemoteBlockLock,
       CommentHighlight,
       Extension.create({
         name: "slashCommand",
@@ -487,7 +505,10 @@ export function TipTapEditor({
         return true;
       },
     },
-    onUpdate: ({ editor: instance }) => {
+    onUpdate: ({ editor: instance, transaction }) => {
+      if (transaction.getMeta(BLOCK_ID_TRANSACTION_META)) {
+        return;
+      }
       onUpdateRef.current(instance.getJSON(), instance.getText());
     },
     onBlur: ({ editor: instance }) => {
@@ -509,40 +530,63 @@ export function TipTapEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const extension = editor.extensionManager.extensions.find(
-      (item) => item.name === "remoteBlockLock",
+
+    const collaboration: RemoteCollaborationMeta = {
+      lockedBlockId,
+      lockedBlockIndex,
+      lockedSelectionFrom,
+      lockedByName,
+      remoteCursors: [],
+    };
+
+    editor.view.dispatch(
+      editor.state.tr.setMeta(remoteCollaborationKey, collaboration),
     );
-    if (!extension) return;
-    extension.options.lockedBlockId = lockedBlockId;
-    extension.options.lockedByName = lockedByName;
-    editor.view.dispatch(editor.state.tr);
-  }, [editor, lockedBlockId, lockedByName]);
+  }, [editor, lockedBlockId, lockedBlockIndex, lockedSelectionFrom, lockedByName]);
 
   useEffect(() => {
     if (!editor || contentSyncToken === 0) return;
     const incoming = JSON.stringify(content);
     const current = JSON.stringify(editor.getJSON());
     if (incoming === current) return;
+
+    const { from, to } = editor.state.selection;
     editor.commands.setContent(content, false);
     ensureEditorBlockIds(editor);
+
+    const docSize = editor.state.doc.content.size;
+    if (docSize > 0 && from >= 1) {
+      const safeFrom = Math.min(from, docSize);
+      const safeTo = Math.min(Math.max(to, safeFrom), docSize);
+      editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
+    }
   }, [content, contentSyncToken, editor]);
 
   useEffect(() => {
     if (!editor) return;
 
+    ensureEditorBlockIds(editor);
+
     const syncActiveBlock = () => {
-      const { from } = editor.state.selection;
+      const { from, to } = editor.state.selection;
+      onSelectionChangeRef.current?.(from, to);
       const match = getTopLevelBlockAtPos(editor, from);
       const blockId = match ? readBlockId(match.node) : null;
-      onActiveBlockChangeRef.current?.(blockId);
+      const blockIndex =
+        getTopLevelBlockIndexFromPos(editor, from) ?? match?.index ?? null;
+      onActiveBlockChangeRef.current?.(blockId, blockIndex);
     };
 
     editor.on("selectionUpdate", syncActiveBlock);
+    editor.on("focus", syncActiveBlock);
     editor.on("update", syncActiveBlock);
-    syncActiveBlock();
+    window.requestAnimationFrame(() => {
+      syncActiveBlock();
+    });
 
     return () => {
       editor.off("selectionUpdate", syncActiveBlock);
+      editor.off("focus", syncActiveBlock);
       editor.off("update", syncActiveBlock);
     };
   }, [editor]);
@@ -683,6 +727,17 @@ export function TipTapEditor({
 
       <div className="tiptap-editor__surface" ref={editorSurfaceRef}>
         <EditorContent editor={editor} />
+
+        {editor && (remoteCursors.length > 0 || lockedSelectionFrom != null || lockedBlockIndex != null) && (
+          <DocumentCollaborationOverlay
+            editor={editor}
+            surfaceRef={editorSurfaceRef}
+            remoteCursors={remoteCursors}
+            lockedBlockIndex={lockedBlockIndex}
+            lockedSelectionFrom={lockedSelectionFrom}
+            lockedByName={lockedByName}
+          />
+        )}
 
         {editor && (
           <EditorBlockDragLayer

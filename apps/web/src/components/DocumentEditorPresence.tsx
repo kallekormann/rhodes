@@ -1,6 +1,7 @@
 "use client";
 
 import type { RemoteEditorPresence } from "@/hooks/useDocumentPresence";
+import { formatRemoteNoticeDetail } from "@/lib/documents/remote-document-notice";
 import "./DocumentRemoteConflictBanner.css";
 
 type DocumentEditorPresenceOverlayProps = {
@@ -37,7 +38,8 @@ export function DocumentAwayNoticeBanner({
   notice,
   onDismiss,
 }: DocumentAwayNoticeBannerProps) {
-  const label = notice.actorLabel?.trim() || "Someone";
+  const label = notice.actorLabel?.trim() || "A collaborator";
+  const changeDetail = formatRemoteNoticeDetail(notice);
 
   return (
     <div className="document-remote-notice document-remote-notice--away" role="status">
@@ -45,8 +47,8 @@ export function DocumentAwayNoticeBanner({
         <p className="document-remote-notice__message">
           While you were away, <strong>{label}</strong> {notice.actionLabel}.
         </p>
-        {notice.detail && (
-          <p className="document-remote-notice__detail">{notice.detail}</p>
+        {changeDetail && (
+          <p className="document-remote-notice__detail">{changeDetail}</p>
         )}
       </div>
       <button

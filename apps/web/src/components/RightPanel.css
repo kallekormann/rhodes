@@ -67,6 +67,13 @@
   gap: 0;
 }
 
+.panel-tab--comments {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: var(--space-sm);
+}
+
 .panel-tab--ask {
   display: flex;
   flex-direction: column;

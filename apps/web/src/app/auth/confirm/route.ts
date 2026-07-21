@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { appUrl } from "@/lib/auth/urls";
 import { createClient } from "@/lib/supabase/server";
+import { getServerSupabaseUrl } from "@/lib/supabase/urls";
 
 function redirectToLogin(error = "verify") {
   return NextResponse.redirect(appUrl(`/auth/login?error=${error}`));
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
     return redirectToLogin();
   }
 
-  const apiBase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const apiBase = getServerSupabaseUrl();
   if (!apiBase) {
     return redirectToLogin("config");
   }

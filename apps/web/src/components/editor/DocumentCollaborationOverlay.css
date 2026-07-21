@@ -1,0 +1,21 @@
+.document-collaboration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.remote-collaborator-cursor--overlay {
+  position: absolute;
+  transform: translate(-1px, 0);
+  pointer-events: none;
+  user-select: none;
+}
+
+.remote-collaborator-cursor--overlay .remote-collaborator-cursor__flag {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: -2px;
+  z-index: 20;
+}

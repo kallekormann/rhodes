@@ -20,6 +20,78 @@
   pointer-events: none;
 }
 
+.remote-collaborator-cursor {
+  position: relative;
+  display: inline;
+  pointer-events: none;
+  user-select: none;
+}
+
+.remote-collaborator-cursor__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  margin: 0 -1px;
+  vertical-align: text-bottom;
+  background: var(--remote-cursor-color);
+  border-radius: 1px;
+}
+
+.remote-collaborator-cursor__flag {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: -2px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--radius-pill);
+  background: var(--remote-cursor-color);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--remote-cursor-color) 35%, transparent);
+}
+
+.remote-collaborator-cursor__avatar {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.remote-collaborator-cursor__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.remote-collaborator-cursor__initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.remote-collaborator-cursor__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remote-collaborator-selection {
+  border-radius: 2px;
+}
+
 .tiptap-editor__surface {
   position: relative;
   overflow: visible;
@@ -31,6 +103,8 @@
 .tiptap-editor .ProseMirror {
   outline: none;
   box-shadow: none;
+  overflow: visible;
+  padding-top: 22px;
 }
 
 .tiptap-editor .ProseMirror:focus,
