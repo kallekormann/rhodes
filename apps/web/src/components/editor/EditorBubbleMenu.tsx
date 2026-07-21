@@ -22,6 +22,8 @@ type EditorBubbleMenuProps = {
   workspaceId?: string | null;
   documentId?: string | null;
   onCommentSave?: (text: string, range: { from: number; to: number }) => void;
+  /** Hide bubble while spell suggestion popover is open (right-click path). */
+  suppressed?: boolean;
 };
 
 type BubbleState = {
@@ -56,6 +58,7 @@ export function EditorBubbleMenu({
   workspaceId,
   documentId,
   onCommentSave,
+  suppressed = false,
 }: EditorBubbleMenuProps) {
   const [bubbleState, setBubbleState] = useState<BubbleState | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
@@ -115,6 +118,11 @@ export function EditorBubbleMenu({
       return;
     }
 
+    if (suppressed) {
+      setBubbleState(null);
+      return;
+    }
+
     if (!shouldShowBubble(editor)) {
       if (!pointerInsideRef.current) {
         setBubbleState(null);
@@ -131,16 +139,17 @@ export function EditorBubbleMenu({
     }
 
     setBubbleState(computeBubbleMenuPosition(rect));
-  }, [clearHideTimer, editor]);
+  }, [clearHideTimer, editor, suppressed]);
 
   const revealBubbleForSelection = useCallback(() => {
+    if (suppressed) return;
     const { from, to, empty } = editor.state.selection;
     if (empty || from >= to) return;
 
     lastSelectionRef.current = { from, to };
     suppressBubbleRef.current = false;
     window.requestAnimationFrame(() => updatePosition());
-  }, [editor, updatePosition]);
+  }, [editor, suppressed, updatePosition]);
 
   const scheduleHide = useCallback(() => {
     clearHideTimer();
@@ -202,6 +211,13 @@ export function EditorBubbleMenu({
   useEffect(() => {
     updatePosition();
   }, [commentOpen, linkOpen, updatePosition]);
+
+  useEffect(() => {
+    if (!suppressed) return;
+    setBubbleState(null);
+    setLinkOpen(false);
+    setCommentOpen(false);
+  }, [suppressed]);
 
   const handleMarkClick = useCallback(
     (mark: BubbleActiveMark) => {
@@ -275,7 +291,7 @@ export function EditorBubbleMenu({
     onAsk?.(selectedText || undefined);
   };
 
-  if (!bubbleState) return null;
+  if (!bubbleState || suppressed) return null;
 
   return (
     <div

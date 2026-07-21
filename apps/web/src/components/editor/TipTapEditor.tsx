@@ -39,9 +39,11 @@ import { CommentHighlight } from "@/components/editor/extensions/CommentHighligh
 import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
 import { SpellcheckExtension } from "@/components/editor/extensions/SpellcheckExtension";
+import type { SpellSuggestionPayload } from "@/components/editor/extensions/SpellcheckExtension";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
+import { SpellSuggestionPopover } from "@/components/editor/SpellSuggestionPopover";
 import {
   applyCommentHighlightsToEditor,
   resolveHighlightCommentId,
@@ -224,6 +226,8 @@ export function TipTapEditor({
 
   const [slashState, setSlashState] = useState<SlashState | null>(null);
   const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [spellSuggestion, setSpellSuggestion] =
+    useState<SpellSuggestionPayload | null>(null);
   const slashActiveIndexRef = useRef(0);
   const suggestionRef = useRef<SuggestionProps<SlashMenuItem> | null>(null);
   const slashMenuPointerRef = useRef(false);
@@ -713,6 +717,19 @@ export function TipTapEditor({
     onRegisterInsertCitation((input) => insertCitation(editor, input));
   }, [editor, onRegisterInsertCitation]);
 
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage.rhodesSpellcheck as {
+      onSuggestionRequest: ((payload: SpellSuggestionPayload) => void) | null;
+    };
+    storage.onSuggestionRequest = (payload: SpellSuggestionPayload) => {
+      setSpellSuggestion(payload);
+    };
+    return () => {
+      storage.onSuggestionRequest = null;
+    };
+  }, [editor]);
+
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>
       {editor && (
@@ -722,6 +739,15 @@ export function TipTapEditor({
           workspaceId={workspaceId}
           documentId={documentId}
           onCommentSave={handleCommentSave}
+          suppressed={Boolean(spellSuggestion)}
+        />
+      )}
+
+      {editor && spellSuggestion && (
+        <SpellSuggestionPopover
+          editor={editor}
+          payload={spellSuggestion}
+          onClose={() => setSpellSuggestion(null)}
         />
       )}
 
