@@ -55,7 +55,8 @@
   padding: 0;
   margin: 0;
   background: color-mix(in srgb, var(--color-text) 18%, transparent);
-  cursor: pointer;
+  /* Dim only — do not block Documents/Library filter triggers under the overlay */
+  pointer-events: none;
   animation: globalAskScrimIn 160ms ease-out;
 }
 

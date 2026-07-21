@@ -20,6 +20,12 @@
   font-size: 12px;
 }
 
+.props-list__empty-options {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .props-list__ai-hint {
   display: inline-block;
   margin-left: 8px;

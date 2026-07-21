@@ -91,7 +91,7 @@ export function useEditorSession() {
         ? requestedId
         : null,
   );
-  const { document, loading, error, save, refresh } = useDocument(
+  const { document, loading, error, save, refresh, applyLocal } = useDocument(
     isEditingTemplate ? null : resolvedId,
   );
   const [templateRecord, setTemplateRecord] = useState<TemplateDetail | null>(
@@ -653,19 +653,28 @@ export function useEditorSession() {
   const saveMetadataField = useCallback(
     (fieldKey: string, value: MetadataFieldValue) => {
       if (!document) return;
-      void persistDocument({
-        metadata: withUserMetadataValue(document.metadata, fieldKey, value),
+      let metadata: Record<string, unknown> | null = null;
+      applyLocal((prev) => {
+        metadata = withUserMetadataValue(prev.metadata, fieldKey, value);
+        return { metadata };
+      });
+      if (!metadata) return;
+      void persistDocument({ metadata }).then((result) => {
+        if (!result) void refresh({ silent: true });
       });
     },
-    [document, persistDocument],
+    [applyLocal, document, persistDocument, refresh],
   );
 
   const saveMetadataDocument = useCallback(
     (metadata: Record<string, unknown>) => {
       if (!document) return;
-      void persistDocument({ metadata });
+      applyLocal({ metadata });
+      void persistDocument({ metadata }).then((result) => {
+        if (!result) void refresh({ silent: true });
+      });
     },
-    [document, persistDocument],
+    [applyLocal, document, persistDocument, refresh],
   );
 
   const debouncedSaveComments = useDebouncedCallback(

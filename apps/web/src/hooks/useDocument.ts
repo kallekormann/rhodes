@@ -85,5 +85,33 @@ export function useDocument(documentId: string | null) {
     [documentId],
   );
 
-  return { document, loading, error, refresh, save };
+  /** Apply a local patch immediately (optimistic UI) before/while a network save runs. */
+  const applyLocal = useCallback(
+    (
+      patch:
+        | {
+            title?: string;
+            content?: Record<string, unknown> | null;
+            content_plain?: string | null;
+            metadata?: Record<string, unknown> | null;
+          }
+        | ((
+            prev: DocumentRecord,
+          ) => {
+            title?: string;
+            content?: Record<string, unknown> | null;
+            content_plain?: string | null;
+            metadata?: Record<string, unknown> | null;
+          }),
+    ) => {
+      setDocument((prev) => {
+        if (!prev) return prev;
+        const resolved = typeof patch === "function" ? patch(prev) : patch;
+        return { ...prev, ...resolved };
+      });
+    },
+    [],
+  );
+
+  return { document, loading, error, refresh, save, applyLocal };
 }

@@ -25,14 +25,7 @@ export function GlobalAskPanel() {
 
   return (
     <>
-      {visible && (
-        <button
-          type="button"
-          className="global-ask-scrim"
-          aria-label="Close Ask"
-          onClick={closePanel}
-        />
-      )}
+      {visible && <div className="global-ask-scrim" aria-hidden="true" />}
       <aside
         className={`right-panel global-ask-panel ${visible ? "right-panel--open" : ""}`}
         aria-hidden={!visible}

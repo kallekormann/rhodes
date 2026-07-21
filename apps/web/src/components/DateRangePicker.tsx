@@ -1,5 +1,5 @@
 import { CalendarRange } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { IconButton } from "./IconButton";
 import { FieldPanel, useFieldPanel } from "./FieldControl";
@@ -53,10 +53,24 @@ export function DateRangePicker({
   embedded = false,
   className = "",
 }: DateRangePickerProps) {
-  const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const initialAnchor = value?.start ?? value?.end ?? new Date();
+  const [viewYear, setViewYear] = useState(initialAnchor.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initialAnchor.getMonth());
   const [range, setRange] = useState<DateRange>(value ?? { start: null, end: null });
+  const startKey = value?.start?.getTime() ?? null;
+  const endKey = value?.end?.getTime() ?? null;
+
+  useEffect(() => {
+    const next = value ?? { start: null, end: null };
+    setRange(next);
+    const anchor = next.start ?? next.end;
+    if (anchor) {
+      setViewYear(anchor.getFullYear());
+      setViewMonth(anchor.getMonth());
+    }
+    // startKey/endKey encode the range; ignore Date identity churn from parents
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [startKey, endKey]);
 
   const cells = useMemo(() => {
     const total = daysInMonth(viewYear, viewMonth);

@@ -205,51 +205,63 @@ export function SchemaFieldRow({
     </>
   );
 
-  if (field.field_type === "select" && options) {
+  if (field.field_type === "select") {
     return (
       <div className={rowClass}>
         <dt>{label}</dt>
         <dd>
-          <Dropdown
-            variant="plain"
-            value={typeof value === "string" ? value : ""}
-            options={options.map((option) => ({
-              id: option,
-              label: option.replace(/_/g, " "),
-            }))}
-            onChange={(next) => onChange(next || null)}
-          />
+          {options ? (
+            <Dropdown
+              variant="plain"
+              value={typeof value === "string" ? value : ""}
+              options={options.map((option) => ({
+                id: option,
+                label: option.replace(/_/g, " "),
+              }))}
+              onChange={(next) => onChange(next || null)}
+            />
+          ) : (
+            <span className="props-list__empty-options">
+              No options — add them in Manage
+            </span>
+          )}
         </dd>
       </div>
     );
   }
 
-  if (field.field_type === "multi_select" && options) {
+  if (field.field_type === "multi_select") {
     const selected = Array.isArray(value) ? value : [];
     return (
       <div className={rowClass}>
         <dt>{label}</dt>
         <dd>
-          <div className="props-multi-select">
-            {options.map((option) => {
-              const active = selected.includes(option);
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  className={`tag ${active ? "tag--active" : ""}`}
-                  onClick={() => {
-                    const next = active
-                      ? selected.filter((item) => item !== option)
-                      : [...selected, option];
-                    onChange(next.length > 0 ? next : null);
-                  }}
-                >
-                  {option.replace(/_/g, " ")}
-                </button>
-              );
-            })}
-          </div>
+          {options ? (
+            <div className="props-multi-select">
+              {options.map((option) => {
+                const active = selected.includes(option);
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`tag ${active ? "tag--active" : ""}`}
+                    onClick={() => {
+                      const next = active
+                        ? selected.filter((item) => item !== option)
+                        : [...selected, option];
+                      onChange(next.length > 0 ? next : null);
+                    }}
+                  >
+                    {option.replace(/_/g, " ")}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <span className="props-list__empty-options">
+              No options — add them in Manage
+            </span>
+          )}
         </dd>
       </div>
     );

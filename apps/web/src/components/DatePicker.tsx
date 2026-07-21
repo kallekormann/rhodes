@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconButton } from "./IconButton";
 import "./DatePicker.css";
 
@@ -40,6 +40,17 @@ export function DatePicker({
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
   const [selected, setSelected] = useState<Date | null>(value ?? null);
+  const valueKey = value?.getTime() ?? null;
+
+  useEffect(() => {
+    setSelected(value ?? null);
+    if (value) {
+      setViewYear(value.getFullYear());
+      setViewMonth(value.getMonth());
+    }
+    // valueKey encodes the calendar instant; ignore Date identity churn from parents
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [valueKey]);
 
   const cells = useMemo(() => {
     const total = daysInMonth(viewYear, viewMonth);
