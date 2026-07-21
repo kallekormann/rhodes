@@ -6,6 +6,10 @@ import {
 } from "@/lib/metadata/api";
 import { MAX_METADATA_SCHEMAS_PER_WORKSPACE } from "@/lib/metadata/schemas";
 import { canManageWorkspaceMetadata } from "@/lib/metadata/access";
+import {
+  requireTierFeature,
+  resolveServerTier,
+} from "@/lib/features/server-gates";
 import { createClient } from "@/lib/supabase/server";
 
 const GROUP_FIELDS =
@@ -41,6 +45,14 @@ export async function POST(request: Request) {
         { error: "You do not have permission to manage properties in this scope" },
         { status: 403 },
       ),
+    );
+  }
+
+  const tier = resolveServerTier();
+  const propertiesGate = requireTierFeature(tier, "properties.manage");
+  if (!propertiesGate.ok) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: propertiesGate.message }, { status: 403 }),
     );
   }
 

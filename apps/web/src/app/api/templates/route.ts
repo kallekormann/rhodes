@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import {
+  requireTierFeature,
+  resolveServerTier,
+} from "@/lib/features/server-gates";
 import { createClient } from "@/lib/supabase/server";
 
 const listTemplatesQuerySchema = z.object({
@@ -95,6 +99,14 @@ export async function POST(request: Request) {
   if (!user) {
     return withSecurityHeaders(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    );
+  }
+
+  const tier = resolveServerTier();
+  const templateGate = requireTierFeature(tier, "templates.create");
+  if (!templateGate.ok) {
+    return withSecurityHeaders(
+      NextResponse.json({ error: templateGate.message }, { status: 403 }),
     );
   }
 
