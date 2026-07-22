@@ -441,10 +441,12 @@ function EditorViewContent() {
                     onTakeTheirs={() => void takeTheirs()}
                   />
                 )}
-                {remoteConflict && conflictReviewOpen && conflictTheirs && (
+                {remoteConflict && conflictReviewOpen && (
                   <DocumentConflictReview
-                    theirsContent={conflictTheirs.content}
                     diffs={conflictBlockDiffs}
+                    resolving={conflictResolving}
+                    onKeepMine={() => void keepLocal()}
+                    onTakeTheirs={() => void takeTheirs()}
                     onClose={toggleConflictReview}
                   />
                 )}

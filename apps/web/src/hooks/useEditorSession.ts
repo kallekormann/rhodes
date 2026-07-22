@@ -48,6 +48,7 @@ import {
   type DocumentRemoteConflict,
 } from "@/hooks/useDocumentRealtime";
 import { useDocumentPresence } from "@/hooks/useDocumentPresence";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import type { Editor } from "@tiptap/react";
 import {
@@ -398,20 +399,11 @@ export function useEditorSession() {
     }
     setConflictResolving(true);
     try {
-      const branch = await saveConflictVersionBranch({
-        documentId: document.id,
-        content: conflictTheirs.content,
-        contentPlain: conflictTheirs.content_plain,
-        changeSummary: "Conflict: collaborator's version",
-      });
-      if (!branch.ok) {
-        showToast(branch.error ?? "Couldn't save their version to History", "error");
-        return;
-      }
-
       const mineContent =
         (latestContentRef.current as Record<string, unknown>) ??
         document.content;
+
+      // Push first so the UI feels instant; History branch runs in the background.
       const result = await forcePushMine({
         documentId: document.id,
         mine: {
@@ -432,20 +424,27 @@ export function useEditorSession() {
 
       markSynced(result.document.updated_at);
       setIsDirty(false);
-      await refresh({ silent: true });
+      await applyRemoteDocument(result.document);
       clearConflictUi();
-      showToast("Kept your version. Theirs was saved to History.", "success");
+      showToast("Kept your edits. Their version was saved to History.", "success");
+
+      void saveConflictVersionBranch({
+        documentId: document.id,
+        content: conflictTheirs.content,
+        contentPlain: conflictTheirs.content_plain,
+        changeSummary: "Conflict: collaborator's version",
+      });
     } finally {
       setConflictResolving(false);
     }
   }, [
+    applyRemoteDocument,
     clearConflictUi,
     conflictTheirs,
     contentPlain,
     document,
     documentTitle,
     markSynced,
-    refresh,
     showToast,
   ]);
 
@@ -460,9 +459,14 @@ export function useEditorSession() {
     try {
       let theirs = conflictTheirs;
       if (!theirs) {
-        const response = await fetch(`/app/api/documents/${document.id}`);
-        const data = await response.json().catch(() => ({}));
-        if (response.ok) theirs = data.document as DocumentRecord;
+        try {
+          const response = await fetch(`/app/api/documents/${document.id}`);
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) theirs = data.document as DocumentRecord;
+        } catch {
+          showToast("Couldn't load their version", "error");
+          return;
+        }
       }
       if (!theirs) {
         showToast("Couldn't load their version", "error");
@@ -472,22 +476,20 @@ export function useEditorSession() {
       const mineContent =
         (latestContentRef.current as Record<string, unknown>) ??
         document.content;
-      const branch = await saveConflictVersionBranch({
-        documentId: document.id,
-        content: mineContent,
-        contentPlain: contentPlain || document.content_plain,
-        changeSummary: "Conflict: your local edits",
-      });
-      if (!branch.ok) {
-        showToast(branch.error ?? "Couldn't save your version to History", "error");
-        return;
-      }
+      const minePlain = contentPlain || document.content_plain;
 
       await applyTakeTheirs({ documentId: document.id, theirs });
       await applyRemoteDocument(theirs);
       markSynced(theirs.updated_at);
       clearConflictUi();
       showToast("Loaded their version. Yours was saved to History.", "success");
+
+      void saveConflictVersionBranch({
+        documentId: document.id,
+        content: mineContent,
+        contentPlain: minePlain,
+        changeSummary: "Conflict: your local edits",
+      });
     } finally {
       setConflictResolving(false);
     }
@@ -506,9 +508,20 @@ export function useEditorSession() {
     setConflictReviewOpen((open) => !open);
   }, []);
 
+  // Open comparison when a conflict appears so the choice is obvious.
+  useEffect(() => {
+    if (activeConflict) {
+      setConflictReviewOpen(true);
+    }
+  }, [activeConflict?.updatedAt]);
+
   const { awayNotice, dismissAwayNotice } = useDocumentAwayNotice(
     isEditingTemplate ? null : (document?.id ?? null),
     session.userId,
+  );
+
+  const { online } = useOnlineStatus(
+    isEditingTemplate ? null : (document?.workspace_id ?? resolvedWorkspaceId),
   );
 
   useEffect(() => {
@@ -536,7 +549,11 @@ export function useEditorSession() {
     selectionFrom: cursorSelection?.from ?? null,
     selectionTo: cursorSelection?.to ?? null,
     selectionRef: cursorSelectionRef,
-    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    // Offline: hide remote cursors and stop broadcasting (WS may still be up under DevTools Offline).
+    enabled:
+      !isEditingTemplate &&
+      crossScopeAccess === "allowed" &&
+      online,
   });
 
   const onEditorSelectionChange = useCallback((from: number, to: number) => {

@@ -35,17 +35,19 @@ export function DocumentRemoteConflictBanner({
           <p className="document-remote-conflict__detail">{changeDetail}</p>
         )}
         <p className="document-remote-conflict__detail">
-          Choose whose version stays live. The other is saved to History.
+          <strong>Keep my edits</strong> — your text stays; theirs goes to History.
+          {" "}
+          <strong>Use their version</strong> — replace yours with theirs; yours goes to History.
         </p>
       </div>
       <div className="document-remote-conflict__actions">
         <Button
-          variant="secondary"
+          variant="ghost"
           size="small"
           disabled={resolving}
           onClick={onReview}
         >
-          {reviewOpen ? "Hide review" : "Review"}
+          {reviewOpen ? "Hide comparison" : "Compare changes"}
         </Button>
         <Button
           variant="secondary"
@@ -54,7 +56,7 @@ export function DocumentRemoteConflictBanner({
           loading={resolving}
           onClick={onKeepMine}
         >
-          Keep mine
+          Keep my edits
         </Button>
         <Button
           variant="primary"
@@ -62,7 +64,7 @@ export function DocumentRemoteConflictBanner({
           disabled={resolving}
           onClick={onTakeTheirs}
         >
-          Take theirs
+          Use their version
         </Button>
       </div>
     </div>

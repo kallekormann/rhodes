@@ -35,10 +35,17 @@ const FALLBACK_POLL_MS = 15_000;
 async function fetchDocumentActivity(
   documentId: string,
 ): Promise<EnrichedActivityRecord[]> {
-  const response = await fetch(`/app/api/documents/${documentId}/activity?limit=20`);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return [];
-  return (data.activity as EnrichedActivityRecord[]) ?? [];
+  if (typeof navigator !== "undefined" && !navigator.onLine) return [];
+  try {
+    const response = await fetch(
+      `/app/api/documents/${documentId}/activity?limit=20`,
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return [];
+    return (data.activity as EnrichedActivityRecord[]) ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export function useDocumentRealtime({
@@ -114,16 +121,40 @@ export function useDocumentRealtime({
 
   const fetchLatest = useCallback(async (): Promise<DocumentRecord | null> => {
     if (!documentId) return null;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return null;
 
-    const response = await fetch(`/app/api/documents/${documentId}`);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return null;
-    return (data.document as DocumentRecord) ?? null;
+    try {
+      const response = await fetch(`/app/api/documents/${documentId}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return null;
+      return (data.document as DocumentRecord) ?? null;
+    } catch {
+      // Offline / network blip — never throw into React.
+      return null;
+    }
   }, [documentId]);
 
   const applyRemote = useCallback(
     async (remoteUpdatedAt: string, force = false) => {
       if (!force && remoteUpdatedAt === lastAppliedUpdatedAtRef.current) {
+        return;
+      }
+
+      const offline =
+        typeof navigator !== "undefined" && !navigator.onLine;
+
+      // Offline: never fetch. If we have local edits, record a soft conflict for reconnect.
+      if (offline) {
+        if (isDirtyRef.current) {
+          setRemoteConflict({
+            updatedAt: remoteUpdatedAt,
+            actorId: null,
+            actorLabel: "A collaborator",
+            actionLabel: "updated the document",
+            detail:
+              "You’re offline. Resolve when you’re back online — your edits are kept locally.",
+          });
+        }
         return;
       }
 
@@ -209,6 +240,7 @@ export function useDocumentRealtime({
     // Prefer Realtime; only poll as a safety net (and skip while subscribed + clean).
     const poll = setInterval(() => {
       void (async () => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return;
         if (liveRef.current && !isDirtyRef.current) {
           return;
         }
