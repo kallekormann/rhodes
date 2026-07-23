@@ -6,8 +6,7 @@ import { useApp } from "@/context/AppContext";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
-import { DocumentRemoteConflictBanner } from "@/components/DocumentRemoteConflictBanner";
-import { DocumentConflictReview } from "@/components/DocumentConflictReview";
+import { DocumentConflictFloat } from "@/components/DocumentConflictFloat";
 import type { Editor } from "@tiptap/react";
 import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
@@ -87,14 +86,6 @@ function EditorViewContent() {
     deleteMetadataGroup,
     awayNotice,
     dismissAwayNotice,
-    remoteConflict,
-    keepLocal,
-    takeTheirs,
-    conflictResolving,
-    conflictReviewOpen,
-    toggleConflictReview,
-    conflictTheirs,
-    conflictBlockDiffs,
     reloadRemoteDocument,
     contentSyncToken,
     lockedBlockId,
@@ -104,6 +95,20 @@ function EditorViewContent() {
     remoteCursors,
     onEditorSelectionChange,
     onActiveBlockChange,
+    ydoc,
+    collabProvider,
+    collabDocReady,
+    collabSynced,
+    collabNeedsInitialSeed,
+    onCollabBootstrapped,
+    collaborationUser,
+    offlineConflictBlocks,
+    offlineConflictReviewPending,
+    keepOfflineMine,
+    takeOfflineTheirs,
+    keepAllOfflineMine,
+    takeAllOfflineTheirs,
+    registerEditorForConflict,
   } = useEditorSession();
 
   const editorEditable = isTemplateMode || canEditDocument;
@@ -154,9 +159,10 @@ function EditorViewContent() {
   const handleRegisterEditor = useCallback(
     (editor: Editor | null) => {
       editorRef.current = editor;
+      registerEditorForConflict(editor);
       registerEditor(editor);
     },
-    [registerEditor],
+    [registerEditor, registerEditorForConflict],
   );
 
   const handleNavigateToActivity = useCallback((target: ActivityNavigateTarget) => {
@@ -431,23 +437,13 @@ function EditorViewContent() {
                     onDismiss={dismissAwayNotice}
                   />
                 )}
-                {remoteConflict && (
-                  <DocumentRemoteConflictBanner
-                    conflict={remoteConflict}
-                    resolving={conflictResolving}
-                    reviewOpen={conflictReviewOpen}
-                    onReview={toggleConflictReview}
-                    onKeepMine={() => void keepLocal()}
-                    onTakeTheirs={() => void takeTheirs()}
-                  />
-                )}
-                {remoteConflict && conflictReviewOpen && (
-                  <DocumentConflictReview
-                    diffs={conflictBlockDiffs}
-                    resolving={conflictResolving}
-                    onKeepMine={() => void keepLocal()}
-                    onTakeTheirs={() => void takeTheirs()}
-                    onClose={toggleConflictReview}
+                {offlineConflictReviewPending && offlineConflictBlocks.length > 0 && (
+                  <DocumentConflictFloat
+                    conflicts={offlineConflictBlocks}
+                    onKeepMine={keepOfflineMine}
+                    onTakeTheirs={takeOfflineTheirs}
+                    onKeepAllMine={keepAllOfflineMine}
+                    onTakeAllTheirs={takeAllOfflineTheirs}
                   />
                 )}
                 {!editorEditable && (
@@ -459,6 +455,13 @@ function EditorViewContent() {
                   key={documentId ?? "template"}
                   content={content}
                   contentSyncToken={contentSyncToken}
+                  ydoc={ydoc}
+                  collabProvider={collabProvider}
+                  collabDocReady={collabDocReady}
+                  collabSynced={collabSynced}
+                  collabNeedsInitialSeed={collabNeedsInitialSeed}
+                  onCollabBootstrapped={onCollabBootstrapped}
+                  collaborationUser={collaborationUser}
                   lockedBlockId={lockedBlockId}
                   lockedBlockIndex={lockedBlockIndex}
                   lockedSelectionFrom={lockedSelectionFrom}

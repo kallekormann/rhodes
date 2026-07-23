@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pullWorkspaceDocuments, pushOutbox } from "@/lib/offline/sync-engine";
 
+/** Give the network a moment to stabilize before retrying queued patches. */
+const RECONNECT_PUSH_DEFER_MS = 1_000;
+
 export function useOnlineStatus(workspaceId?: string | null) {
   const [online, setOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -19,10 +22,20 @@ export function useOnlineStatus(workspaceId?: string | null) {
     })();
   }, []);
 
+  const scheduleRetrySync = useCallback(() => {
+    if (typeof window === "undefined") {
+      retrySync();
+      return;
+    }
+    window.setTimeout(() => {
+      retrySync();
+    }, RECONNECT_PUSH_DEFER_MS);
+  }, [retrySync]);
+
   useEffect(() => {
     const onOnline = () => {
       setOnline(true);
-      retrySync();
+      scheduleRetrySync();
     };
     const onOffline = () => setOnline(false);
 
@@ -32,7 +45,7 @@ export function useOnlineStatus(workspaceId?: string | null) {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [retrySync]);
+  }, [scheduleRetrySync]);
 
   return { online, retrySync };
 }

@@ -36,16 +36,19 @@
 }
 
 .documents-toolbar__search {
-  flex: 1;
-  max-width: 280px;
+  flex: 1 1 0;
+  min-width: 160px;
+  max-width: 360px;
 }
 
 .documents-toolbar__property {
-  flex-shrink: 0;
-  width: 160px;
+  flex: 0 0 128px;
+  width: 128px;
+  max-width: 128px;
 }
 
 .documents-toolbar__tabs {
+  flex-shrink: 0;
   overflow-x: auto;
   max-width: 100%;
 }

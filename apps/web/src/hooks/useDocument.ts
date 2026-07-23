@@ -8,9 +8,10 @@ import {
   putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
-import { enqueueDocumentPatch } from "@/lib/offline/outbox";
+import { enqueueDocumentPatch, getOutboxForDocument } from "@/lib/offline/outbox";
 import {
   pushOutbox,
+  reconcileStalePendingOnOpen,
   subscribeSyncEngine,
 } from "@/lib/offline/sync-engine";
 import type { OfflineSyncStatus } from "@/lib/offline/db";
@@ -132,6 +133,41 @@ export function useDocument(documentId: string | null) {
         cached &&
         (cached.sync_status === "pending" || cached.sync_status === "conflict")
       ) {
+        const localPlain = (cached.content_plain ?? "").trim();
+        const remotePlain = (remote.content_plain ?? "").trim();
+        // Never prefer an empty pending wipe over a non-empty server document.
+        if (localPlain.length === 0 && remotePlain.length > 0) {
+          setDocument(remote);
+          serverUpdatedAtRef.current = remote.updated_at;
+          setSyncStatus("synced");
+          try {
+            await putOfflineDocument(
+              toOfflineDocumentRecord({
+                ...remote,
+                server_updated_at: remote.updated_at,
+                sync_status: "synced",
+              }),
+            );
+          } catch {
+            /* IndexedDB unavailable */
+          }
+          setLoading(false);
+          return;
+        }
+
+        const reconciled = await reconcileStalePendingOnOpen({
+          documentId,
+          remote,
+          cached,
+        });
+        if (reconciled) {
+          setDocument(reconciled.document);
+          serverUpdatedAtRef.current = reconciled.serverUpdatedAt;
+          setSyncStatus(reconciled.syncStatus);
+          setLoading(false);
+          return;
+        }
+
         // Prefer local pending/conflict over remote until resolved.
         setLoading(false);
         return;
@@ -219,6 +255,7 @@ export function useDocument(documentId: string | null) {
       }
 
       const nextLocal: DocumentRecord = { ...prev, ...patch };
+
       setDocument(nextLocal);
       documentRef.current = nextLocal;
 
@@ -266,24 +303,22 @@ export function useDocument(documentId: string | null) {
       }
 
       if (typeof navigator !== "undefined" && navigator.onLine) {
-        const result = await pushOutbox();
-        const conflict = result.conflicts.find(
-          (item) => item.documentId === documentId,
-        );
-        if (conflict) {
-          setSyncStatus("conflict");
-          return nextLocal;
+        let pushResult = await pushOutbox();
+        for (let attempt = 0; attempt < 6; attempt++) {
+          const pending = await getOutboxForDocument(documentId);
+          if (pending.length === 0) break;
+          if (pushResult.stoppedOnNetwork) break;
+          pushResult = await pushOutbox();
         }
-        if (result.pushed > 0) {
-          const synced = await getOfflineDocument(documentId);
-          if (synced) {
-            serverUpdatedAtRef.current = synced.server_updated_at;
-            const next = recordFromOffline(synced);
-            setDocument(next);
-            documentRef.current = next;
-            setSyncStatus("synced");
-            return next;
-          }
+
+        const synced = await getOfflineDocument(documentId);
+        if (synced?.sync_status === "synced") {
+          serverUpdatedAtRef.current = synced.server_updated_at;
+          const next = recordFromOffline(synced);
+          setDocument(next);
+          documentRef.current = next;
+          setSyncStatus("synced");
+          return next;
         }
       }
 

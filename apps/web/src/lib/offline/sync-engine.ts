@@ -1,5 +1,11 @@
 /**
- * Push outbox → PATCH /api/documents. Pull / conflict UI = later waves.
+ * Push outbox → PATCH /api/documents.
+ *
+ * Only title/metadata patches flow through here now — the document body is
+ * owned by the Yjs CRDT (see useYjsCollaboration) and persists/merges on its
+ * own via document_yjs_state. Title/metadata conflicts are rare, single-field
+ * edits, so a 409 here simply refetches and force-overwrites (last write wins)
+ * rather than opening a conflict-review UI.
  */
 
 import {
@@ -7,8 +13,10 @@ import {
   putOfflineDocument,
   setOfflineDocumentStatus,
 } from "@/lib/offline/documents-cache";
-import { rememberConflictTheirs } from "@/lib/offline/conflict-resolve";
 import {
+  clearOutboxForDocument,
+  enqueueDocumentPatch,
+  getOutboxForDocument,
   listOutbox,
   removeOutboxEntry,
   type DocumentPatchPayload,
@@ -17,25 +25,21 @@ import type { OfflineSyncStatus } from "@/lib/offline/db";
 import { getOfflineDB } from "@/lib/offline/db";
 import type { DocumentRecord } from "@/hooks/useDocument";
 
-export type SyncConflictPayload = {
-  documentId: string;
-  serverDocument: Record<string, unknown>;
-};
-
 export type SyncStatusEvent = {
   documentId: string;
   status: OfflineSyncStatus;
 };
 
 type SyncListener = (event: {
-  type: "status" | "conflict" | "drained";
+  type: "status" | "drained";
   documentId?: string;
   status?: OfflineSyncStatus;
-  conflict?: SyncConflictPayload;
 }) => void;
 
 const listeners = new Set<SyncListener>();
-let pushing = false;
+/** Serializes concurrent pushOutbox callers so merged title/metadata patches are not dropped. */
+let pushTail: Promise<{ pushed: number; stoppedOnNetwork: boolean }> =
+  Promise.resolve({ pushed: 0, stoppedOnNetwork: false });
 
 export function subscribeSyncEngine(listener: SyncListener): () => void {
   listeners.add(listener);
@@ -52,28 +56,56 @@ function emit(event: Parameters<SyncListener>[0]) {
   }
 }
 
+export function notifyDocumentSyncStatus(
+  documentId: string,
+  status: OfflineSyncStatus,
+): void {
+  emit({ type: "status", documentId, status });
+}
+
+async function patchDocument(
+  documentId: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return fetch(`/app/api/documents/${documentId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function pushOutbox(): Promise<{
   pushed: number;
-  conflicts: SyncConflictPayload[];
   stoppedOnNetwork: boolean;
 }> {
   if (typeof window === "undefined") {
-    return { pushed: 0, conflicts: [], stoppedOnNetwork: false };
+    return { pushed: 0, stoppedOnNetwork: false };
   }
   if (!navigator.onLine) {
-    return { pushed: 0, conflicts: [], stoppedOnNetwork: true };
-  }
-  if (pushing) {
-    return { pushed: 0, conflicts: [], stoppedOnNetwork: false };
+    return { pushed: 0, stoppedOnNetwork: true };
   }
 
-  pushing = true;
+  const job = () => drainPushOutbox();
+  const next = pushTail.then(job, job);
+  pushTail = next.then(
+    () => ({ pushed: 0, stoppedOnNetwork: false }),
+    () => ({ pushed: 0, stoppedOnNetwork: false }),
+  );
+  return next;
+}
+
+async function drainPushOutbox(): Promise<{
+  pushed: number;
+  stoppedOnNetwork: boolean;
+}> {
   let pushed = 0;
-  const conflicts: SyncConflictPayload[] = [];
   let stoppedOnNetwork = false;
 
-  try {
+  while (navigator.onLine) {
     const queue = await listOutbox();
+    if (queue.length === 0) break;
+
+    let progressed = false;
     for (const entry of queue) {
       if (entry.mutation !== "patch" || entry.id == null) continue;
       if (!navigator.onLine) {
@@ -81,16 +113,19 @@ export async function pushOutbox(): Promise<{
         break;
       }
 
-      const patch = entry.payload as DocumentPatchPayload;
+      const db = await getOfflineDB();
+      const freshEntry = await db.get("outbox", entry.id);
+      if (!freshEntry || freshEntry.mutation !== "patch" || freshEntry.id == null) {
+        continue;
+      }
+
+      const patch = freshEntry.payload as DocumentPatchPayload;
+
       let response: Response;
       try {
-        response = await fetch(`/app/api/documents/${entry.document_id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...patch,
-            expected_updated_at: entry.expected_updated_at,
-          }),
+        response = await patchDocument(freshEntry.document_id, {
+          ...patch,
+          expected_updated_at: freshEntry.expected_updated_at,
         });
       } catch {
         stoppedOnNetwork = true;
@@ -98,36 +133,16 @@ export async function pushOutbox(): Promise<{
       }
 
       if (response.status === 409) {
-        const data = await response.json().catch(() => ({}));
-        const serverDocument =
-          (data.document as Record<string, unknown>) ??
-          (data as Record<string, unknown>);
+        // Rare for title/metadata — last write wins rather than a conflict UI.
         try {
-          await rememberConflictTheirs(
-            entry.document_id,
-            serverDocument as DocumentRecord,
-          );
+          response = await patchDocument(freshEntry.document_id, {
+            ...patch,
+            force: true,
+          });
         } catch {
-          await setOfflineDocumentStatus(entry.document_id, "conflict");
+          stoppedOnNetwork = true;
+          break;
         }
-        const conflict: SyncConflictPayload = {
-          documentId: entry.document_id,
-          serverDocument,
-        };
-        conflicts.push(conflict);
-        emit({
-          type: "conflict",
-          documentId: entry.document_id,
-          status: "conflict",
-          conflict,
-        });
-        emit({
-          type: "status",
-          documentId: entry.document_id,
-          status: "conflict",
-        });
-        // Leave outbox entry until user resolves (Wave B).
-        continue;
       }
 
       if (!response.ok) {
@@ -163,26 +178,27 @@ export async function pushOutbox(): Promise<{
           sync_status: "synced",
         });
       } else {
-        await setOfflineDocumentStatus(entry.document_id, "synced");
+        await setOfflineDocumentStatus(freshEntry.document_id, "synced");
       }
 
-      await removeOutboxEntry(entry.id);
+      await removeOutboxEntry(freshEntry.id);
       pushed += 1;
+      progressed = true;
       emit({
         type: "status",
-        documentId: entry.document_id,
+        documentId: freshEntry.document_id,
         status: "synced",
       });
     }
 
-    if (pushed > 0) {
-      emit({ type: "drained" });
-    }
-  } finally {
-    pushing = false;
+    if (stoppedOnNetwork || !progressed) break;
   }
 
-  return { pushed, conflicts, stoppedOnNetwork };
+  if (pushed > 0) {
+    emit({ type: "drained" });
+  }
+
+  return { pushed, stoppedOnNetwork };
 }
 
 /** Read local sync status for UI. */
@@ -190,11 +206,93 @@ export async function getDocumentSyncStatus(
   documentId: string,
 ): Promise<OfflineSyncStatus | null> {
   const row = await getOfflineDocument(documentId);
-  return row?.sync_status ?? null;
+  if (!row) return null;
+  if (row.sync_status === "pending") {
+    const outbox = await getOutboxForDocument(documentId);
+    if (outbox.length === 0) return "synced";
+  }
+  return row.sync_status;
+}
+
+/**
+ * On cold open: clear stale IDB pending when title/metadata already match
+ * server, or drain outbox when local is ahead.
+ */
+export async function reconcileStalePendingOnOpen(params: {
+  documentId: string;
+  remote: DocumentRecord;
+  cached: NonNullable<Awaited<ReturnType<typeof getOfflineDocument>>>;
+}): Promise<{
+  document: DocumentRecord;
+  syncStatus: OfflineSyncStatus;
+  serverUpdatedAt: string;
+} | null> {
+  const { documentId, remote, cached } = params;
+  if (cached.sync_status !== "pending" && cached.sync_status !== "conflict") {
+    return null;
+  }
+  if (typeof navigator === "undefined" || !navigator.onLine) return null;
+
+  if (cached.title === remote.title) {
+    await putOfflineDocument({
+      id: remote.id,
+      workspace_id: remote.workspace_id,
+      title: remote.title,
+      content: remote.content,
+      content_plain: remote.content_plain,
+      metadata: remote.metadata,
+      server_updated_at: remote.updated_at,
+      updated_at: remote.updated_at,
+      created_at: remote.created_at,
+      sync_status: "synced",
+    });
+    await clearOutboxForDocument(documentId);
+    notifyDocumentSyncStatus(documentId, "synced");
+    return {
+      document: remote,
+      syncStatus: "synced",
+      serverUpdatedAt: remote.updated_at,
+    };
+  }
+
+  await pushOutbox();
+  const row = await getOfflineDocument(documentId);
+  if (row?.sync_status === "synced") {
+    return {
+      document: {
+        id: row.id,
+        workspace_id: row.workspace_id,
+        title: row.title,
+        content: row.content,
+        content_plain: row.content_plain,
+        metadata: row.metadata ?? null,
+        updated_at: row.updated_at,
+        created_at: row.created_at,
+      },
+      syncStatus: "synced",
+      serverUpdatedAt: row.server_updated_at,
+    };
+  }
+
+  return null;
 }
 
 function pullCursorKey(workspaceId: string) {
   return `last_sync_cursor:${workspaceId}`;
+}
+
+/** Enqueue a title/metadata patch that must be retried at a rebased server clock. */
+export async function enqueueRebasedPatch(params: {
+  documentId: string;
+  serverUpdatedAt: string;
+  patch: DocumentPatchPayload;
+}): Promise<{ pushed: number; stoppedOnNetwork: boolean }> {
+  await enqueueDocumentPatch({
+    documentId: params.documentId,
+    patch: params.patch,
+    expectedUpdatedAt: params.serverUpdatedAt,
+  });
+  return pushOutbox();
 }
 
 /**
@@ -241,9 +339,7 @@ export async function pullWorkspaceDocuments(
       continue;
     }
 
-    await putOfflineDocument(
-      toOfflineRecord(remote),
-    );
+    await putOfflineDocument(toOfflineRecord(remote));
     pulled += 1;
     if (!newest || remote.updated_at > newest) {
       newest = remote.updated_at;

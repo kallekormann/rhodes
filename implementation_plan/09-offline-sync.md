@@ -9,7 +9,7 @@
 **Started:** July 21, 2026 — IndexedDB scaffold + encrypted Ask history.  
 **Wave A (branch `feature/phase-09-offline-wave-a`):** document local-first outbox + push + `expected_updated_at` 409 + online/sync indicator.  
 **Wave B (same branch):** Keep mine / Take theirs / Review + block-diff list; conflict version branches; workspace pull `since` cursor.  
-**Wave C (later):** per-block accept + write-third-variant merge card. CRDT/Yjs still O-007 V2.
+**Wave C:** TipTap + Yjs live collaboration (O-007) over Supabase Realtime; Compare Keep/Take reserved for offline reconnect 409 only.
 
 ---
 

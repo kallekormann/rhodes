@@ -161,6 +161,33 @@ export function withDocumentComments(
   };
 }
 
+/** Union comments by id — mine/live wins on duplicates; keeps peer comments. */
+export function mergeDocumentCommentMetadata(
+  mineMetadata: Record<string, unknown> | null | undefined,
+  theirsMetadata: Record<string, unknown> | null | undefined,
+  liveComments?: StoredDocumentComment[] | null,
+): Record<string, unknown> {
+  const byId = new Map<string, StoredDocumentComment>();
+  for (const comment of parseDocumentComments(theirsMetadata)) {
+    byId.set(comment.id, comment);
+  }
+  for (const comment of parseDocumentComments(mineMetadata)) {
+    byId.set(comment.id, comment);
+  }
+  if (liveComments) {
+    for (const comment of liveComments) {
+      byId.set(comment.id, comment);
+    }
+  }
+  return withDocumentComments(
+    {
+      ...(theirsMetadata ?? {}),
+      ...(mineMetadata ?? {}),
+    },
+    [...byId.values()],
+  );
+}
+
 export function createDocumentComment(input: {
   parentId?: string;
   blockId: string;
@@ -247,6 +274,7 @@ export function applyCommentHighlightsToEditor(
   });
 
   for (const comment of rootComments) {
+    if ((comment as { orphaned?: boolean }).orphaned) continue;
     if (comment.from < 0 || comment.to > tr.doc.content.size) continue;
     if (comment.from >= comment.to) continue;
     tr = tr.addMark(

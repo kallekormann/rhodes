@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ensureRealtimeAuth } from "@/lib/supabase/ensure-realtime-auth";
 import type { RemoteCollaboratorCursor } from "@/components/editor/extensions/remote-cursor-decorations";
 
 export type RemoteEditorPresence = {
@@ -28,7 +29,8 @@ type CursorBroadcastPayload = {
   last_seen: number;
 };
 
-const STALE_MS = 8_000;
+/** Drop remote carets quickly when a peer goes offline / stops heartbeating. */
+const STALE_MS = 3_000;
 const BROADCAST_EVENT = "cursor";
 const CHANNEL_PREFIX = "document-collab";
 
@@ -200,44 +202,47 @@ export function useDocumentPresence(options: UseDocumentPresenceOptions) {
     }
 
     let cancelled = false;
+    let heartbeat: number | null = null;
+    let prune: number | null = null;
     const supabase = createClient();
     const channelName = `${CHANNEL_PREFIX}:${documentId}`;
 
-    const channel = supabase.channel(channelName, {
-      config: {
-        broadcast: { ack: false, self: false },
-      },
-    });
-    channelRef.current = channel;
-
-    const publishCursor = async () => {
-      if (cancelled || !subscribedRef.current) return;
-      if (!optionsRef.current.userId) return;
-
-      try {
-        await channel.send({
-          type: "broadcast",
-          event: BROADCAST_EVENT,
-          payload: buildBroadcastPayload(optionsRef.current),
-        });
-      } catch {
-        // Heartbeat retries after subscribe.
-      }
-    };
-
-    const upsertPeer = (raw: unknown) => {
-      const editor = parseBroadcastPayload(raw, userId);
-      if (!editor) return;
-      peersRef.current.set(editor.userId, editor);
-      syncPeersState();
-    };
-
-    channel.on("broadcast", { event: BROADCAST_EVENT }, ({ payload }) => {
-      upsertPeer(payload);
-    });
-
     void (async () => {
+      await ensureRealtimeAuth(supabase);
       if (cancelled) return;
+
+      const channel = supabase.channel(channelName, {
+        config: {
+          broadcast: { ack: false, self: false },
+        },
+      });
+      channelRef.current = channel;
+
+      const publishCursor = async () => {
+        if (cancelled || !subscribedRef.current) return;
+        if (!optionsRef.current.userId) return;
+
+        try {
+          await channel.send({
+            type: "broadcast",
+            event: BROADCAST_EVENT,
+            payload: buildBroadcastPayload(optionsRef.current),
+          });
+        } catch {
+          // Heartbeat retries after subscribe.
+        }
+      };
+
+      const upsertPeer = (raw: unknown) => {
+        const editor = parseBroadcastPayload(raw, userId);
+        if (!editor) return;
+        peersRef.current.set(editor.userId, editor);
+        syncPeersState();
+      };
+
+      channel.on("broadcast", { event: BROADCAST_EVENT }, ({ payload }) => {
+        upsertPeer(payload);
+      });
 
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED" && !cancelled) {
@@ -252,33 +257,34 @@ export function useDocumentPresence(options: UseDocumentPresenceOptions) {
           setChannelReady(false);
         }
       });
-    })();
 
-    const heartbeat = window.setInterval(() => {
-      void publishCursor();
-    }, 400);
+      heartbeat = window.setInterval(() => {
+        void publishCursor();
+      }, 400);
 
-    const prune = window.setInterval(() => {
-      const now = Date.now();
-      let changed = false;
-      for (const [peerId, editor] of peersRef.current.entries()) {
-        if (now - editor.lastSeen >= STALE_MS) {
-          peersRef.current.delete(peerId);
-          changed = true;
+      prune = window.setInterval(() => {
+        const now = Date.now();
+        let changed = false;
+        for (const [peerId, editor] of peersRef.current.entries()) {
+          if (now - editor.lastSeen >= STALE_MS) {
+            peersRef.current.delete(peerId);
+            changed = true;
+          }
         }
-      }
-      if (changed) syncPeersState();
-    }, 1_000);
+        if (changed) syncPeersState();
+      }, 1_000);
+    })();
 
     return () => {
       cancelled = true;
       subscribedRef.current = false;
       setChannelReady(false);
-      window.clearInterval(heartbeat);
-      window.clearInterval(prune);
+      if (heartbeat != null) window.clearInterval(heartbeat);
+      if (prune != null) window.clearInterval(prune);
       peersRef.current.clear();
+      const channel = channelRef.current;
       channelRef.current = null;
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
       setRemoteEditors([]);
     };
   }, [documentId, enabled, userId]);

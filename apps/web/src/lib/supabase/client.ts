@@ -1,10 +1,14 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { resetRealtimeAuthCache } from "@/lib/supabase/ensure-realtime-auth";
+import {
+  ensureRealtimeAuth,
+  resetRealtimeAuthCache,
+} from "@/lib/supabase/ensure-realtime-auth";
 import { getBrowserSupabaseUrl } from "@/lib/supabase/urls";
 
 type BrowserClient = ReturnType<typeof createBrowserClient>;
 
 let browserClient: BrowserClient | undefined;
+let onlineAuthListenerRegistered = false;
 
 export function createClient(): BrowserClient {
   const url = getBrowserSupabaseUrl();
@@ -19,6 +23,14 @@ export function createClient(): BrowserClient {
     browserClient.auth.onAuthStateChange(() => {
       resetRealtimeAuthCache();
     });
+
+    if (typeof window !== "undefined" && !onlineAuthListenerRegistered) {
+      onlineAuthListenerRegistered = true;
+      window.addEventListener("online", () => {
+        resetRealtimeAuthCache();
+        void ensureRealtimeAuth(browserClient!, { force: true });
+      });
+    }
   }
 
   return browserClient;

@@ -94,7 +94,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const expectedUpdatedAt = parsed.data.expected_updated_at;
-  if (expectedUpdatedAt) {
+  const forceWrite = parsed.data.force === true;
+  if (!forceWrite && expectedUpdatedAt) {
     const serverUpdatedAt = String(existing.updated_at ?? "");
     const serverMs = Date.parse(serverUpdatedAt);
     const expectedMs = Date.parse(expectedUpdatedAt);

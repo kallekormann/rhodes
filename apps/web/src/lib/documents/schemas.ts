@@ -22,6 +22,8 @@ export const updateDocumentSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
   /** Optimistic concurrency — reject with 409 when server is newer. */
   expected_updated_at: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
+  /** Conflict resolution — overwrite server without OCC check. */
+  force: z.boolean().optional(),
 });
 
 export const listDocumentsQuerySchema = z.object({
