@@ -1,0 +1,24 @@
+.conflict-diff {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: break-word;
+  color: var(--color-text);
+}
+
+.conflict-diff__add {
+  background: rgb(255 214 102 / 28%);
+  color: inherit;
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.conflict-diff--theirs .conflict-diff__add {
+  background: rgb(120 180 255 / 22%);
+}
+
+.conflict-diff__del {
+  opacity: 0.55;
+  text-decoration: line-through;
+}

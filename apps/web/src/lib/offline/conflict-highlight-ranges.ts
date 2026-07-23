@@ -1,40 +1,7 @@
-import { diffChars, diffWords } from "@/lib/documents/text-diff";
-
 export type CharRange = {
   start: number;
   end: number;
 };
-
-function mergeCharRanges(ranges: CharRange[]): CharRange[] {
-  if (ranges.length === 0) return [];
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
-  const merged: CharRange[] = [{ ...sorted[0] }];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-    if (current.start <= last.end + 1) {
-      last.end = Math.max(last.end, current.end);
-      continue;
-    }
-    merged.push({ ...current });
-  }
-
-  return merged;
-}
-
-function findAllRanges(text: string, needle: string): CharRange[] {
-  if (!needle) return [];
-  const ranges: CharRange[] = [];
-  let index = 0;
-  while (index < text.length) {
-    const found = text.indexOf(needle, index);
-    if (found === -1) break;
-    ranges.push({ start: found, end: found + needle.length });
-    index = found + Math.max(1, needle.length);
-  }
-  return ranges;
-}
 
 function longestCommonPrefix(...values: string[]): number {
   if (values.length === 0) return 0;
@@ -48,51 +15,67 @@ function longestCommonPrefix(...values: string[]): number {
   return first.length;
 }
 
-/** Locate the conflicting span inside the block text shown in the editor. */
+function longestCommonSuffix(...values: string[]): number {
+  if (values.length === 0) return 0;
+  const minLen = Math.min(...values.map((value) => value.length));
+  let suffix = 0;
+  for (let i = 1; i <= minLen; i++) {
+    const ch = values[0][values[0].length - i];
+    if (!values.every((value) => value[value.length - i] === ch)) break;
+    suffix = i;
+  }
+  return suffix;
+}
+
+/**
+ * Character ranges to highlight inside the offline user's version (mineText).
+ * Highlights where mine and theirs diverge — no substring search (avoids
+ * false matches like "added" in an unrelated row).
+ */
+export function conflictCharRangesForBlock(params: {
+  baseText: string;
+  mineText: string;
+  theirsText: string;
+}): CharRange[] {
+  const { baseText, mineText, theirsText } = params;
+  if (!mineText || mineText === theirsText) return [];
+
+  const divergeStart = longestCommonPrefix(mineText, theirsText);
+  const divergeEnd =
+    mineText.length - longestCommonSuffix(mineText, theirsText);
+
+  if (divergeEnd > divergeStart) {
+    return [{ start: divergeStart, end: divergeEnd }];
+  }
+
+  const mineStart = longestCommonPrefix(baseText, mineText);
+  const mineEnd = mineText.length - longestCommonSuffix(baseText, mineText);
+  if (mineEnd > mineStart) {
+    return [{ start: mineStart, end: mineEnd }];
+  }
+
+  if (mineText !== baseText) {
+    return [{ start: 0, end: mineText.length }];
+  }
+
+  return [];
+}
+
+/** @deprecated Use conflictCharRangesForBlock — kept for legacy callers with displayText. */
 export function conflictCharRangesInDisplayText(params: {
   baseText: string;
   mineText: string;
   theirsText: string;
   displayText: string;
 }): CharRange[] {
-  const { baseText, mineText, theirsText, displayText } = params;
-  if (!displayText) return [];
-
-  const ranges: CharRange[] = [];
-
-  // Highlight what changed offline (base → mine).
-  for (const segment of diffWords(baseText, mineText)) {
-    if (segment.type !== "add" || !segment.text.trim()) continue;
-    ranges.push(...findAllRanges(displayText, segment.text));
+  const ranges = conflictCharRangesForBlock(params);
+  if (ranges.length === 0 || params.displayText === params.mineText) {
+    return ranges;
   }
 
-  // Also surface what the peer changed (base → theirs) when it differs from mine.
-  for (const segment of diffWords(baseText, theirsText)) {
-    if (segment.type !== "add" || !segment.text.trim()) continue;
-    if (mineText.includes(segment.text)) continue;
-    ranges.push(...findAllRanges(displayText, segment.text));
-  }
-
-  const merged = mergeCharRanges(ranges);
-  if (merged.length > 0) return merged;
-
-  // Word diff missed (e.g. replace "user B" with "changed by user A") — use char diff.
-  for (const segment of diffChars(baseText, mineText)) {
-    if (segment.type !== "add" || !segment.text.trim()) continue;
-    ranges.push(...findAllRanges(displayText, segment.text));
-  }
-
-  const charMerged = mergeCharRanges(ranges);
-  if (charMerged.length > 0) return charMerged;
-
-  // Last resort: highlight from the first divergence to the end of the line.
-  if (mineText !== theirsText && (mineText !== baseText || theirsText !== baseText)) {
-    const prefixLen = longestCommonPrefix(baseText, mineText, theirsText, displayText);
-    if (prefixLen < displayText.length) {
-      return [{ start: prefixLen, end: displayText.length }];
-    }
-    return [{ start: 0, end: displayText.length }];
-  }
-
-  return [];
+  const aligned = longestCommonPrefix(params.displayText, params.mineText);
+  return ranges.map((range) => ({
+    start: Math.min(params.displayText.length, range.start),
+    end: Math.min(params.displayText.length, range.end),
+  }));
 }

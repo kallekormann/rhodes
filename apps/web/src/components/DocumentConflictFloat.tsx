@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
+import { ConflictDiffText } from "@/components/ConflictDiffText";
 import "./DocumentConflictFloat.css";
 
 type DocumentConflictFloatProps = {
@@ -73,6 +74,7 @@ export function DocumentConflictFloat({
   if (!active) return null;
 
   const position = Math.min(activeIndex, conflicts.length - 1) + 1;
+  const versionsDiffer = active.mineText !== active.theirsText;
 
   return (
     <aside
@@ -83,13 +85,42 @@ export function DocumentConflictFloat({
       <div className="document-conflict-float__header">
         <p className="document-conflict-float__eyebrow">Sync conflict</p>
         <h2 id="conflict-float-title" className="document-conflict-float__title">
-          Review highlighted text
+          Review conflicting edits
         </h2>
         <p className="document-conflict-float__hint">
           {conflicts.length > 1
-            ? `Conflict ${position} of ${conflicts.length}. Use Next to jump between blocks.`
-            : "Choose whether to keep your offline edit or dismiss it."}
+            ? `Conflict ${position} of ${conflicts.length}. Compare versions below, then choose.`
+            : "Compare your offline edit with the online version, then choose."}
         </p>
+      </div>
+
+      <div className="document-conflict-float__diff" aria-live="polite">
+        <div className="document-conflict-float__diff-section">
+          <p className="document-conflict-float__diff-label">Before you went offline</p>
+          <p className="document-conflict-float__diff-plain">{active.baseText}</p>
+        </div>
+
+        {versionsDiffer && (
+          <>
+            <div className="document-conflict-float__diff-section">
+              <p className="document-conflict-float__diff-label">Your offline edit</p>
+              <ConflictDiffText
+                baseText={active.baseText}
+                text={active.mineText}
+                variant="mine"
+              />
+            </div>
+
+            <div className="document-conflict-float__diff-section">
+              <p className="document-conflict-float__diff-label">Online edit (others)</p>
+              <ConflictDiffText
+                baseText={active.baseText}
+                text={active.theirsText}
+                variant="theirs"
+              />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="document-conflict-float__actions">
@@ -106,6 +137,7 @@ export function DocumentConflictFloat({
           type="button"
           className="btn btn--secondary btn--sm"
           onClick={handleDismiss}
+          title="Use the online version from other editors"
         >
           Dismiss
         </button>
@@ -113,6 +145,7 @@ export function DocumentConflictFloat({
           type="button"
           className="btn btn--primary btn--sm"
           onClick={handleKeep}
+          title="Keep your offline version"
         >
           Keep
         </button>

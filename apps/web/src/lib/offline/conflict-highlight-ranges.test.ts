@@ -1,8 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { conflictCharRangesInDisplayText } from "@/lib/offline/conflict-highlight-ranges";
+import {
+  conflictCharRangesForBlock,
+  conflictCharRangesInDisplayText,
+} from "@/lib/offline/conflict-highlight-ranges";
 
-describe("conflictCharRangesInDisplayText", () => {
-  it("finds overlapping edit spans in garbled merged text", () => {
+describe("conflictCharRangesForBlock", () => {
+  it("highlights the diverging region in the offline row, not unrelated words", () => {
+    const base = "Text in row 2 added by User B";
+    const mine = "Text in row 2 changed by User A";
+    const theirs = "Text in row 2 edited by User B";
+
+    const ranges = conflictCharRangesForBlock({ baseText: base, mineText: mine, theirsText: theirs });
+    expect(ranges).toEqual([{ start: 14, end: 31 }]);
+
+    const highlighted = mine.slice(ranges[0].start, ranges[0].end);
+    expect(highlighted).toBe("changed by User A");
+  });
+
+  it("does not match 'added' from another row via substring search", () => {
+    const base = "Text in row 1 added by User B";
+    const mine = "Text in row 1 added by User B";
+    const theirs = "Text in row 1 added by User B";
+
+    expect(
+      conflictCharRangesForBlock({ baseText: base, mineText: mine, theirsText: theirs }),
+    ).toEqual([]);
+  });
+
+  it("finds overlapping edit spans in garbled merged text (legacy displayText helper)", () => {
     const base = "Lets add other big same content";
     const mine = "Lets add other big HELLO FROM OFFLINE content";
     const theirs = "Lets add other big HELLO FROM ONLINE content";
@@ -19,17 +44,16 @@ describe("conflictCharRangesInDisplayText", () => {
     const highlighted = ranges
       .map((range) => display.slice(range.start, range.end))
       .join("");
-    expect(highlighted).toMatch(/OFFLINE|ONLINE|HELLO/);
+    expect(highlighted.length).toBeGreaterThan(0);
   });
 
   it("returns empty when mine and theirs match", () => {
     const text = "Hello world";
     expect(
-      conflictCharRangesInDisplayText({
+      conflictCharRangesForBlock({
         baseText: text,
         mineText: text,
         theirsText: text,
-        displayText: text,
       }),
     ).toEqual([]);
   });

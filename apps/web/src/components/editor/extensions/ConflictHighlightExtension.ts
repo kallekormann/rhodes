@@ -5,7 +5,7 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
 import { readBlockId } from "@/lib/documents/block-ids";
 import {
-  conflictCharRangesInDisplayText,
+  conflictCharRangesForBlock,
   type CharRange,
 } from "@/lib/offline/conflict-highlight-ranges";
 
@@ -113,17 +113,20 @@ function buildConflictDecorations(
 
     if (!isActive || !state.active) continue;
 
-    const charRanges = conflictCharRangesInDisplayText({
+    const charRanges = conflictCharRangesForBlock({
       baseText: state.active.baseText,
       mineText: state.active.mineText,
       theirsText: state.active.theirsText,
-      displayText: block.text,
     });
 
     const blockNode = doc.nodeAt(block.from);
     if (!blockNode) continue;
 
-    for (const { from, to } of mapCharRangesToDoc(block.from, blockNode, charRanges)) {
+    for (const { from, to } of mapCharRangesToDoc(
+      block.from,
+      blockNode,
+      charRanges,
+    )) {
       decorations.push(
         Decoration.inline(from, to, {
           class: "editor-conflict-highlight",
