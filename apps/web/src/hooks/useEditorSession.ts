@@ -40,10 +40,6 @@ import { useYjsCollaboration } from "@/hooks/useYjsCollaboration";
 import { useOfflineYjsConflict } from "@/hooks/useOfflineYjsConflict";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { Editor } from "@tiptap/react";
-import {
-  snapshotYDoc,
-  storeOfflineBase,
-} from "@/lib/offline/yjs-offline-snapshot";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import {
   createTemplate,
@@ -325,13 +321,11 @@ export function useEditorSession() {
   const collabActiveRef = useRef(false);
   const editorForConflictRef = useRef<Editor | null>(null);
   const ydocForSnapshotRef = useRef<import("yjs").Doc | null>(null);
+  const snapshotOfflineRef = useRef<(() => void) | null>(null);
 
   const handleCollabDisconnected = useCallback(() => {
-    const doc = ydocForSnapshotRef.current;
-    const id = document?.id;
-    if (!doc || !id) return;
-    void storeOfflineBase(id, snapshotYDoc(doc));
-  }, [document?.id]);
+    snapshotOfflineRef.current?.();
+  }, []);
 
   const {
     ydoc,
@@ -366,6 +360,7 @@ export function useEditorSession() {
     takeOfflineTheirs,
     keepAllOfflineMine,
     takeAllOfflineTheirs,
+    snapshotOfflineBase,
   } = useOfflineYjsConflict({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     ydoc,
@@ -375,6 +370,7 @@ export function useEditorSession() {
     getEditor: () => editorForConflictRef.current,
     flushPersist: flushCollabPersist,
   });
+  snapshotOfflineRef.current = snapshotOfflineBase;
 
   const registerEditorForConflict = useCallback((editor: Editor | null) => {
     editorForConflictRef.current = editor;

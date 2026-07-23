@@ -88,6 +88,9 @@ export class SupabaseYjsProvider {
   private intentionalDisconnect = false;
   /** True once a peer sync/update arrived during the current connect attempt. */
   private receivedPeerDataSinceConnect = false;
+  /** Set at connect when offline edits need peer step2 before catch-up is complete. */
+  private catchupRequiresPeer = false;
+  private soloSyncedWithoutPeer = false;
   private catchupListeners = new Set<SyncListener>();
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
@@ -181,8 +184,8 @@ export class SupabaseYjsProvider {
   /** True once peer data has been merged (or no offline catch-up is pending). */
   get isCatchupComplete(): boolean {
     if (!this.synced) return false;
-    if (!this.hasPendingLocalBroadcast()) return true;
-    return this.receivedPeerDataSinceConnect;
+    if (!this.catchupRequiresPeer) return true;
+    return this.receivedPeerDataSinceConnect || this.soloSyncedWithoutPeer;
   }
 
   onCatchupComplete(listener: SyncListener): () => void {
@@ -405,12 +408,13 @@ export class SupabaseYjsProvider {
 
     // When offline edits are pending, wait for a peer step2 instead of solo-syncing early.
     if (this.hasPendingLocalBroadcast()) {
-      this.soloSyncLongTimer = window.setTimeout(() => {
-        this.soloSyncLongTimer = null;
-        if (!this.destroyed && !this.authFailed && !this.synced) {
-          this.setSynced(true);
-        }
-      }, 5_000);
+    this.soloSyncLongTimer = window.setTimeout(() => {
+      this.soloSyncLongTimer = null;
+      if (!this.destroyed && !this.authFailed && !this.synced) {
+        this.soloSyncedWithoutPeer = true;
+        this.setSynced(true);
+      }
+    }, 5_000);
       return;
     }
 
@@ -434,6 +438,8 @@ export class SupabaseYjsProvider {
     if (this.destroyed) return;
 
     this.receivedPeerDataSinceConnect = false;
+    this.soloSyncedWithoutPeer = false;
+    this.catchupRequiresPeer = this.hasPendingLocalBroadcast();
 
     // First connect only: baseline is current doc (usually empty diff after sync).
     if (!this.unsentBaselineVector) {

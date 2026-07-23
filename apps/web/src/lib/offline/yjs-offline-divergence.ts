@@ -75,6 +75,40 @@ function collectBlockIds(
 }
 
 /**
+ * True when every block we edited offline has peer changes merged in cleanly.
+ * Returns false while peer edits are still in flight (merged still equals mine).
+ */
+export function isOfflineMergeSettled(
+  baseDoc: Y.Doc,
+  mineDoc: Y.Doc,
+  theirsDoc: Y.Doc,
+  mergedDoc: Y.Doc,
+): boolean {
+  const baseBlocks = extractBlockTexts(baseDoc);
+  const mineBlocks = extractBlockTexts(mineDoc);
+  const theirsBlocks = extractBlockTexts(theirsDoc);
+  const mergedBlocks = extractBlockTexts(mergedDoc);
+
+  for (const blockId of collectBlockIds(baseBlocks, mineBlocks)) {
+    const baseText = baseBlocks.get(blockId)?.text ?? "";
+    const mineText = mineBlocks.get(blockId)?.text ?? "";
+    const theirsText = theirsBlocks.get(blockId)?.text ?? "";
+    const mergedText = mergedBlocks.get(blockId)?.text ?? "";
+
+    if (mineText === baseText) continue;
+
+    // Peer edits not applied yet on a block we changed — keep waiting.
+    if (mergedText === mineText) return false;
+
+    const merge = threeWayMergeText(baseText, mineText, theirsText);
+    if (!merge.ok) return false;
+    if (merge.text !== mergedText) return false;
+  }
+
+  return true;
+}
+
+/**
  * Compare base / mine / theirs Y.Docs per block.
  * Returns blocks that need human review (Case C overlaps).
  */
@@ -99,19 +133,17 @@ export function detectOfflineBlockConflicts(
     if (mineText === theirsText) continue;
     if (mineText === baseText && theirsText === baseText) continue;
 
+    // Only blocks we edited offline.
+    if (mineText === baseText) continue;
+
+    // Peer not merged yet — wait for another detection pass.
+    if (mergedText === mineText) continue;
+
     const merge = threeWayMergeText(baseText, mineText, theirsText);
+    const needsReview =
+      !merge.ok || (merge.ok && merge.text !== mergedText);
 
-    // Offline returner: peer edits landed (merged ≠ mine) while we also changed the block.
-    const peerChangedWhileOffline =
-      mineText !== baseText && mergedText.length > 0 && mergedText !== mineText;
-
-    const crdtGarbled =
-      peerChangedWhileOffline &&
-      mergedText !== theirsText &&
-      (!merge.ok ||
-        (merge.ok && merge.text !== mergedText));
-
-    if (merge.ok && !crdtGarbled) continue;
+    if (!needsReview) continue;
 
     const blockIndex =
       mineBlocks.get(blockId)?.blockIndex ??
