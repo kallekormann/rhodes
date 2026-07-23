@@ -430,6 +430,7 @@ export function useOfflineYjsConflict(params: {
   const resolveBlock = useCallback(
     async (
       blockId: string,
+      blockIndex: number,
       text: string,
       blockJson?: ProseMirrorJsonNode,
     ): Promise<ProseMirrorJsonNode | null> => {
@@ -437,11 +438,11 @@ export function useOfflineYjsConflict(params: {
       if (!editor) return null;
 
       const resolved =
-        replaceBlockForConflict(editor, blockId, text, blockJson) ??
-        (blockJson?.type && setBlockFromJson(editor, blockId, blockJson)
+        replaceBlockForConflict(editor, blockId, text, blockJson, blockIndex) ??
+        (blockJson?.type && setBlockFromJson(editor, blockId, blockJson, blockIndex)
           ? blockJson
           : setBlockPlainText(editor, blockId, text)
-            ? blockJsonFromPlainText(editor, blockId, text)
+            ? blockJsonFromPlainText(editor, blockId, text, blockIndex)
             : null);
 
       return resolved;
@@ -450,8 +451,8 @@ export function useOfflineYjsConflict(params: {
   );
 
   const broadcastResolvedBlock = useCallback(
-    (blockId: string, block: ProseMirrorJsonNode) => {
-      const payload: BlockResolutionPayload = { blockId, block };
+    (blockId: string, blockIndex: number, block: ProseMirrorJsonNode) => {
+      const payload: BlockResolutionPayload = { blockId, blockIndex, block };
       providerRef.current?.broadcastBlockResolution(payload);
     },
     [],
@@ -470,6 +471,7 @@ export function useOfflineYjsConflict(params: {
           payload.blockId,
           "",
           payload.block as ProseMirrorJsonNode,
+          payload.blockIndex,
         );
       });
       provider.flushPersist();
@@ -489,10 +491,14 @@ export function useOfflineYjsConflict(params: {
       const conflict = conflicts.find((c) => c.blockId === blockId);
       if (!conflict) return;
       const block =
-        (await resolveBlock(blockId, conflict.mineText, conflict.mineBlock)) ??
-        conflict.mineBlock;
+        (await resolveBlock(
+          blockId,
+          conflict.blockIndex,
+          conflict.mineText,
+          conflict.mineBlock,
+        )) ?? conflict.mineBlock;
       if (block) {
-        broadcastResolvedBlock(blockId, block);
+        broadcastResolvedBlock(blockId, conflict.blockIndex, block);
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
     },
@@ -506,11 +512,12 @@ export function useOfflineYjsConflict(params: {
       const block =
         (await resolveBlock(
           blockId,
+          conflict.blockIndex,
           conflict.theirsText,
           conflict.theirsBlock,
         )) ?? conflict.theirsBlock;
       if (block) {
-        broadcastResolvedBlock(blockId, block);
+        broadcastResolvedBlock(blockId, conflict.blockIndex, block);
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
     },
@@ -522,11 +529,12 @@ export function useOfflineYjsConflict(params: {
       const block =
         (await resolveBlock(
           conflict.blockId,
+          conflict.blockIndex,
           conflict.mineText,
           conflict.mineBlock,
         )) ?? conflict.mineBlock;
       if (block) {
-        broadcastResolvedBlock(conflict.blockId, block);
+        broadcastResolvedBlock(conflict.blockId, conflict.blockIndex, block);
       }
     }
     setConflicts([]);
@@ -537,11 +545,12 @@ export function useOfflineYjsConflict(params: {
       const block =
         (await resolveBlock(
           conflict.blockId,
+          conflict.blockIndex,
           conflict.theirsText,
           conflict.theirsBlock,
         )) ?? conflict.theirsBlock;
       if (block) {
-        broadcastResolvedBlock(conflict.blockId, block);
+        broadcastResolvedBlock(conflict.blockId, conflict.blockIndex, block);
       }
     }
     setConflicts([]);

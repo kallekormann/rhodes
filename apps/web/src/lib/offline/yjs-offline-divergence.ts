@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { yDocToProsemirrorJSON } from "y-prosemirror";
 import { threeWayMergeText } from "@/lib/documents/text-diff";
+import { conflictCharRangesForBlock } from "@/lib/offline/conflict-highlight-ranges";
 
 export type BlockText = {
   blockId: string;
@@ -12,6 +13,10 @@ export type BlockConflict = BlockText & {
   baseText: string;
   mineText: string;
   theirsText: string;
+  /** Inclusive start offset inside mineText for inline highlight. */
+  highlightStart: number;
+  /** Exclusive end offset inside mineText for inline highlight. */
+  highlightEnd: number;
   mineBlock?: ProseMirrorJsonNode;
   theirsBlock?: ProseMirrorJsonNode;
 };
@@ -62,6 +67,33 @@ export function extractBlockTexts(doc: Y.Doc): Map<string, BlockText> {
   });
 
   return blocks;
+}
+
+/** Document position for a block — disambiguates duplicate blockIds by text. */
+export function findBlockIndexInDoc(
+  doc: Y.Doc,
+  blockId: string,
+  expectedText?: string,
+): number {
+  const json = yDocToProsemirrorJSON(doc, "default") as {
+    content?: ProseMirrorJsonNode[];
+  };
+  const nodes = json.content ?? [];
+  const trimmedExpected = expectedText?.trim();
+
+  if (trimmedExpected) {
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes[index];
+      if (node.attrs?.blockId !== blockId) continue;
+      if (plainFromNode(node).trim() === trimmedExpected) return index;
+    }
+  }
+
+  for (let index = 0; index < nodes.length; index++) {
+    if (nodes[index].attrs?.blockId === blockId) return index;
+  }
+
+  return 0;
 }
 
 function collectBlockIds(
@@ -210,11 +242,17 @@ export function detectOfflineBlockConflicts(
 
     if (!needsReview) continue;
 
-    const blockIndex =
-      mineBlocks.get(blockId)?.blockIndex ??
-      theirsBlocks.get(blockId)?.blockIndex ??
-      baseBlocks.get(blockId)?.blockIndex ??
-      0;
+    const blockIndex = findBlockIndexInDoc(mineDoc, blockId, mineText);
+
+    const highlightRanges = conflictCharRangesForBlock({
+      baseText,
+      mineText,
+      theirsText,
+    });
+    const highlight = highlightRanges[0] ?? {
+      start: 0,
+      end: mineText.length,
+    };
 
     conflicts.push({
       blockId,
@@ -223,6 +261,8 @@ export function detectOfflineBlockConflicts(
       baseText,
       mineText,
       theirsText,
+      highlightStart: highlight.start,
+      highlightEnd: highlight.end,
       mineBlock: extractBlockNode(mineDoc, blockId) ?? undefined,
       theirsBlock: extractBlockNode(theirsDoc, blockId) ?? undefined,
     });

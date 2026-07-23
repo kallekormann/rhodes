@@ -3,40 +3,20 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
-import { readBlockId } from "@/lib/documents/block-ids";
-import {
-  conflictCharRangesForBlock,
-  type CharRange,
-} from "@/lib/offline/conflict-highlight-ranges";
+import { getTopLevelBlockRangeForConflict } from "@/lib/documents/block-positions";
+import type { CharRange } from "@/lib/offline/conflict-highlight-ranges";
 
 export const conflictHighlightKey = new PluginKey("rhodesConflictHighlight");
 
 export type ConflictHighlightState = {
   active: BlockConflict | null;
-  blockIds: string[];
+  conflicts: BlockConflict[];
 };
 
 type ConflictHighlightStorage = {
   state: ConflictHighlightState;
   refresh: (next: ConflictHighlightState) => void;
 };
-
-function findBlockRange(
-  doc: ProseMirrorNode,
-  blockId: string,
-): { from: number; to: number; text: string } | null {
-  let pos = 0;
-  for (let i = 0; i < doc.childCount; i++) {
-    const node = doc.child(i);
-    const start = pos;
-    const end = pos + node.nodeSize;
-    if (readBlockId(node) === blockId) {
-      return { from: start, to: end, text: node.textContent };
-    }
-    pos = end;
-  }
-  return null;
-}
 
 function mapCharRangeToDoc(
   blockFrom: number,
@@ -52,15 +32,14 @@ function mapCharRangeToDoc(
 
   blockNode.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
-    const nodeStart = pos;
     const len = node.text.length;
     const nodeEndChar = charIndex + len;
 
     if (from < 0 && start < nodeEndChar) {
-      from = nodeStart + Math.max(0, start - charIndex);
+      from = pos + Math.max(0, start - charIndex);
     }
     if (to < 0 && end <= nodeEndChar) {
-      to = nodeStart + Math.max(0, end - charIndex);
+      to = pos + Math.max(0, end - charIndex);
     }
 
     charIndex += len;
@@ -97,12 +76,15 @@ function buildConflictDecorations(
 ): DecorationSet {
   const decorations: Decoration[] = [];
   const activeId = state.active?.blockId ?? null;
+  const activeIndex = state.active?.blockIndex ?? null;
 
-  for (const blockId of state.blockIds) {
-    const block = findBlockRange(doc, blockId);
+  for (const conflict of state.conflicts) {
+    const block = getTopLevelBlockRangeForConflict(doc, conflict);
     if (!block) continue;
 
-    const isActive = blockId === activeId;
+    const isActive =
+      conflict.blockId === activeId && conflict.blockIndex === activeIndex;
+
     decorations.push(
       Decoration.node(block.from, block.to, {
         class: isActive
@@ -113,20 +95,14 @@ function buildConflictDecorations(
 
     if (!isActive || !state.active) continue;
 
-    const charRanges = conflictCharRangesForBlock({
-      baseText: state.active.baseText,
-      mineText: state.active.mineText,
-      theirsText: state.active.theirsText,
-    });
+    const charRanges: CharRange[] = [
+      {
+        start: state.active.highlightStart,
+        end: state.active.highlightEnd,
+      },
+    ];
 
-    const blockNode = doc.nodeAt(block.from);
-    if (!blockNode) continue;
-
-    for (const { from, to } of mapCharRangesToDoc(
-      block.from,
-      blockNode,
-      charRanges,
-    )) {
+    for (const { from, to } of mapCharRangesToDoc(block.from, block.node, charRanges)) {
       decorations.push(
         Decoration.inline(from, to, {
           class: "editor-conflict-highlight",
@@ -147,7 +123,7 @@ export const ConflictHighlightExtension = Extension.create<
 
   addStorage() {
     return {
-      state: { active: null, blockIds: [] },
+      state: { active: null, conflicts: [] },
       refresh: () => undefined,
     };
   },

@@ -8,7 +8,7 @@ import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
 import { DocumentConflictFloat } from "@/components/DocumentConflictFloat";
 import type { Editor } from "@tiptap/react";
-import { scrollEditorToBlock, scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
+import { scrollEditorToBlockIndex, scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -166,10 +166,10 @@ function EditorViewContent() {
     [registerEditor, registerEditorForConflict],
   );
 
-  const handleScrollToConflict = useCallback((blockId: string) => {
+  const handleScrollToConflict = useCallback((conflict: BlockConflict) => {
     const editor = editorRef.current;
     if (!editor) return;
-    scrollEditorToBlock(editor, blockId);
+    scrollEditorToBlockIndex(editor, conflict.blockIndex);
   }, []);
 
   const handleActiveOfflineConflictChange = useCallback(
@@ -513,9 +513,7 @@ function EditorViewContent() {
                   onActiveBlockChange={onActiveBlockChange}
                   onSelectionChange={onEditorSelectionChange}
                   activeOfflineConflict={activeOfflineConflict}
-                  offlineConflictBlockIds={offlineConflictBlocks.map(
-                    (conflict) => conflict.blockId,
-                  )}
+                  offlineConflictBlocks={offlineConflictBlocks}
                   onBlur={() => {
                     void evaluateOnBlur();
                   }}

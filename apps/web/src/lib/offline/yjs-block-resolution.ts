@@ -1,17 +1,25 @@
 import type { Editor } from "@tiptap/react";
 import { Node as PMNode } from "@tiptap/pm/model";
+import { getTopLevelBlockRangeForConflict } from "@/lib/documents/block-positions";
 import { readBlockId } from "@/lib/documents/block-ids";
 import type { ProseMirrorJsonNode } from "@/lib/offline/yjs-offline-divergence";
 
 function findBlockRange(
   editor: Editor,
   blockId: string,
+  blockIndex?: number,
 ): { from: number; to: number } | null {
-  const { state } = editor;
+  const { doc } = editor.state;
+
+  if (blockIndex != null) {
+    const byIndex = getTopLevelBlockRangeForConflict(doc, { blockId, blockIndex });
+    if (byIndex) return { from: byIndex.from, to: byIndex.to };
+  }
+
   let targetPos: number | null = null;
   let targetNodeSize = 0;
 
-  state.doc.descendants((node, pos) => {
+  doc.descendants((node, pos) => {
     if (targetPos != null) return false;
     if (readBlockId(node) !== blockId) return true;
     targetPos = pos;
@@ -27,8 +35,9 @@ export function blockJsonFromPlainText(
   editor: Editor,
   blockId: string,
   text: string,
+  blockIndex?: number,
 ): ProseMirrorJsonNode | null {
-  const range = findBlockRange(editor, blockId);
+  const range = findBlockRange(editor, blockId, blockIndex);
   if (!range) return null;
   const node = editor.state.doc.nodeAt(range.from);
   if (!node) return null;
@@ -45,8 +54,9 @@ export function setBlockFromJson(
   editor: Editor,
   blockId: string,
   blockJson: ProseMirrorJsonNode,
+  blockIndex?: number,
 ): boolean {
-  const range = findBlockRange(editor, blockId);
+  const range = findBlockRange(editor, blockId, blockIndex);
   if (!range) return false;
 
   try {
@@ -101,12 +111,13 @@ export function replaceBlockForConflict(
   blockId: string,
   text: string,
   blockJson?: ProseMirrorJsonNode,
+  blockIndex?: number,
 ): ProseMirrorJsonNode | null {
   const json =
     blockJson?.type != null
       ? blockJson
-      : blockJsonFromPlainText(editor, blockId, text);
+      : blockJsonFromPlainText(editor, blockId, text, blockIndex);
   if (!json) return null;
-  if (!setBlockFromJson(editor, blockId, json)) return null;
+  if (!setBlockFromJson(editor, blockId, json, blockIndex)) return null;
   return json;
 }

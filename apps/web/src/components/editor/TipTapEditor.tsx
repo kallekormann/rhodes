@@ -123,7 +123,7 @@ type TipTapEditorProps = {
   onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
   onSelectionChange?: (from: number, to: number) => void;
   activeOfflineConflict?: BlockConflict | null;
-  offlineConflictBlockIds?: string[];
+  offlineConflictBlocks?: BlockConflict[];
 };
 
 type SlashState = {
@@ -237,7 +237,7 @@ export function TipTapEditor({
   onActiveBlockChange,
   onSelectionChange,
   activeOfflineConflict = null,
-  offlineConflictBlockIds = [],
+  offlineConflictBlocks = [],
 }: TipTapEditorProps) {
   // Bind Collaboration to Y.Doc as soon as local CRDT is ready (offline-first).
   const collabMode = Boolean(ydoc && collabDocReady);
@@ -897,10 +897,10 @@ export function TipTapEditor({
     };
     const next: ConflictHighlightState = {
       active: activeOfflineConflict,
-      blockIds: offlineConflictBlockIds,
+      conflicts: offlineConflictBlocks,
     };
     storage.refresh(next);
-  }, [activeOfflineConflict, editor, offlineConflictBlockIds]);
+  }, [activeOfflineConflict, editor, offlineConflictBlocks]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>

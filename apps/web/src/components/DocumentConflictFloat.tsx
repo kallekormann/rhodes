@@ -10,7 +10,7 @@ type DocumentConflictFloatProps = {
   onKeep: (blockId: string) => void;
   onDismiss: (blockId: string) => void;
   onActiveConflictChange?: (conflict: BlockConflict | null) => void;
-  onScrollToConflict?: (blockId: string) => void;
+  onScrollToConflict?: (conflict: BlockConflict) => void;
 };
 
 export function DocumentConflictFloat({
@@ -37,8 +37,8 @@ export function DocumentConflictFloat({
 
   useEffect(() => {
     if (!active) return;
-    onScrollToConflict?.(active.blockId);
-  }, [active?.blockId, onScrollToConflict]);
+    onScrollToConflict?.(active);
+  }, [active, onScrollToConflict]);
 
   const goToIndex = useCallback(
     (index: number) => {
@@ -46,7 +46,7 @@ export function DocumentConflictFloat({
       const next = ((index % conflicts.length) + conflicts.length) % conflicts.length;
       setActiveIndex(next);
       const conflict = conflicts[next];
-      if (conflict) onScrollToConflict?.(conflict.blockId);
+      if (conflict) onScrollToConflict?.(conflict);
     },
     [conflicts, onScrollToConflict],
   );

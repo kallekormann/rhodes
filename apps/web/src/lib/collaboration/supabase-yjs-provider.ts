@@ -61,6 +61,7 @@ const EVENT_BLOCK_RESOLVED = "y-block-resolved";
 
 export type BlockResolutionPayload = {
   blockId: string;
+  blockIndex: number;
   block: {
     type?: string;
     attrs?: { blockId?: string | null };
@@ -800,6 +801,9 @@ export class SupabaseYjsProvider {
       const json = new TextDecoder().decode(base64ToUint8(payload.data));
       const parsed = JSON.parse(json) as BlockResolutionPayload;
       if (typeof parsed?.blockId !== "string" || !parsed.block) return;
+      if (typeof parsed.blockIndex !== "number") {
+        parsed.blockIndex = 0;
+      }
       for (const listener of this.blockResolutionListeners) {
         try {
           listener(parsed);
