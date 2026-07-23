@@ -87,14 +87,18 @@ export async function clearOfflineSnapshots(documentId: string): Promise<void> {
   ]);
 }
 
+export async function resetOfflineConflictClaim(
+  documentId: string,
+): Promise<void> {
+  await deleteMeta(offlineConflictClaimKey(documentId));
+}
+
 /** Only one tab per document may own the offline conflict review UI. */
 export async function claimOfflineConflictReview(
   documentId: string,
   tabId: string,
 ): Promise<boolean> {
   const key = offlineConflictClaimKey(documentId);
-  const existing = await getMeta<string>(key);
-  if (existing && existing !== tabId) return false;
   await putMeta(key, tabId);
   return true;
 }

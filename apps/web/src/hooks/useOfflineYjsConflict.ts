@@ -17,6 +17,7 @@ import {
   getOfflineMine,
   offlineSnapshotToDoc,
   ownsOfflineConflictReview,
+  resetOfflineConflictClaim,
   snapshotYDoc,
   storeOfflineBase,
   storeOfflineMine,
@@ -27,6 +28,13 @@ const TAB_ID =
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `tab-${Date.now()}`;
+
+function toSnapshot(bytes: Uint8Array) {
+  return {
+    state: uint8ToBase64(bytes),
+    capturedAt: new Date().toISOString(),
+  };
+}
 
 /** Reconstruct peer edits by diffing the post-sync merged doc against offline mine. */
 function buildTheirsDoc(
@@ -65,10 +73,17 @@ export function useOfflineYjsConflict(params: {
   } = params;
   const [conflicts, setConflicts] = useState<BlockConflict[]>([]);
   const [reviewPending, setReviewPending] = useState(false);
-  const offlineSessionRef = useRef(false);
+  const pendingBaseSnapshotRef = useRef<Uint8Array | null>(null);
   const pendingMineSnapshotRef = useRef<Uint8Array | null>(null);
   const detectionTimerRef = useRef<number | null>(null);
   const lastCheckedMergedRef = useRef<string | null>(null);
+  const prevOnlineRef = useRef(online);
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
+
+  const hasOfflineSession = useCallback(() => {
+    return pendingBaseSnapshotRef.current != null;
+  }, []);
 
   const captureMine = useCallback(() => {
     if (!ydoc) return;
@@ -79,29 +94,25 @@ export function useOfflineYjsConflict(params: {
   }, [documentId, ydoc]);
 
   const runDetection = useCallback(async () => {
-    if (!documentId || !ydoc || !online || !synced || !catchupComplete) return;
+    if (!documentId || !ydoc || !online || !synced) return;
     if (reviewPending || conflicts.length > 0) return;
 
     const mergedKey = uint8ToBase64(snapshotYDoc(ydoc));
     if (mergedKey === lastCheckedMergedRef.current) return;
     lastCheckedMergedRef.current = mergedKey;
 
-    const baseSnapshot = await getOfflineBase(documentId);
+    const baseSnapshot =
+      pendingBaseSnapshotRef.current != null
+        ? toSnapshot(pendingBaseSnapshotRef.current)
+        : await getOfflineBase(documentId);
     if (!baseSnapshot) return;
 
-    const ownsReview = await claimOfflineConflictReview(documentId, TAB_ID);
-    if (!ownsReview) {
-      await clearOfflineSnapshots(documentId);
-      offlineSessionRef.current = false;
-      return;
-    }
+    await resetOfflineConflictClaim(documentId);
+    await claimOfflineConflictReview(documentId, TAB_ID);
 
     const mineSnapshot =
       pendingMineSnapshotRef.current != null
-        ? {
-            state: uint8ToBase64(pendingMineSnapshotRef.current),
-            capturedAt: new Date().toISOString(),
-          }
+        ? toSnapshot(pendingMineSnapshotRef.current)
         : ((await getOfflineMine(documentId)) ?? baseSnapshot);
 
     const baseDoc = offlineSnapshotToDoc(baseSnapshot);
@@ -139,7 +150,7 @@ export function useOfflineYjsConflict(params: {
 
     if (settled) {
       await clearOfflineSnapshots(documentId);
-      offlineSessionRef.current = false;
+      pendingBaseSnapshotRef.current = null;
       pendingMineSnapshotRef.current = null;
       lastCheckedMergedRef.current = null;
     }
@@ -154,7 +165,7 @@ export function useOfflineYjsConflict(params: {
   ]);
 
   const scheduleDetection = useCallback(() => {
-    if (!offlineSessionRef.current) return;
+    if (!hasOfflineSession() && !documentId) return;
     if (detectionTimerRef.current != null) {
       window.clearTimeout(detectionTimerRef.current);
     }
@@ -162,27 +173,45 @@ export function useOfflineYjsConflict(params: {
       detectionTimerRef.current = null;
       void runDetection();
     }, 50);
-  }, [runDetection]);
+  }, [documentId, hasOfflineSession, runDetection]);
 
   const snapshotBase = useCallback(() => {
     if (!documentId || !ydoc) return;
-    offlineSessionRef.current = true;
-    captureMine();
-    void storeOfflineBase(documentId, snapshotYDoc(ydoc));
-  }, [captureMine, documentId, ydoc]);
+    const base = snapshotYDoc(ydoc);
+    pendingBaseSnapshotRef.current = base;
+    pendingMineSnapshotRef.current = base;
+    lastCheckedMergedRef.current = null;
+    void resetOfflineConflictClaim(documentId);
+    void storeOfflineBase(documentId, base);
+    void storeOfflineMine(documentId, base);
+  }, [documentId, ydoc]);
 
-  // Capture base + mine on disconnect / offline; keep mine fresh while offline.
+  // React online state (reliable with DevTools offline) + window offline event.
+  useEffect(() => {
+    if (!documentId || !ydoc) return;
+
+    if (prevOnlineRef.current && !online) {
+      snapshotBase();
+    }
+
+    if (!prevOnlineRef.current && online && pendingBaseSnapshotRef.current) {
+      captureMine();
+      scheduleDetection();
+    }
+
+    prevOnlineRef.current = online;
+  }, [captureMine, documentId, online, scheduleDetection, snapshotBase, ydoc]);
+
   useEffect(() => {
     if (!documentId || !ydoc) return;
 
     const onOffline = () => {
-      lastCheckedMergedRef.current = null;
       snapshotBase();
     };
 
     const onMineUpdate = () => {
-      if (!offlineSessionRef.current) return;
-      if (typeof navigator !== "undefined" && navigator.onLine) return;
+      if (onlineRef.current) return;
+      if (!pendingBaseSnapshotRef.current) return;
       captureMine();
     };
 
@@ -194,12 +223,11 @@ export function useOfflineYjsConflict(params: {
     };
   }, [captureMine, documentId, snapshotBase, ydoc]);
 
-  // Final mine capture on online (capture phase) before reconnect merges remote state.
   useEffect(() => {
     if (!documentId || !ydoc) return;
 
     const onOnline = () => {
-      if (!offlineSessionRef.current) return;
+      if (!pendingBaseSnapshotRef.current) return;
       captureMine();
     };
 
@@ -207,16 +235,15 @@ export function useOfflineYjsConflict(params: {
     return () => window.removeEventListener("online", onOnline, { capture: true });
   }, [captureMine, documentId, ydoc]);
 
-  // Detect after catch-up and on every subsequent CRDT merge while offline session is open.
   useEffect(() => {
-    if (!documentId || !ydoc || !online || !catchupComplete) return;
-    if (!offlineSessionRef.current) return;
+    if (!documentId || !ydoc || !online) return;
+    if (!hasOfflineSession()) return;
     scheduleDetection();
-  }, [catchupComplete, documentId, online, scheduleDetection, synced, ydoc]);
+  }, [catchupComplete, documentId, hasOfflineSession, online, scheduleDetection, synced, ydoc]);
 
   useEffect(() => {
-    if (!documentId || !ydoc || !online || !catchupComplete) return;
-    if (!offlineSessionRef.current) return;
+    if (!documentId || !ydoc || !online) return;
+    if (!hasOfflineSession()) return;
 
     const onDocUpdate = (_update: Uint8Array, origin: unknown) => {
       if (origin === "offline-conflict") return;
@@ -234,9 +261,9 @@ export function useOfflineYjsConflict(params: {
       }
     };
   }, [
-    catchupComplete,
     conflicts.length,
     documentId,
+    hasOfflineSession,
     online,
     reviewPending,
     scheduleDetection,
@@ -244,11 +271,12 @@ export function useOfflineYjsConflict(params: {
   ]);
 
   useEffect(() => {
-    offlineSessionRef.current = false;
-    setConflicts([]);
-    setReviewPending(false);
+    pendingBaseSnapshotRef.current = null;
     pendingMineSnapshotRef.current = null;
     lastCheckedMergedRef.current = null;
+    prevOnlineRef.current = online;
+    setConflicts([]);
+    setReviewPending(false);
   }, [documentId]);
 
   const resolveBlock = useCallback(
@@ -310,7 +338,7 @@ export function useOfflineYjsConflict(params: {
       flushPersist();
       await clearOfflineSnapshots(documentId);
       setReviewPending(false);
-      offlineSessionRef.current = false;
+      pendingBaseSnapshotRef.current = null;
       pendingMineSnapshotRef.current = null;
       lastCheckedMergedRef.current = null;
     })();
