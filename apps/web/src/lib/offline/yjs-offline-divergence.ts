@@ -117,7 +117,9 @@ export function detectOfflineBlockConflicts(
   mineDoc: Y.Doc,
   theirsDoc: Y.Doc,
   mergedDoc?: Y.Doc,
+  options?: { catchupComplete?: boolean },
 ): BlockConflict[] {
+  const catchupComplete = options?.catchupComplete ?? true;
   const baseBlocks = extractBlockTexts(baseDoc);
   const mineBlocks = extractBlockTexts(mineDoc);
   const theirsBlocks = extractBlockTexts(theirsDoc);
@@ -137,11 +139,31 @@ export function detectOfflineBlockConflicts(
     if (mineText === baseText) continue;
 
     // Peer not merged yet — wait for another detection pass.
-    if (mergedText === mineText) continue;
+    if (!catchupComplete && mergedText === mineText) continue;
 
     const merge = threeWayMergeText(baseText, mineText, theirsText);
+
+    const peerDiverged =
+      theirsText !== baseText && mineText !== theirsText;
+
+    const crdtGarbled =
+      catchupComplete &&
+      mergedBlocks != null &&
+      peerDiverged &&
+      mergedText !== mineText &&
+      mergedText !== theirsText &&
+      (!merge.ok || (merge.ok && merge.text !== mergedText));
+
+    const peerDivergedButMergedLocal =
+      catchupComplete &&
+      mergedText === mineText &&
+      peerDiverged;
+
     const needsReview =
-      !merge.ok || (merge.ok && merge.text !== mergedText);
+      crdtGarbled ||
+      peerDivergedButMergedLocal ||
+      !merge.ok ||
+      (merge.ok && merge.text !== mergedText);
 
     if (!needsReview) continue;
 
