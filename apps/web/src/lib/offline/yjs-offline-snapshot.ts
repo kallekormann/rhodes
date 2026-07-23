@@ -85,6 +85,95 @@ export async function clearOfflineSnapshots(documentId: string): Promise<void> {
     deleteMeta(offlineMineKey(documentId)),
     deleteMeta(offlineConflictClaimKey(documentId)),
   ]);
+  clearOfflineSessionMarker(documentId);
+}
+
+const OFFLINE_SESSION_MARKER_PREFIX = "rhodes:offline-session:";
+
+/** Tab-scoped, invalidated on every full page load (hard refresh). */
+const PAGE_LOAD_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `load-${Date.now()}`;
+
+/** Tab-scoped flag: this browser session has unmerged offline edits for the doc. */
+export function markOfflineSessionPending(documentId: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.setItem(
+      `${OFFLINE_SESSION_MARKER_PREFIX}${documentId}`,
+      PAGE_LOAD_ID,
+    );
+  } catch {
+    /* private mode */
+  }
+}
+
+export function hasOfflineSessionMarker(documentId: string): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  try {
+    return (
+      sessionStorage.getItem(`${OFFLINE_SESSION_MARKER_PREFIX}${documentId}`) ===
+      PAGE_LOAD_ID
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function clearOfflineSessionMarker(documentId: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(`${OFFLINE_SESSION_MARKER_PREFIX}${documentId}`);
+  } catch {
+    /* private mode */
+  }
+}
+
+export async function hasActiveOfflineEdits(
+  documentId: string,
+): Promise<boolean> {
+  const [base, mine] = await Promise.all([
+    getOfflineBase(documentId),
+    getOfflineMine(documentId),
+  ]);
+  if (!base || !mine) return false;
+  return base.state !== mine.state;
+}
+
+/**
+ * True when IDB holds unmerged offline edits for a session that is still active
+ * in this tab (or the tab is still offline on load).
+ */
+export async function shouldResumeOfflineSession(
+  documentId: string,
+): Promise<boolean> {
+  const pending = await hasActiveOfflineEdits(documentId);
+  if (!pending) return false;
+  if (hasOfflineSessionMarker(documentId)) return true;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  return false;
+}
+
+export async function clearStaleOfflineSnapshots(
+  documentId: string,
+): Promise<void> {
+  const [base, mine] = await Promise.all([
+    getOfflineBase(documentId),
+    getOfflineMine(documentId),
+  ]);
+  if (base && mine && base.state === mine.state) {
+    await clearOfflineSnapshots(documentId);
+    return;
+  }
+  const pending = await hasActiveOfflineEdits(documentId);
+  if (!pending) {
+    await clearOfflineSnapshots(documentId);
+    return;
+  }
+  if (!(await shouldResumeOfflineSession(documentId))) {
+    await clearOfflineSnapshots(documentId);
+  }
 }
 
 export async function resetOfflineConflictClaim(

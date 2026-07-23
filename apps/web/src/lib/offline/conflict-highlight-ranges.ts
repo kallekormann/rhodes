@@ -61,6 +61,73 @@ export function conflictCharRangesForBlock(params: {
   return [];
 }
 
+/**
+ * Shift highlight ranges when the live editor block text differs from the
+ * offline snapshot (e.g. snapshot text was trimmed during conflict detection).
+ */
+export function shiftCharRangesToDisplayText(
+  ranges: CharRange[],
+  snapshotText: string,
+  displayText: string,
+): CharRange[] {
+  if (ranges.length === 0 || snapshotText === displayText) return ranges;
+
+  const trimmedSnapshot = snapshotText.trim();
+  if (trimmedSnapshot.length === 0) return ranges;
+
+  const trimmedDisplay = displayText.trim();
+  if (trimmedSnapshot === trimmedDisplay) {
+    const lead = displayText.indexOf(trimmedDisplay);
+    if (lead < 0) return ranges;
+    return ranges.map((range) => ({
+      start: range.start + lead,
+      end: range.end + lead,
+    }));
+  }
+
+  const anchor = displayText.indexOf(trimmedSnapshot);
+  if (anchor >= 0) {
+    const snapshotLead = snapshotText.indexOf(trimmedSnapshot);
+    const delta = anchor - (snapshotLead >= 0 ? snapshotLead : 0);
+    return ranges.map((range) => ({
+      start: range.start + delta,
+      end: range.end + delta,
+    }));
+  }
+
+  return ranges;
+}
+
+const CONTEXT_CHARS = 120;
+
+export type ConflictContextSnippet = {
+  prefix: string;
+  highlight: string;
+  suffix: string;
+  prefixEllipsis: boolean;
+  suffixEllipsis: boolean;
+};
+
+/** Surrounding context for side-by-side conflict review. */
+export function conflictContextSnippet(
+  text: string,
+  start: number,
+  end: number,
+  contextChars = CONTEXT_CHARS,
+): ConflictContextSnippet {
+  const safeStart = Math.max(0, Math.min(start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(end, text.length));
+  const prefixStart = Math.max(0, safeStart - contextChars);
+  const suffixEnd = Math.min(text.length, safeEnd + contextChars);
+  return {
+    prefix: text.slice(prefixStart, safeStart),
+    highlight: text.slice(safeStart, safeEnd),
+    suffix: text.slice(safeEnd, suffixEnd),
+    prefixEllipsis: prefixStart > 0,
+    suffixEllipsis: suffixEnd < text.length,
+  };
+}
+
 /** @deprecated Use conflictCharRangesForBlock — kept for legacy callers with displayText. */
 export function conflictCharRangesInDisplayText(params: {
   baseText: string;

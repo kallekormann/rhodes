@@ -1,0 +1,13 @@
+.editor-conflict-span {
+  border-radius: 2px;
+  background: var(--color-comment-highlight);
+  color: var(--color-comment-highlight-text);
+  box-decoration-break: clone;
+  cursor: pointer;
+}
+
+.editor-conflict-span--active {
+  background: color-mix(in srgb, var(--color-comment-highlight) 55%, white);
+  color: var(--color-comment-highlight-text);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-comment-highlight) 70%, var(--color-text));
+}

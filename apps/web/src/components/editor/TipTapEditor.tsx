@@ -46,10 +46,11 @@ import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
 import { SpellcheckExtension } from "@/components/editor/extensions/SpellcheckExtension";
 import type { SpellSuggestionPayload } from "@/components/editor/extensions/SpellcheckExtension";
 import {
-  ConflictHighlightExtension,
-  type ConflictHighlightState,
-} from "@/components/editor/extensions/ConflictHighlightExtension";
-import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
+  ConflictInlineExtension,
+  type ConflictInlineState,
+} from "@/components/editor/extensions/ConflictInlineExtension";
+import type { SpanConflictCluster, SpanConflictVariantSide } from "@/lib/offline/span-conflict-clusters";
+import "@/components/editor/extensions/ConflictInline.css";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
@@ -122,8 +123,13 @@ type TipTapEditorProps = {
   onRegisterEditor?: (editor: Editor | null) => void;
   onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
   onSelectionChange?: (from: number, to: number) => void;
-  activeOfflineConflict?: BlockConflict | null;
-  offlineConflictBlocks?: BlockConflict[];
+  offlineConflictClusters?: SpanConflictCluster[];
+  activeOfflineConflictClusterId?: string | null;
+  onActivateOfflineConflictCluster?: (clusterId: string) => void;
+  onResolveOfflineCluster?: (
+    clusterId: string,
+    side: SpanConflictVariantSide,
+  ) => void;
 };
 
 type SlashState = {
@@ -236,12 +242,14 @@ export function TipTapEditor({
   onRegisterEditor,
   onActiveBlockChange,
   onSelectionChange,
-  activeOfflineConflict = null,
-  offlineConflictBlocks = [],
+  offlineConflictClusters = [],
+  activeOfflineConflictClusterId = null,
+  onActivateOfflineConflictCluster,
+  onResolveOfflineCluster,
 }: TipTapEditorProps) {
-  // Bind Collaboration to Y.Doc as soon as local CRDT is ready (offline-first).
-  const collabMode = Boolean(ydoc && collabDocReady);
-  const collabCursorMode = Boolean(collabProvider && collabSynced);
+  // Bind Collaboration to Y.Doc as soon as the CRDT is mounted.
+  const collabMode = Boolean(ydoc);
+  const collabCursorMode = Boolean(collabProvider && collaborationUser);
   const seededCollabRef = useRef(false);
   const collabSaveReadyRef = useRef(!collabMode);
   const onCollabBootstrappedRef = useRef(onCollabBootstrapped);
@@ -277,6 +285,10 @@ export function TipTapEditor({
   }, [content, plainFromDoc]);
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const onResolveOfflineClusterRef = useRef(onResolveOfflineCluster);
+  onResolveOfflineClusterRef.current = onResolveOfflineCluster;
+  const onActivateOfflineConflictClusterRef = useRef(onActivateOfflineConflictCluster);
+  onActivateOfflineConflictClusterRef.current = onActivateOfflineConflictCluster;
   const onActiveBlockChangeRef = useRef(onActiveBlockChange);
   onActiveBlockChangeRef.current = onActiveBlockChange;
   const onSelectionChangeRef = useRef(onSelectionChange);
@@ -470,7 +482,11 @@ export function TipTapEditor({
       ...(collabMode ? [] : [RemoteBlockLock]),
       CommentHighlight,
       SpellcheckExtension.configure({ enabled: true, locale: "en" }),
-      ConflictHighlightExtension,
+      ConflictInlineExtension.configure({
+        onActivate: (clusterId) => {
+          onActivateOfflineConflictClusterRef.current?.(clusterId);
+        },
+      }),
       Extension.create({
         name: "slashCommand",
         addProseMirrorPlugins() {
@@ -561,13 +577,13 @@ export function TipTapEditor({
       }),
     ];
 
-    if (ydoc && collabDocReady) {
+    if (ydoc) {
       list.push(
         Collaboration.configure({
           document: ydoc,
         }),
       );
-      if (collabCursorMode && collaborationUser && collabProvider) {
+      if (collabCursorMode && collabProvider) {
         list.push(
           CollaborationCursor.configure({
             provider: collabProvider,
@@ -634,7 +650,9 @@ export function TipTapEditor({
         if (collabNeedsInitialSeedRef.current && !seededCollabRef.current) {
           const snapshot = contentSnapshotRef.current;
           const plainFromContent = plainFromDoc(snapshot);
-          if (plainFromContent.length > 0) {
+          const ydocHasBody =
+            ydoc != null && ydoc.getXmlFragment("default").length > 0;
+          if (!ydocHasBody && plainFromContent.length > 0) {
             instance.commands.setContent(snapshot);
             ensureEditorBlockIds(instance);
             contentSnapshotRef.current = instance.getJSON() as Record<
@@ -643,10 +661,10 @@ export function TipTapEditor({
             >;
             onUpdateRef.current(instance.getJSON(), instance.getText());
           }
-          if (ydoc) {
+          if (ydoc && !ydocHasBody) {
             ydoc.getMap("rhodes").set("seeded", true);
+            onCollabBootstrappedRef.current?.();
           }
-          onCollabBootstrappedRef.current?.();
         }
         collabSaveReadyRef.current = true;
         seededCollabRef.current = true;
@@ -892,15 +910,18 @@ export function TipTapEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const storage = editor.storage.rhodesConflictHighlight as {
-      refresh: (next: ConflictHighlightState) => void;
+    const storage = editor.storage.rhodesConflictInline as {
+      refresh: (next: ConflictInlineState) => void;
     };
-    const next: ConflictHighlightState = {
-      active: activeOfflineConflict,
-      conflicts: offlineConflictBlocks,
+    const next: ConflictInlineState = {
+      clusters: offlineConflictClusters,
+      activeClusterId:
+        activeOfflineConflictClusterId ??
+        offlineConflictClusters[0]?.id ??
+        null,
     };
     storage.refresh(next);
-  }, [activeOfflineConflict, editor, offlineConflictBlocks]);
+  }, [activeOfflineConflictClusterId, editor, offlineConflictClusters]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>

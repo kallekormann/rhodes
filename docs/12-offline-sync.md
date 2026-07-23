@@ -38,7 +38,18 @@ stateDiagram-v2
 | `offline_dirty` | Sync indicator only — **never** conflict float |
 | `reconnect_checking` | “Checking for conflicts…” banner |
 | `auto_merging` | Silent merge + push (no float) |
-| `conflict_review` | Mode C float + inline Case C chrome |
+| `conflict_review` | Thin status bar + **inline** highlighted spans with variant rows below blocks |
+
+### Yjs offline conflict review (live collab path)
+
+When a user edits offline while peers edit online, the **reconnecting client** enters `conflict_review`:
+
+- Peer Yjs updates are **deferred** on the returner; outbound sync is **blocked** until resolved.
+- Peers see `conflictReviewPending` via awareness and **do not persist** garbled merges to `document_yjs_state` while review is active.
+- Inline UI: highlighted spans in the editor + dimmed variant rows (Original / You / Others) below each affected block.
+- Resolution is **per span cluster** (overlapping hunks); auto Case A/B hunks merge silently.
+- After all clusters are resolved, authoritative `broadcastBlockResolution` + `broadcastPendingLocalUpdates` converge all clients and Postgres.
+
 
 ## Three-version merge (offline 409)
 

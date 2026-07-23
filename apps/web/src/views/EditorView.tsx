@@ -6,11 +6,12 @@ import { useApp } from "@/context/AppContext";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
+import { ConflictCompareModal } from "@/components/ConflictCompareModal";
 import { DocumentConflictFloat } from "@/components/DocumentConflictFloat";
 import type { Editor } from "@tiptap/react";
-import { scrollEditorToBlockIndex, scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
-import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
+import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
+import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { EditorTitleField } from "@/components/EditorTitleField";
 import { IconLabelButton } from "@/components/IconLabelButton";
@@ -104,9 +105,13 @@ function EditorViewContent() {
     onCollabBootstrapped,
     collaborationUser,
     offlineConflictBlocks,
+    offlineConflictClusters,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
+    keepAllOfflineMine,
+    takeAllOfflineTheirs,
+    resolveOfflineCluster,
     registerEditorForConflict,
   } = useEditorSession();
 
@@ -151,8 +156,10 @@ function EditorViewContent() {
   const [propertiesStage, setPropertiesStage] = useState<PropertiesPanelStage>("view");
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
-  const [activeOfflineConflict, setActiveOfflineConflict] =
-    useState<BlockConflict | null>(null);
+  const [activeConflictClusterId, setActiveConflictClusterId] = useState<
+    string | null
+  >(null);
+  const [conflictCompareOpen, setConflictCompareOpen] = useState(false);
   const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
   const insertCitationRef = useRef<(input: CitationInsertInput) => void>(() => {});
   const editorRef = useRef<Editor | null>(null);
@@ -166,25 +173,6 @@ function EditorViewContent() {
     [registerEditor, registerEditorForConflict],
   );
 
-  const handleScrollToConflict = useCallback((conflict: BlockConflict) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    scrollEditorToBlockIndex(editor, conflict.blockIndex);
-  }, []);
-
-  const handleActiveOfflineConflictChange = useCallback(
-    (conflict: BlockConflict | null) => {
-      setActiveOfflineConflict(conflict);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!offlineConflictReviewPending || offlineConflictBlocks.length === 0) {
-      setActiveOfflineConflict(null);
-    }
-  }, [offlineConflictBlocks.length, offlineConflictReviewPending]);
-
   const handleNavigateToActivity = useCallback((target: ActivityNavigateTarget) => {
     const editor = editorRef.current;
     if (!editor || target.eventType !== "content_edited") return;
@@ -193,6 +181,67 @@ function EditorViewContent() {
     if (typeof excerpt !== "string") return;
     scrollEditorToExcerpt(editor, excerpt);
   }, []);
+
+  useEffect(() => {
+    if (offlineConflictClusters.length === 0) {
+      setActiveConflictClusterId(null);
+      setConflictCompareOpen(false);
+      return;
+    }
+    setActiveConflictClusterId((current) => {
+      if (current && offlineConflictClusters.some((c) => c.id === current)) {
+        return current;
+      }
+      return offlineConflictClusters[0]?.id ?? null;
+    });
+  }, [offlineConflictClusters]);
+
+  const activeConflictCluster =
+    offlineConflictClusters.find((c) => c.id === activeConflictClusterId) ??
+    offlineConflictClusters[0] ??
+    null;
+
+  const scrollToConflictCluster = useCallback((cluster: SpanConflictCluster) => {
+    const target = document.querySelector(
+      `[data-cluster-id="${cluster.id}"]`,
+    );
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+
+  const handleShowConflictCluster = useCallback(
+    (cluster: SpanConflictCluster) => {
+      setActiveConflictClusterId(cluster.id);
+      scrollToConflictCluster(cluster);
+      setConflictCompareOpen(true);
+    },
+    [scrollToConflictCluster],
+  );
+
+  const handleActivateConflictCluster = useCallback(
+    (clusterId: string) => {
+      setActiveConflictClusterId(clusterId);
+      const cluster = offlineConflictClusters.find((c) => c.id === clusterId);
+      if (cluster) scrollToConflictCluster(cluster);
+      setConflictCompareOpen(true);
+    },
+    [offlineConflictClusters, scrollToConflictCluster],
+  );
+
+  const handleKeepConflictCluster = useCallback(
+    (clusterId: string) => {
+      void resolveOfflineCluster(clusterId, "mine");
+      setConflictCompareOpen(false);
+    },
+    [resolveOfflineCluster],
+  );
+
+  const handleDismissConflictCluster = useCallback(
+    (clusterId: string) => {
+      void resolveOfflineCluster(clusterId, "theirs");
+      setConflictCompareOpen(false);
+    },
+    [resolveOfflineCluster],
+  );
 
   const handleOpenAsk = useCallback(
     (selectedText?: string) => {
@@ -457,13 +506,14 @@ function EditorViewContent() {
                     onDismiss={dismissAwayNotice}
                   />
                 )}
-                {offlineConflictReviewPending && offlineConflictBlocks.length > 0 && (
+                {offlineConflictReviewPending && offlineConflictClusters.length > 0 && (
                   <DocumentConflictFloat
-                    conflicts={offlineConflictBlocks}
-                    onKeep={keepOfflineMine}
-                    onDismiss={takeOfflineTheirs}
-                    onActiveConflictChange={handleActiveOfflineConflictChange}
-                    onScrollToConflict={handleScrollToConflict}
+                    clusters={offlineConflictClusters}
+                    activeClusterId={activeConflictClusterId}
+                    onActiveClusterChange={setActiveConflictClusterId}
+                    onShowConflict={handleShowConflictCluster}
+                    onKeep={handleKeepConflictCluster}
+                    onDismiss={handleDismissConflictCluster}
                   />
                 )}
                 {!editorEditable && (
@@ -512,8 +562,10 @@ function EditorViewContent() {
                   onRegisterEditor={handleRegisterEditor}
                   onActiveBlockChange={onActiveBlockChange}
                   onSelectionChange={onEditorSelectionChange}
-                  activeOfflineConflict={activeOfflineConflict}
-                  offlineConflictBlocks={offlineConflictBlocks}
+                  offlineConflictClusters={offlineConflictClusters}
+                  activeOfflineConflictClusterId={activeConflictClusterId}
+                  onActivateOfflineConflictCluster={handleActivateConflictCluster}
+                  onResolveOfflineCluster={resolveOfflineCluster}
                   onBlur={() => {
                     void evaluateOnBlur();
                   }}
@@ -583,6 +635,20 @@ function EditorViewContent() {
         askPrefill={askPrefill}
         onConsumeAskPrefill={() => setAskPrefill("")}
         onInsertCitation={isTemplateMode ? undefined : handleInsertCitation}
+      />
+
+      <ConflictCompareModal
+        cluster={activeConflictCluster}
+        open={conflictCompareOpen && offlineConflictReviewPending}
+        onClose={() => setConflictCompareOpen(false)}
+        onKeep={() => {
+          if (!activeConflictCluster) return;
+          handleKeepConflictCluster(activeConflictCluster.id);
+        }}
+        onDismiss={() => {
+          if (!activeConflictCluster) return;
+          handleDismissConflictCluster(activeConflictCluster.id);
+        }}
       />
     </div>
   );

@@ -46,9 +46,53 @@ export function getTopLevelBlockRangeForConflict(
   doc: ProseMirrorNode,
   conflict: { blockId: string; blockIndex: number },
 ): { from: number; to: number; node: ProseMirrorNode; text: string; blockIndex: number } | null {
+  const byId = getTopLevelBlockRangeById(doc, conflict.blockId);
+  if (byId) return byId;
+
   const byIndex = getTopLevelBlockRange(doc, conflict.blockIndex);
-  if (byIndex && readBlockId(byIndex.node) === conflict.blockId) {
+  if (byIndex) {
     return { ...byIndex, blockIndex: conflict.blockIndex };
   }
-  return getTopLevelBlockRangeById(doc, conflict.blockId);
+  return null;
+}
+
+/** Map UTF-16 offsets inside a block's plain text to absolute document positions. */
+export function mapBlockCharRangeToDoc(
+  blockFrom: number,
+  blockNode: ProseMirrorNode,
+  start: number,
+  end: number,
+): { from: number; to: number } | null {
+  if (end <= start) return null;
+
+  const contentStart = blockFrom + 1;
+  let charIndex = 0;
+  let from = -1;
+  let to = -1;
+
+  blockNode.descendants((node, pos) => {
+    if (!node.isText || !node.text) return;
+    const len = node.text.length;
+    const nodeStartChar = charIndex;
+    const nodeEndChar = charIndex + len;
+
+    if (from < 0 && start < nodeEndChar) {
+      from = contentStart + pos + Math.max(0, start - nodeStartChar);
+    }
+    if (to < 0 && end <= nodeEndChar) {
+      to = contentStart + pos + Math.max(0, end - nodeStartChar);
+    }
+
+    charIndex += len;
+  });
+
+  if (from >= 0 && to > from) {
+    return { from, to };
+  }
+
+  const blockTextLength = blockNode.textContent.length;
+  return {
+    from: contentStart + Math.max(0, start),
+    to: contentStart + Math.min(blockTextLength, end),
+  };
 }

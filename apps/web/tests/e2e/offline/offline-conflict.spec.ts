@@ -38,8 +38,8 @@ test.describe("C1 — true conflict Mode C", () => {
     await contextA.setOffline(false);
     await pageA.waitForTimeout(5000);
 
-    await expect(pageA.getByText("Sync conflict", { exact: false })).toBeVisible();
-    await expect(pageB.getByText("Sync conflict", { exact: false })).toHaveCount(0);
+    await expect(pageA.getByText("conflicting change", { exact: false })).toBeVisible();
+    await expect(pageB.getByText("conflicting change", { exact: false })).toHaveCount(0);
 
     await contextA.close();
     await contextB.close();

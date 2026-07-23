@@ -7,15 +7,16 @@
 }
 
 .conflict-diff__add {
-  background: rgb(255 214 102 / 28%);
-  color: inherit;
+  background: var(--color-comment-highlight);
+  color: var(--color-comment-highlight-text);
   text-decoration: none;
   border-radius: 2px;
   padding: 0 1px;
 }
 
 .conflict-diff--theirs .conflict-diff__add {
-  background: rgb(120 180 255 / 22%);
+  background: var(--color-info-bg);
+  color: var(--color-text);
 }
 
 .conflict-diff__del {

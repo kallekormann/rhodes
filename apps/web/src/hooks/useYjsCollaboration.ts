@@ -11,7 +11,12 @@ import {
   base64ToUint8,
   uint8ToBase64,
 } from "@/lib/collaboration/supabase-yjs-provider";
-import { getOfflineBase, getOfflineMine } from "@/lib/offline/yjs-offline-snapshot";
+import {
+  clearOfflineSnapshots,
+  clearStaleOfflineSnapshots,
+} from "@/lib/offline/yjs-offline-snapshot";
+import { clearYjsIndexedDbPersistence } from "@/lib/collaboration/yjs-idb";
+import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { avatarHueForUser } from "@/lib/profile/avatar";
 
 export type CollaborationUser = {
@@ -22,15 +27,6 @@ export type CollaborationUser = {
 
 function userColor(userId: string): string {
   return `hsl(${avatarHueForUser(userId)} 62% 46%)`;
-}
-
-async function hasActiveOfflineEdits(documentId: string): Promise<boolean> {
-  const [base, mine] = await Promise.all([
-    getOfflineBase(documentId),
-    getOfflineMine(documentId),
-  ]);
-  if (!base || !mine) return false;
-  return base.state !== mine.state;
 }
 
 type PersistedYjsState = {
@@ -105,14 +101,35 @@ function persistStateOnUnload(documentId: string, state: Uint8Array): void {
 
 const PROVIDER_RETRY_ATTEMPTS = 3;
 const PROVIDER_RETRY_BASE_MS = 2_000;
+const SESSION_WAIT_ATTEMPTS = 20;
+const SESSION_WAIT_MS = 250;
+const SERVER_PULL_MS = 8_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForAuthSession(
+  supabase: ReturnType<typeof createClient>,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < SESSION_WAIT_ATTEMPTS; attempt++) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) return true;
+    await sleep(SESSION_WAIT_MS);
+  }
+  return false;
+}
+
 /** Shared key marking whether this Y.Doc has ever been seeded from Postgres JSON. */
 const SEEDED_MAP_KEY = "rhodes";
 const SEEDED_FLAG = "seeded";
+
+function applyServerState(doc: Y.Doc, state: Uint8Array): void {
+  if (state.length === 0) return;
+  Y.applyUpdate(doc, state);
+}
 
 /**
  * Shared Y.Doc + Supabase Realtime provider for TipTap Collaboration.
@@ -191,6 +208,7 @@ export function useYjsCollaboration(params: {
     const doc = new Y.Doc();
     docRef.current = doc;
     let idbPersistence: IndexeddbPersistence | null = null;
+    let serverPullTimer: number | null = null;
 
     const createProvider = async (attempt = 0): Promise<void> => {
       if (cancelled || providerRef.current) return;
@@ -199,6 +217,20 @@ export function useYjsCollaboration(params: {
       const supabase = createClient();
       const forceAuth = forceAuthRef.current;
       forceAuthRef.current = false;
+
+      const hasSession = await waitForAuthSession(supabase);
+      if (cancelled) return;
+      if (!hasSession) {
+        if (attempt < PROVIDER_RETRY_ATTEMPTS - 1) {
+          await sleep(PROVIDER_RETRY_BASE_MS * (attempt + 1));
+          return createProvider(attempt + 1);
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[yjs] Realtime provider skipped — no auth session");
+        }
+        return;
+      }
+
       try {
         await ensureRealtimeAuth(supabase, { force: forceAuth });
       } catch {
@@ -215,12 +247,7 @@ export function useYjsCollaboration(params: {
       let unsentBaselineVector: Uint8Array | null = null;
       const server = await fetchPersistedState(documentId);
       if (cancelled) return;
-      const offlineEditsPending = await hasActiveOfflineEdits(documentId);
-      if (
-        !offlineEditsPending &&
-        server.state &&
-        server.state.length > 0
-      ) {
+      if (server.state && server.state.length > 0) {
         const serverDoc = new Y.Doc();
         Y.applyUpdate(serverDoc, server.state);
         unsentBaselineVector = Y.encodeStateVector(serverDoc);
@@ -252,6 +279,12 @@ export function useYjsCollaboration(params: {
 
       const unsub = nextProvider.onSynced((isSynced) => {
         if (!cancelled) setSynced(isSynced);
+        if (!cancelled && isSynced) {
+          void fetchPersistedState(documentId).then((server) => {
+            if (cancelled || !server.state || server.state.length === 0) return;
+            applyServerState(doc, server.state);
+          });
+        }
       });
       const unsubCatchup = nextProvider.onCatchupComplete((ready) => {
         if (!cancelled) setCatchupComplete(ready);
@@ -272,39 +305,71 @@ export function useYjsCollaboration(params: {
       (
         nextProvider as SupabaseYjsProvider & { _unsubCatchup?: () => void }
       )._unsubCatchup = unsubCatchup;
+
+      if (serverPullTimer == null) {
+        serverPullTimer = window.setInterval(() => {
+          if (cancelled || !providerRef.current?.isSynced) return;
+          void fetchPersistedState(documentId).then((server) => {
+            if (cancelled || !server.state || server.state.length === 0) return;
+            applyServerState(doc, server.state);
+          });
+        }, SERVER_PULL_MS);
+      }
     };
 
     void (async () => {
-      // Offline-first: local IDB state (including offline edits) loads before
-      // any network round-trip, so the doc is editable immediately, online or not.
+      const isOffline =
+        typeof navigator !== "undefined" && !navigator.onLine;
+
+      let serverState: Uint8Array | null = null;
+      if (!isOffline) {
+        const server = await fetchPersistedState(documentId);
+        if (cancelled) return;
+        // Online reload: Postgres wins over stale y-indexeddb.
+        await clearYjsIndexedDbPersistence(documentId);
+        if (server.state && server.state.length > 0) {
+          serverState = server.state;
+          applyServerState(doc, serverState);
+        }
+      }
+
       idbPersistence = new IndexeddbPersistence(documentId, doc);
       await idbPersistence.whenSynced;
       if (cancelled) return;
 
-      if (typeof navigator === "undefined" || navigator.onLine) {
+      await clearStaleOfflineSnapshots(documentId);
+      if (cancelled) return;
+
+      if (serverState) {
+        applyServerState(doc, serverState);
+      } else if (!isOffline) {
         const server = await fetchPersistedState(documentId);
         if (cancelled) return;
-        const offlineEditsPending = await hasActiveOfflineEdits(documentId);
-        if (
-          !offlineEditsPending &&
-          server.state &&
-          server.state.length > 0
-        ) {
-          Y.applyUpdate(doc, server.state);
+        if (server.state && server.state.length > 0) {
+          applyServerState(doc, server.state);
         }
       }
       if (cancelled) return;
 
-      // Authoritative seed-once check: the flag lives inside the CRDT itself,
-      // so it survives across IDB + server merges regardless of which client
-      // performed the original seed.
+      // Stale offline conflict snapshots must never rewind a fresh server load.
+      if (!isOffline && ydocHasCollaborationBody(doc)) {
+        await clearOfflineSnapshots(documentId);
+      }
+
       const alreadySeeded =
-        doc.getMap(SEEDED_MAP_KEY).get(SEEDED_FLAG) === true;
+        doc.getMap(SEEDED_MAP_KEY).get(SEEDED_FLAG) === true ||
+        ydocHasCollaborationBody(doc);
       setNeedsInitialSeed(!alreadySeeded);
       setLocalReady(true);
       setYdoc(doc);
 
+      if (isOffline) {
+        await createProvider();
+        return;
+      }
+
       await createProvider();
+      if (cancelled) return;
     })();
 
     const onOnlineRetry = () => {
@@ -323,6 +388,10 @@ export function useYjsCollaboration(params: {
 
     return () => {
       cancelled = true;
+      if (serverPullTimer != null) {
+        window.clearInterval(serverPullTimer);
+        serverPullTimer = null;
+      }
       window.clearInterval(providerRetryTimer);
       window.removeEventListener("online", onOnlineRetry);
       const current = providerRef.current as

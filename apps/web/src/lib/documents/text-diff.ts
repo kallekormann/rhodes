@@ -79,7 +79,24 @@ type TextHunk = {
   insert: string[];
 };
 
+export type { TextHunk };
+
+export function getTextTokens(value: string): string[] {
+  return tokenize(value);
+}
+
 /** Turn base→side alignment into hunks against base token indices. */
+export function hunksAgainstBaseText(
+  base: string,
+  side: string,
+): TextHunk[] {
+  return hunksAgainstBase(tokenize(base), tokenize(side));
+}
+
+export function hunksOverlap(a: TextHunk, b: TextHunk): boolean {
+  return hunksOverlapInternal(a, b);
+}
+
 function hunksAgainstBase(base: string[], side: string[]): TextHunk[] {
   const n = base.length;
   const m = side.length;
@@ -128,7 +145,7 @@ function hunksAgainstBase(base: string[], side: string[]): TextHunk[] {
   return hunks;
 }
 
-function hunksOverlap(a: TextHunk, b: TextHunk): boolean {
+function hunksOverlapInternal(a: TextHunk, b: TextHunk): boolean {
   const aInsertOnly = a.baseStart === a.baseEnd;
   const bInsertOnly = b.baseStart === b.baseEnd;
 
@@ -147,6 +164,28 @@ function hunksOverlap(a: TextHunk, b: TextHunk): boolean {
   }
 
   return a.baseStart < b.baseEnd && b.baseStart < a.baseEnd;
+}
+
+/** Map token hunk indices to character offsets in the original base string. */
+export function hunkCharRange(
+  baseText: string,
+  hunk: TextHunk,
+): { start: number; end: number } {
+  const baseTokens = tokenize(baseText);
+  const before = baseTokens.slice(0, hunk.baseStart).join("");
+  const span = baseTokens.slice(hunk.baseStart, hunk.baseEnd).join("");
+  return { start: before.length, end: before.length + span.length };
+}
+
+/** Apply a single hunk to base text (token-aligned). */
+export function applyHunkToText(baseText: string, hunk: TextHunk): string {
+  const baseTokens = tokenize(baseText);
+  const out = [
+    ...baseTokens.slice(0, hunk.baseStart),
+    ...hunk.insert,
+    ...baseTokens.slice(hunk.baseEnd),
+  ];
+  return out.join("");
 }
 
 /**
@@ -177,7 +216,7 @@ export function threeWayMergeText(
 
   for (const mh of mineHunks) {
     for (const th of theirsHunks) {
-      if (!hunksOverlap(mh, th)) continue;
+      if (!hunksOverlapInternal(mh, th)) continue;
       if (
         mh.baseStart === th.baseStart &&
         mh.baseEnd === th.baseEnd &&

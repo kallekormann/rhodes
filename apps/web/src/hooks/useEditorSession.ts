@@ -321,11 +321,6 @@ export function useEditorSession() {
   const collabActiveRef = useRef(false);
   const editorForConflictRef = useRef<Editor | null>(null);
   const ydocForSnapshotRef = useRef<import("yjs").Doc | null>(null);
-  const snapshotOfflineRef = useRef<(() => void) | null>(null);
-
-  const handleCollabDisconnected = useCallback(() => {
-    snapshotOfflineRef.current?.();
-  }, []);
 
   const {
     ydoc,
@@ -342,12 +337,11 @@ export function useEditorSession() {
     enabled: !isEditingTemplate && crossScopeAccess === "allowed",
     userId: session.userId,
     displayName: session.displayName || session.userEmail,
-    onDisconnected: handleCollabDisconnected,
   });
   ydocForSnapshotRef.current = ydoc;
   collabActiveRef.current = collabActive;
 
-  const collabCursorMode = Boolean(collabProvider && collabSynced);
+  const collabCursorMode = Boolean(collabProvider && collaborationUser);
 
   const handleCollabBootstrapped = useCallback(() => {
     flushCollabPersist();
@@ -355,12 +349,13 @@ export function useEditorSession() {
 
   const {
     offlineConflictBlocks,
+    offlineConflictClusters,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
     keepAllOfflineMine,
     takeAllOfflineTheirs,
-    snapshotOfflineBase,
+    resolveOfflineCluster,
   } = useOfflineYjsConflict({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     ydoc,
@@ -372,7 +367,6 @@ export function useEditorSession() {
     getEditor: () => editorForConflictRef.current,
     flushPersist: flushCollabPersist,
   });
-  snapshotOfflineRef.current = snapshotOfflineBase;
 
   const registerEditorForConflict = useCallback((editor: Editor | null) => {
     editorForConflictRef.current = editor;
@@ -1023,7 +1017,11 @@ export function useEditorSession() {
         !resolvedWorkspaceId ||
         crossScopeAccess === "pending" ||
         (!document && loading) ||
-        (document != null && contentHydratedForId !== document.id),
+        (document != null && contentHydratedForId !== document.id) ||
+        (!isEditingTemplate &&
+          crossScopeAccess === "allowed" &&
+          document != null &&
+          !collabDocReady),
     error: isEditingTemplate ? templateError : error,
     content,
     contentPlain,
@@ -1105,11 +1103,13 @@ export function useEditorSession() {
     collabActive,
     collaborationUser,
     offlineConflictBlocks,
+    offlineConflictClusters,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
     keepAllOfflineMine,
     takeAllOfflineTheirs,
+    resolveOfflineCluster,
     registerEditorForConflict,
   };
 }

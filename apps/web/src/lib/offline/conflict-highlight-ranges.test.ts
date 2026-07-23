@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   conflictCharRangesForBlock,
   conflictCharRangesInDisplayText,
+  shiftCharRangesToDisplayText,
 } from "@/lib/offline/conflict-highlight-ranges";
 
 describe("conflictCharRangesForBlock", () => {
@@ -56,5 +57,14 @@ describe("conflictCharRangesForBlock", () => {
         theirsText: text,
       }),
     ).toEqual([]);
+  });
+});
+
+describe("shiftCharRangesToDisplayText", () => {
+  it("offsets ranges when snapshot text was trimmed", () => {
+    const ranges = [{ start: 0, end: 5 }];
+    expect(shiftCharRangesToDisplayText(ranges, "hello", "  hello  ")).toEqual([
+      { start: 2, end: 7 },
+    ]);
   });
 });

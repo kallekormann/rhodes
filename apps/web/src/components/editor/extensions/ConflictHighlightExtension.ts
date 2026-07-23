@@ -3,7 +3,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
-import { getTopLevelBlockRangeForConflict } from "@/lib/documents/block-positions";
+import { getTopLevelBlockRangeForConflict, mapBlockCharRangeToDoc } from "@/lib/documents/block-positions";
 import type { CharRange } from "@/lib/offline/conflict-highlight-ranges";
 
 export const conflictHighlightKey = new PluginKey("rhodesConflictHighlight");
@@ -18,45 +18,6 @@ type ConflictHighlightStorage = {
   refresh: (next: ConflictHighlightState) => void;
 };
 
-function mapCharRangeToDoc(
-  blockFrom: number,
-  blockNode: ProseMirrorNode,
-  start: number,
-  end: number,
-): { from: number; to: number } | null {
-  if (end <= start) return null;
-
-  let charIndex = 0;
-  let from = -1;
-  let to = -1;
-
-  blockNode.descendants((node, pos) => {
-    if (!node.isText || !node.text) return;
-    const len = node.text.length;
-    const nodeEndChar = charIndex + len;
-
-    if (from < 0 && start < nodeEndChar) {
-      from = pos + Math.max(0, start - charIndex);
-    }
-    if (to < 0 && end <= nodeEndChar) {
-      to = pos + Math.max(0, end - charIndex);
-    }
-
-    charIndex += len;
-  });
-
-  if (from >= 0 && to > from) {
-    return { from, to };
-  }
-
-  const contentStart = blockFrom + 1;
-  const blockTextLength = blockNode.textContent.length;
-  return {
-    from: contentStart + Math.max(0, start),
-    to: contentStart + Math.min(blockTextLength, end),
-  };
-}
-
 function mapCharRangesToDoc(
   blockFrom: number,
   blockNode: ProseMirrorNode,
@@ -64,7 +25,12 @@ function mapCharRangesToDoc(
 ): Array<{ from: number; to: number }> {
   const positions: Array<{ from: number; to: number }> = [];
   for (const range of ranges) {
-    const mapped = mapCharRangeToDoc(blockFrom, blockNode, range.start, range.end);
+    const mapped = mapBlockCharRangeToDoc(
+      blockFrom,
+      blockNode,
+      range.start,
+      range.end,
+    );
     if (mapped) positions.push(mapped);
   }
   return positions;

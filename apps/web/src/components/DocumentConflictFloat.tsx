@@ -1,155 +1,150 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
-import { ConflictDiffText } from "@/components/ConflictDiffText";
+import { Button } from "@/components/Button";
+import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
+import "@/components/CommentsTab.css";
 import "./DocumentConflictFloat.css";
 
 type DocumentConflictFloatProps = {
-  conflicts: BlockConflict[];
-  onKeep: (blockId: string) => void;
-  onDismiss: (blockId: string) => void;
-  onActiveConflictChange?: (conflict: BlockConflict | null) => void;
-  onScrollToConflict?: (conflict: BlockConflict) => void;
+  clusters: SpanConflictCluster[];
+  activeClusterId: string | null;
+  onActiveClusterChange: (clusterId: string) => void;
+  onShowConflict: (cluster: SpanConflictCluster) => void;
+  onKeep: (clusterId: string) => void;
+  onDismiss: (clusterId: string) => void;
 };
 
 export function DocumentConflictFloat({
-  conflicts,
+  clusters,
+  activeClusterId,
+  onActiveClusterChange,
+  onShowConflict,
   onKeep,
   onDismiss,
-  onActiveConflictChange,
-  onScrollToConflict,
 }: DocumentConflictFloatProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [conflicts]);
+  }, [clusters]);
+
+  useEffect(() => {
+    if (!activeClusterId) return;
+    const index = clusters.findIndex((cluster) => cluster.id === activeClusterId);
+    if (index >= 0) setActiveIndex(index);
+  }, [activeClusterId, clusters]);
 
   const active =
-    conflicts.length > 0
-      ? conflicts[Math.min(activeIndex, conflicts.length - 1)]
+    clusters.length > 0
+      ? clusters[Math.min(activeIndex, clusters.length - 1)]
       : null;
 
   useEffect(() => {
-    onActiveConflictChange?.(active);
-  }, [active, onActiveConflictChange]);
-
-  useEffect(() => {
-    if (!active) return;
-    onScrollToConflict?.(active);
-  }, [active, onScrollToConflict]);
+    if (active) onActiveClusterChange(active.id);
+  }, [active, onActiveClusterChange]);
 
   const goToIndex = useCallback(
     (index: number) => {
-      if (conflicts.length === 0) return;
-      const next = ((index % conflicts.length) + conflicts.length) % conflicts.length;
+      if (clusters.length === 0) return;
+      const next = ((index % clusters.length) + clusters.length) % clusters.length;
       setActiveIndex(next);
-      const conflict = conflicts[next];
-      if (conflict) onScrollToConflict?.(conflict);
+      const cluster = clusters[next];
+      if (cluster) onActiveClusterChange(cluster.id);
     },
-    [conflicts, onScrollToConflict],
+    [clusters, onActiveClusterChange],
   );
 
-  const handleNext = useCallback(() => {
-    goToIndex(activeIndex + 1);
-  }, [activeIndex, goToIndex]);
+  const handleShow = useCallback(() => {
+    if (!active) return;
+    onShowConflict(active);
+  }, [active, onShowConflict]);
 
   const handleKeep = useCallback(() => {
     if (!active) return;
-    onKeep(active.blockId);
-    if (conflicts.length > 1) {
-      setActiveIndex((index) => Math.min(index, conflicts.length - 2));
+    onKeep(active.id);
+    if (clusters.length > 1) {
+      setActiveIndex((index) => Math.min(index, clusters.length - 2));
     }
-  }, [active, conflicts.length, onKeep]);
+  }, [active, clusters.length, onKeep]);
 
   const handleDismiss = useCallback(() => {
     if (!active) return;
-    onDismiss(active.blockId);
-    if (conflicts.length > 1) {
-      setActiveIndex((index) => Math.min(index, conflicts.length - 2));
+    onDismiss(active.id);
+    if (clusters.length > 1) {
+      setActiveIndex((index) => Math.min(index, clusters.length - 2));
     }
-  }, [active, conflicts.length, onDismiss]);
+  }, [active, clusters.length, onDismiss]);
 
   if (!active) return null;
 
-  const position = Math.min(activeIndex, conflicts.length - 1) + 1;
-  const versionsDiffer = active.mineText !== active.theirsText;
+  const position = Math.min(activeIndex, clusters.length - 1) + 1;
+  const message =
+    clusters.length === 1
+      ? "1 conflicting change needs your decision."
+      : `${clusters.length} conflicting changes need your decision.`;
 
   return (
     <aside
       className="document-conflict-float"
-      role="dialog"
-      aria-labelledby="conflict-float-title"
+      role="status"
+      aria-live="polite"
+      aria-label="Offline sync conflict"
     >
-      <div className="document-conflict-float__header">
-        <p className="document-conflict-float__eyebrow">Sync conflict</p>
-        <h2 id="conflict-float-title" className="document-conflict-float__title">
-          Review conflicting edits
-        </h2>
-        <p className="document-conflict-float__hint">
-          {conflicts.length > 1
-            ? `Conflict ${position} of ${conflicts.length}. Compare versions below, then choose.`
-            : "Compare your offline edit with the online version, then choose."}
-        </p>
-      </div>
-
-      <div className="document-conflict-float__diff" aria-live="polite">
-        <div className="document-conflict-float__diff-section">
-          <p className="document-conflict-float__diff-label">Before you went offline</p>
-          <p className="document-conflict-float__diff-plain">{active.baseText}</p>
+      <article className="comments-tab__card comments-tab__card--selected document-conflict-float__card">
+        <div className="comments-tab__thread">
+          <div className="comments-tab__message">
+            <header className="comments-tab__message-header">
+              <div className="comments-tab__message-identity">
+                <div className="comments-tab__message-meta">
+                  <span className="comments-tab__message-author">Sync conflict</span>
+                  {clusters.length > 1 && (
+                    <span className="comments-tab__message-date">
+                      {position} of {clusters.length}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </header>
+            <p className="comments-tab__message-text">{message}</p>
+          </div>
         </div>
 
-        {versionsDiffer && (
-          <>
-            <div className="document-conflict-float__diff-section">
-              <p className="document-conflict-float__diff-label">Your offline edit</p>
-              <ConflictDiffText
-                baseText={active.baseText}
-                text={active.mineText}
-                variant="mine"
-              />
-            </div>
-
-            <div className="document-conflict-float__diff-section">
-              <p className="document-conflict-float__diff-label">Online edit (others)</p>
-              <ConflictDiffText
-                baseText={active.baseText}
-                text={active.theirsText}
-                variant="theirs"
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="document-conflict-float__actions">
-        {conflicts.length > 1 && (
-          <button
+        <div className="comments-tab__card-footer document-conflict-float__footer">
+          {clusters.length > 1 && (
+            <Button
+              type="button"
+              size="small"
+              variant="ghost"
+              className="document-conflict-float__btn-next"
+              onClick={() => goToIndex(activeIndex + 1)}
+            >
+              Next
+            </Button>
+          )}
+          <Button type="button" size="small" variant="ghost" onClick={handleShow}>
+            Show me
+          </Button>
+          <Button
             type="button"
-            className="btn btn--ghost btn--sm document-conflict-float__btn-next"
-            onClick={handleNext}
+            size="small"
+            variant="secondary"
+            onClick={handleDismiss}
+            title="Use the online version from other editors"
           >
-            Next
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={handleDismiss}
-          title="Use the online version from other editors"
-        >
-          Dismiss
-        </button>
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          onClick={handleKeep}
-          title="Keep your offline version"
-        >
-          Keep
-        </button>
-      </div>
+            Dismiss
+          </Button>
+          <Button
+            type="button"
+            size="small"
+            variant="primary"
+            onClick={handleKeep}
+            title="Keep your offline version"
+          >
+            Keep
+          </Button>
+        </div>
+      </article>
     </aside>
   );
 }

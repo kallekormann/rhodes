@@ -115,11 +115,13 @@ export class SupabaseYjsProvider {
   private blockResolutionListeners = new Set<BlockResolutionListener>();
   /** Suppress rebroadcast while applying a peer's authoritative block resolution. */
   private suppressOutgoingUpdates = false;
+  /** Another peer is reviewing offline conflicts — defer their leaked updates and block persist. */
+  private remoteConflictReviewActive = false;
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
   private static readonly AWARENESS_TIMEOUT_MS = 6_000;
   /** Idle window before writing the merged CRDT state durably to Postgres. */
-  private static readonly PERSIST_DEBOUNCE_MS = 4_000;
+  private static readonly PERSIST_DEBOUNCE_MS = 1_500;
 
   constructor(params: {
     documentId: string;
@@ -198,16 +200,17 @@ export class SupabaseYjsProvider {
   private handleBrowserOffline = () => {
     // Capture before offline edits so peers can receive them after reconnect.
     this.unsentBaselineVector = Y.encodeStateVector(this.doc);
-    // Belt-and-suspenders: queue peer updates as soon as the browser goes offline.
-    this.offlineReviewActive = true;
-    this.deferPeerUpdates = true;
+    // Only queue peer updates during an active offline conflict review.
+    if (this.offlineReviewActive) {
+      this.deferPeerUpdates = true;
+    }
   };
 
   private handleBrowserOnline = () => {
-    // Defer reconnect so capture-phase offline-review listeners can restore mine first.
-    queueMicrotask(() => {
+    // Let offline-conflict capture listeners restore mine before reconnect.
+    window.setTimeout(() => {
       void this.reconnect();
-    });
+    }, 100);
   };
 
   get isSynced(): boolean {
@@ -225,8 +228,20 @@ export class SupabaseYjsProvider {
     return this.deferPeerUpdates;
   }
 
-  get isOfflineReviewActive(): boolean {
+  get isRemoteConflictReviewActive(): boolean {
+    return this.remoteConflictReviewActive;
+  }
+
+  private shouldBlockPersist(): boolean {
+    // Only the offline returner pauses persist during their own conflict review.
+    // Peers must keep persisting — otherwise their edits never reach Postgres.
     return this.offlineReviewActive;
+  }
+
+  private shouldDeferIncomingUpdates(): boolean {
+    // Only the offline returner defers peer updates during their own review.
+    // Never block live edits because another peer has conflictReviewPending.
+    return this.deferPeerUpdates;
   }
 
   setOnPeerUpdatesDeferred(listener: (() => void) | null): void {
@@ -260,12 +275,18 @@ export class SupabaseYjsProvider {
    */
   setOfflineReviewActive(active: boolean): void {
     this.offlineReviewActive = active;
+    this.awareness.setLocalStateField(
+      "conflictReviewPending",
+      active ? true : null,
+    );
     if (active) {
       this.deferPeerUpdates = true;
       return;
     }
-    this.deferPeerUpdates = false;
-    this.deferredPeerUpdates = [];
+    if (!this.remoteConflictReviewActive) {
+      this.deferPeerUpdates = false;
+      this.deferredPeerUpdates = [];
+    }
   }
 
   /**
@@ -346,7 +367,7 @@ export class SupabaseYjsProvider {
 
   /** Immediately persist the current Y.Doc state (bypasses debounce). */
   flushPersist(): void {
-    if (this.destroyed || !this.persist || this.offlineReviewActive) return;
+    if (this.destroyed || !this.persist || this.shouldBlockPersist()) return;
     if (this.persistTimer != null) {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
@@ -517,12 +538,13 @@ export class SupabaseYjsProvider {
   }
 
   private schedulePersist = () => {
-    if (this.destroyed || !this.persist || this.offlineReviewActive) return;
+    if (this.destroyed || !this.persist || this.shouldBlockPersist()) return;
     if (this.persistTimer != null) {
       window.clearTimeout(this.persistTimer);
     }
     this.persistTimer = window.setTimeout(() => {
       this.persistTimer = null;
+      if (this.shouldBlockPersist()) return;
       void this.persist?.(Y.encodeStateAsUpdate(this.doc)).catch((error) => {
         if (process.env.NODE_ENV !== "production") {
           console.warn("[yjs] debounced persist failed:", error);
@@ -532,8 +554,37 @@ export class SupabaseYjsProvider {
   };
 
   private flushPersistOnUnload = () => {
+    if (this.destroyed || this.shouldBlockPersist()) return;
     this.persistOnUnload?.(Y.encodeStateAsUpdate(this.doc));
   };
+
+  /** Scan peer awareness for an active offline conflict review session. */
+  private refreshRemoteConflictReview(): void {
+    let pending = false;
+    this.awareness.getStates().forEach((state, clientId) => {
+      if (clientId === this.doc.clientID) return;
+      if (
+        state &&
+        (state as { conflictReviewPending?: boolean }).conflictReviewPending
+      ) {
+        pending = true;
+      }
+    });
+
+    const wasActive = this.remoteConflictReviewActive;
+    this.remoteConflictReviewActive = pending;
+
+    if (pending && !wasActive) {
+      return;
+    }
+
+    if (!pending && wasActive) {
+      this.deferredPeerUpdates = [];
+      if (!this.offlineReviewActive) {
+        this.deferPeerUpdates = false;
+      }
+    }
+  }
 
   private scheduleSoloSyncFallback() {
     if (this.soloSyncTimer != null) {
@@ -580,11 +631,11 @@ export class SupabaseYjsProvider {
     this.catchupRequiresPeer =
       this.hasPendingLocalBroadcast() || this.offlineReviewActive;
 
+    // Only the offline conflict returner queues peer updates — never block
+    // passive viewers or catch-up from receiving live edits.
+    this.deferPeerUpdates = this.offlineReviewActive;
     if (!this.offlineReviewActive) {
       this.deferredPeerUpdates = [];
-    }
-    if (this.catchupRequiresPeer || this.offlineReviewActive) {
-      this.deferPeerUpdates = true;
     }
 
     // First connect only: baseline is current doc (usually empty diff after sync).
@@ -704,6 +755,9 @@ export class SupabaseYjsProvider {
       return;
     }
     void this.send(EVENT_UPDATE, update);
+    if (update.length > 8_192) {
+      this.flushPersist();
+    }
   };
 
   private handleAwarenessUpdate = (
@@ -727,7 +781,7 @@ export class SupabaseYjsProvider {
     if (!payload?.data || this.destroyed) return;
     const bytes = base64ToUint8(payload.data);
 
-    if (this.deferPeerUpdates) {
+    if (this.shouldDeferIncomingUpdates()) {
       const decoder = decoding.createDecoder(bytes);
       const encoder = encoding.createEncoder();
       const shadow = new Y.Doc();
@@ -740,7 +794,8 @@ export class SupabaseYjsProvider {
         this.origin,
       );
 
-      if (encoding.length(encoder) > 1) {
+      // Do not push offline returner's local deltas to peers during review.
+      if (encoding.length(encoder) > 1 && !this.offlineReviewActive) {
         void this.send(EVENT_SYNC, encoding.toUint8Array(encoder));
       }
 
@@ -777,7 +832,7 @@ export class SupabaseYjsProvider {
   private applyEncodedUpdate(payload: { data?: string }) {
     if (!payload?.data || this.destroyed) return;
     const update = base64ToUint8(payload.data);
-    if (this.deferPeerUpdates) {
+    if (this.shouldDeferIncomingUpdates()) {
       this.queueDeferredPeerUpdate(update);
       return;
     }
@@ -793,6 +848,7 @@ export class SupabaseYjsProvider {
       base64ToUint8(payload.data),
       this.origin,
     );
+    this.refreshRemoteConflictReview();
   }
 
   private applyBlockResolution(payload: { data?: string }) {
