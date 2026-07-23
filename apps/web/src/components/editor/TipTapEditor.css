@@ -280,6 +280,22 @@
   text-underline-offset: 3px;
 }
 
+.tiptap-editor-body .editor-conflict-block--pending {
+  opacity: 0.72;
+}
+
+.tiptap-editor-body .editor-conflict-block--active {
+  opacity: 1;
+}
+
+.tiptap-editor-body .editor-conflict-highlight {
+  background: color-mix(in srgb, var(--color-warning, #f5a623) 42%, transparent);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning, #f5a623) 55%, transparent);
+}
+
 .tiptap-editor-body .rhodes-suggestion {
   margin: var(--space-sm) 0 var(--space-md);
   padding: var(--space-sm) var(--space-md);

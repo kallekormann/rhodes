@@ -1,94 +1,122 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
 import "./DocumentConflictFloat.css";
-import "./DocumentConflictReview.css";
 
 type DocumentConflictFloatProps = {
   conflicts: BlockConflict[];
-  onKeepMine: (blockId: string) => void;
-  onTakeTheirs: (blockId: string) => void;
-  onKeepAllMine: () => void;
-  onTakeAllTheirs: () => void;
+  onKeep: (blockId: string) => void;
+  onDismiss: (blockId: string) => void;
+  onActiveConflictChange?: (conflict: BlockConflict | null) => void;
+  onScrollToConflict?: (blockId: string) => void;
 };
 
 export function DocumentConflictFloat({
   conflicts,
-  onKeepMine,
-  onTakeTheirs,
-  onKeepAllMine,
-  onTakeAllTheirs,
+  onKeep,
+  onDismiss,
+  onActiveConflictChange,
+  onScrollToConflict,
 }: DocumentConflictFloatProps) {
-  if (conflicts.length === 0) return null;
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const active = conflicts[0];
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [conflicts]);
+
+  const active =
+    conflicts.length > 0
+      ? conflicts[Math.min(activeIndex, conflicts.length - 1)]
+      : null;
+
+  useEffect(() => {
+    onActiveConflictChange?.(active);
+  }, [active, onActiveConflictChange]);
+
+  useEffect(() => {
+    if (!active) return;
+    onScrollToConflict?.(active.blockId);
+  }, [active?.blockId, onScrollToConflict]);
+
+  const goToIndex = useCallback(
+    (index: number) => {
+      if (conflicts.length === 0) return;
+      const next = ((index % conflicts.length) + conflicts.length) % conflicts.length;
+      setActiveIndex(next);
+      const conflict = conflicts[next];
+      if (conflict) onScrollToConflict?.(conflict.blockId);
+    },
+    [conflicts, onScrollToConflict],
+  );
+
+  const handleNext = useCallback(() => {
+    goToIndex(activeIndex + 1);
+  }, [activeIndex, goToIndex]);
+
+  const handleKeep = useCallback(() => {
+    if (!active) return;
+    onKeep(active.blockId);
+    if (conflicts.length > 1) {
+      setActiveIndex((index) => Math.min(index, conflicts.length - 2));
+    }
+  }, [active, conflicts.length, onKeep]);
+
+  const handleDismiss = useCallback(() => {
+    if (!active) return;
+    onDismiss(active.blockId);
+    if (conflicts.length > 1) {
+      setActiveIndex((index) => Math.min(index, conflicts.length - 2));
+    }
+  }, [active, conflicts.length, onDismiss]);
+
+  if (!active) return null;
+
+  const position = Math.min(activeIndex, conflicts.length - 1) + 1;
 
   return (
-    <aside className="document-conflict-float" role="dialog" aria-labelledby="conflict-float-title">
+    <aside
+      className="document-conflict-float"
+      role="dialog"
+      aria-labelledby="conflict-float-title"
+    >
       <div className="document-conflict-float__header">
         <p className="document-conflict-float__eyebrow">Sync conflict</p>
         <h2 id="conflict-float-title" className="document-conflict-float__title">
-          Review your offline edits
+          Review highlighted text
         </h2>
         <p className="document-conflict-float__hint">
-          Someone else edited the same text while you were offline. Choose which
-          version to keep for this block.
+          {conflicts.length > 1
+            ? `Conflict ${position} of ${conflicts.length}. Use Next to jump between blocks.`
+            : "Choose whether to keep your offline edit or dismiss it."}
         </p>
       </div>
 
-      <div className="document-conflict-review__diff-row document-conflict-review__diff-row--changed">
-        <span className="document-conflict-review__kind">Block {active.blockIndex + 1}</span>
-        <div className="document-conflict-review__columns">
-          <div className="document-conflict-review__col">
-            <span className="document-conflict-review__col-label">Yours</span>
-            <p className="document-conflict-review__col-text">
-              {active.mineText || "(empty)"}
-            </p>
-          </div>
-          <div className="document-conflict-review__col">
-            <span className="document-conflict-review__col-label">Theirs</span>
-            <p className="document-conflict-review__col-text">
-              {active.theirsText || "(empty)"}
-            </p>
-          </div>
-        </div>
-      </div>
-
       <div className="document-conflict-float__actions">
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          onClick={() => onKeepMine(active.blockId)}
-        >
-          Keep mine
-        </button>
+        {conflicts.length > 1 && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm document-conflict-float__btn-next"
+            onClick={handleNext}
+          >
+            Next
+          </button>
+        )}
         <button
           type="button"
           className="btn btn--secondary btn--sm"
-          onClick={() => onTakeTheirs(active.blockId)}
+          onClick={handleDismiss}
         >
-          Take theirs
+          Dismiss
+        </button>
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          onClick={handleKeep}
+        >
+          Keep
         </button>
       </div>
-
-      {conflicts.length > 1 && (
-        <div className="document-conflict-float__actions">
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={onKeepAllMine}
-          >
-            Keep all mine ({conflicts.length})
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={onTakeAllTheirs}
-          >
-            Take all theirs
-          </button>
-        </div>
-      )}
     </aside>
   );
 }

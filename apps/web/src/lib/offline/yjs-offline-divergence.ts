@@ -74,6 +74,24 @@ function collectBlockIds(
   return [...ids];
 }
 
+/** When Yjs delta isolation fails, infer peer text from the merged doc. */
+function resolveTheirsText(
+  baseText: string,
+  mineText: string,
+  theirsText: string,
+  mergedText: string,
+): string {
+  if (
+    theirsText === baseText &&
+    mineText !== baseText &&
+    mergedText !== mineText &&
+    mergedText !== baseText
+  ) {
+    return mergedText;
+  }
+  return theirsText;
+}
+
 /**
  * True when every block we edited offline has peer changes merged in cleanly.
  * Returns false while peer edits are still in flight (merged still equals mine).
@@ -92,8 +110,14 @@ export function isOfflineMergeSettled(
   for (const blockId of collectBlockIds(baseBlocks, mineBlocks)) {
     const baseText = baseBlocks.get(blockId)?.text ?? "";
     const mineText = mineBlocks.get(blockId)?.text ?? "";
-    const theirsText = theirsBlocks.get(blockId)?.text ?? "";
+    const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks.get(blockId)?.text ?? "";
+    const theirsText = resolveTheirsText(
+      baseText,
+      mineText,
+      rawTheirsText,
+      mergedText,
+    );
 
     if (mineText === baseText) continue;
 
@@ -129,14 +153,26 @@ export function detectOfflineBlockConflicts(
   for (const blockId of collectBlockIds(baseBlocks, mineBlocks, theirsBlocks)) {
     const baseText = baseBlocks.get(blockId)?.text ?? "";
     const mineText = mineBlocks.get(blockId)?.text ?? "";
-    const theirsText = theirsBlocks.get(blockId)?.text ?? "";
+    const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks?.get(blockId)?.text ?? "";
+    const theirsText = resolveTheirsText(
+      baseText,
+      mineText,
+      rawTheirsText,
+      mergedText,
+    );
 
     if (mineText === theirsText) continue;
     if (mineText === baseText && theirsText === baseText) continue;
 
-    // Only blocks we edited offline.
-    if (mineText === baseText) continue;
+    const offlineEdited = mineText !== baseText;
+    const mergedDivergedFromMine =
+      mergedBlocks != null &&
+      mergedText !== mineText &&
+      mergedText !== baseText;
+
+    // Only blocks we edited offline — or where a leaked CRDT merge diverged from mine.
+    if (!offlineEdited && !mergedDivergedFromMine) continue;
 
     // Peer not merged yet — wait for another detection pass.
     if (!catchupComplete && mergedText === mineText) continue;
@@ -159,9 +195,16 @@ export function detectOfflineBlockConflicts(
       mergedText === mineText &&
       peerDiverged;
 
+    const peerWonSilently =
+      catchupComplete &&
+      mineText !== baseText &&
+      mineText !== theirsText &&
+      mergedText === theirsText;
+
     const needsReview =
       crdtGarbled ||
       peerDivergedButMergedLocal ||
+      peerWonSilently ||
       !merge.ok ||
       (merge.ok && merge.text !== mergedText);
 

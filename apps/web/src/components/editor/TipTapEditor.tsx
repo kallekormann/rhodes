@@ -45,6 +45,11 @@ import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
 import { SpellcheckExtension } from "@/components/editor/extensions/SpellcheckExtension";
 import type { SpellSuggestionPayload } from "@/components/editor/extensions/SpellcheckExtension";
+import {
+  ConflictHighlightExtension,
+  type ConflictHighlightState,
+} from "@/components/editor/extensions/ConflictHighlightExtension";
+import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
@@ -117,6 +122,8 @@ type TipTapEditorProps = {
   onRegisterEditor?: (editor: Editor | null) => void;
   onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
   onSelectionChange?: (from: number, to: number) => void;
+  activeOfflineConflict?: BlockConflict | null;
+  offlineConflictBlockIds?: string[];
 };
 
 type SlashState = {
@@ -229,6 +236,8 @@ export function TipTapEditor({
   onRegisterEditor,
   onActiveBlockChange,
   onSelectionChange,
+  activeOfflineConflict = null,
+  offlineConflictBlockIds = [],
 }: TipTapEditorProps) {
   // Bind Collaboration to Y.Doc as soon as local CRDT is ready (offline-first).
   const collabMode = Boolean(ydoc && collabDocReady);
@@ -461,6 +470,7 @@ export function TipTapEditor({
       ...(collabMode ? [] : [RemoteBlockLock]),
       CommentHighlight,
       SpellcheckExtension.configure({ enabled: true, locale: "en" }),
+      ConflictHighlightExtension,
       Extension.create({
         name: "slashCommand",
         addProseMirrorPlugins() {
@@ -879,6 +889,18 @@ export function TipTapEditor({
       storage.onSuggestionRequest = null;
     };
   }, [editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage.rhodesConflictHighlight as {
+      refresh: (next: ConflictHighlightState) => void;
+    };
+    const next: ConflictHighlightState = {
+      active: activeOfflineConflict,
+      blockIds: offlineConflictBlockIds,
+    };
+    storage.refresh(next);
+  }, [activeOfflineConflict, editor, offlineConflictBlockIds]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>

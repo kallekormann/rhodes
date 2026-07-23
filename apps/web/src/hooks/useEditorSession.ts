@@ -367,6 +367,8 @@ export function useEditorSession() {
     synced: collabSynced,
     catchupComplete: collabCatchupComplete,
     online,
+    remoteUpdateOrigin: collabProvider,
+    provider: collabProvider,
     getEditor: () => editorForConflictRef.current,
     flushPersist: flushCollabPersist,
   });

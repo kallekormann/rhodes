@@ -8,7 +8,8 @@ import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { DocumentAwayNoticeBanner } from "@/components/DocumentEditorPresence";
 import { DocumentConflictFloat } from "@/components/DocumentConflictFloat";
 import type { Editor } from "@tiptap/react";
-import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
+import { scrollEditorToBlock, scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
+import type { BlockConflict } from "@/lib/offline/yjs-offline-divergence";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { EditorTitleField } from "@/components/EditorTitleField";
@@ -106,8 +107,6 @@ function EditorViewContent() {
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
-    keepAllOfflineMine,
-    takeAllOfflineTheirs,
     registerEditorForConflict,
   } = useEditorSession();
 
@@ -152,6 +151,8 @@ function EditorViewContent() {
   const [propertiesStage, setPropertiesStage] = useState<PropertiesPanelStage>("view");
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [hoverCommentId, setHoverCommentId] = useState<string | null>(null);
+  const [activeOfflineConflict, setActiveOfflineConflict] =
+    useState<BlockConflict | null>(null);
   const scrollToCommentRef = useRef<(commentId: string) => void>(() => {});
   const insertCitationRef = useRef<(input: CitationInsertInput) => void>(() => {});
   const editorRef = useRef<Editor | null>(null);
@@ -164,6 +165,25 @@ function EditorViewContent() {
     },
     [registerEditor, registerEditorForConflict],
   );
+
+  const handleScrollToConflict = useCallback((blockId: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    scrollEditorToBlock(editor, blockId);
+  }, []);
+
+  const handleActiveOfflineConflictChange = useCallback(
+    (conflict: BlockConflict | null) => {
+      setActiveOfflineConflict(conflict);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!offlineConflictReviewPending || offlineConflictBlocks.length === 0) {
+      setActiveOfflineConflict(null);
+    }
+  }, [offlineConflictBlocks.length, offlineConflictReviewPending]);
 
   const handleNavigateToActivity = useCallback((target: ActivityNavigateTarget) => {
     const editor = editorRef.current;
@@ -440,10 +460,10 @@ function EditorViewContent() {
                 {offlineConflictReviewPending && offlineConflictBlocks.length > 0 && (
                   <DocumentConflictFloat
                     conflicts={offlineConflictBlocks}
-                    onKeepMine={keepOfflineMine}
-                    onTakeTheirs={takeOfflineTheirs}
-                    onKeepAllMine={keepAllOfflineMine}
-                    onTakeAllTheirs={takeAllOfflineTheirs}
+                    onKeep={keepOfflineMine}
+                    onDismiss={takeOfflineTheirs}
+                    onActiveConflictChange={handleActiveOfflineConflictChange}
+                    onScrollToConflict={handleScrollToConflict}
                   />
                 )}
                 {!editorEditable && (
@@ -492,6 +512,10 @@ function EditorViewContent() {
                   onRegisterEditor={handleRegisterEditor}
                   onActiveBlockChange={onActiveBlockChange}
                   onSelectionChange={onEditorSelectionChange}
+                  activeOfflineConflict={activeOfflineConflict}
+                  offlineConflictBlockIds={offlineConflictBlocks.map(
+                    (conflict) => conflict.blockId,
+                  )}
                   onBlur={() => {
                     void evaluateOnBlur();
                   }}

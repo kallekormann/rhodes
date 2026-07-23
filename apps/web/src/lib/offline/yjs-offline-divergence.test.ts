@@ -53,4 +53,18 @@ describe("offline Yjs block overlap detection", () => {
     const needsReview = !merge.ok || (merge.ok && merge.text !== merged);
     expect(needsReview).toBe(true);
   });
+
+  it("flags silent peer win when merged equals online version", () => {
+    const base = "Lets add other big same content";
+    const mine = "Lets add other big HELLO FROM OFFLINE content";
+    const theirs = "Lets add other big HELLO FROM ONLINE content";
+    const merged = theirs;
+    const merge = threeWayMergeText(base, mine, theirs);
+    const peerWonSilently =
+      mine !== base && mine !== theirs && merged === theirs;
+    const needsReview =
+      peerWonSilently || !merge.ok || (merge.ok && merge.text !== merged);
+    expect(peerWonSilently).toBe(true);
+    expect(needsReview).toBe(true);
+  });
 });

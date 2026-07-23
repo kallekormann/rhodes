@@ -11,6 +11,7 @@ import {
   base64ToUint8,
   uint8ToBase64,
 } from "@/lib/collaboration/supabase-yjs-provider";
+import { getOfflineBase, getOfflineMine } from "@/lib/offline/yjs-offline-snapshot";
 import { avatarHueForUser } from "@/lib/profile/avatar";
 
 export type CollaborationUser = {
@@ -21,6 +22,15 @@ export type CollaborationUser = {
 
 function userColor(userId: string): string {
   return `hsl(${avatarHueForUser(userId)} 62% 46%)`;
+}
+
+async function hasActiveOfflineEdits(documentId: string): Promise<boolean> {
+  const [base, mine] = await Promise.all([
+    getOfflineBase(documentId),
+    getOfflineMine(documentId),
+  ]);
+  if (!base || !mine) return false;
+  return base.state !== mine.state;
 }
 
 type PersistedYjsState = {
@@ -205,7 +215,12 @@ export function useYjsCollaboration(params: {
       let unsentBaselineVector: Uint8Array | null = null;
       const server = await fetchPersistedState(documentId);
       if (cancelled) return;
-      if (server.state && server.state.length > 0) {
+      const offlineEditsPending = await hasActiveOfflineEdits(documentId);
+      if (
+        !offlineEditsPending &&
+        server.state &&
+        server.state.length > 0
+      ) {
         const serverDoc = new Y.Doc();
         Y.applyUpdate(serverDoc, server.state);
         unsentBaselineVector = Y.encodeStateVector(serverDoc);
@@ -269,7 +284,12 @@ export function useYjsCollaboration(params: {
       if (typeof navigator === "undefined" || navigator.onLine) {
         const server = await fetchPersistedState(documentId);
         if (cancelled) return;
-        if (server.state && server.state.length > 0) {
+        const offlineEditsPending = await hasActiveOfflineEdits(documentId);
+        if (
+          !offlineEditsPending &&
+          server.state &&
+          server.state.length > 0
+        ) {
           Y.applyUpdate(doc, server.state);
         }
       }

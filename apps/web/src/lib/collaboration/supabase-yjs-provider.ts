@@ -57,6 +57,19 @@ function isAuthSendError(error: unknown): boolean {
 const EVENT_SYNC = "y-sync";
 const EVENT_UPDATE = "y-update";
 const EVENT_AWARENESS = "y-awareness";
+const EVENT_BLOCK_RESOLVED = "y-block-resolved";
+
+export type BlockResolutionPayload = {
+  blockId: string;
+  block: {
+    type?: string;
+    attrs?: { blockId?: string | null };
+    text?: string;
+    content?: BlockResolutionPayload["block"][];
+  };
+};
+
+type BlockResolutionListener = (payload: BlockResolutionPayload) => void;
 
 export class SupabaseYjsProvider {
   readonly doc: Y.Doc;
@@ -92,6 +105,15 @@ export class SupabaseYjsProvider {
   private catchupRequiresPeer = false;
   private soloSyncedWithoutPeer = false;
   private catchupListeners = new Set<SyncListener>();
+  /** Hold peer updates during offline conflict review so the editor stays on mine. */
+  private deferPeerUpdates = false;
+  private deferredPeerUpdates: Uint8Array[] = [];
+  /** Set while the offline returner has an active review session (from go-offline until resolved). */
+  private offlineReviewActive = false;
+  private peerUpdatesDeferredListener: (() => void) | null = null;
+  private blockResolutionListeners = new Set<BlockResolutionListener>();
+  /** Suppress rebroadcast while applying a peer's authoritative block resolution. */
+  private suppressOutgoingUpdates = false;
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
   private static readonly AWARENESS_TIMEOUT_MS = 6_000;
@@ -153,6 +175,10 @@ export class SupabaseYjsProvider {
       this.reconnectTimer = null;
     }
 
+    if (this.offlineReviewActive) {
+      this.deferPeerUpdates = true;
+    }
+
     this.reconnecting = true;
     try {
       this.intentionalDisconnect = true;
@@ -171,10 +197,16 @@ export class SupabaseYjsProvider {
   private handleBrowserOffline = () => {
     // Capture before offline edits so peers can receive them after reconnect.
     this.unsentBaselineVector = Y.encodeStateVector(this.doc);
+    // Belt-and-suspenders: queue peer updates as soon as the browser goes offline.
+    this.offlineReviewActive = true;
+    this.deferPeerUpdates = true;
   };
 
   private handleBrowserOnline = () => {
-    void this.reconnect();
+    // Defer reconnect so capture-phase offline-review listeners can restore mine first.
+    queueMicrotask(() => {
+      void this.reconnect();
+    });
   };
 
   get isSynced(): boolean {
@@ -186,6 +218,100 @@ export class SupabaseYjsProvider {
     if (!this.synced) return false;
     if (!this.catchupRequiresPeer) return true;
     return this.receivedPeerDataSinceConnect || this.soloSyncedWithoutPeer;
+  }
+
+  get isDeferringPeerUpdates(): boolean {
+    return this.deferPeerUpdates;
+  }
+
+  get isOfflineReviewActive(): boolean {
+    return this.offlineReviewActive;
+  }
+
+  setOnPeerUpdatesDeferred(listener: (() => void) | null): void {
+    this.peerUpdatesDeferredListener = listener;
+  }
+
+  onBlockResolution(listener: BlockResolutionListener): () => void {
+    this.blockResolutionListeners.add(listener);
+    return () => this.blockResolutionListeners.delete(listener);
+  }
+
+  /** Authoritative block content after offline conflict Keep/Dismiss — peers apply as-is. */
+  broadcastBlockResolution(payload: BlockResolutionPayload): void {
+    if (this.destroyed || !this.channel) return;
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    void this.send(EVENT_BLOCK_RESOLVED, bytes);
+  }
+
+  runWithoutOutgoingUpdates<T>(fn: () => T): T {
+    this.suppressOutgoingUpdates = true;
+    try {
+      return fn();
+    } finally {
+      this.suppressOutgoingUpdates = false;
+    }
+  }
+
+  /**
+   * Offline returner is reviewing local edits — queue all peer Yjs updates until
+   * conflicts are resolved or a clean auto-merge is confirmed.
+   */
+  setOfflineReviewActive(active: boolean): void {
+    this.offlineReviewActive = active;
+    if (active) {
+      this.deferPeerUpdates = true;
+      return;
+    }
+    this.deferPeerUpdates = false;
+    this.deferredPeerUpdates = [];
+  }
+
+  /**
+   * While true, peer sync/update messages are queued instead of applied to the live doc.
+   */
+  setDeferPeerUpdates(defer: boolean): void {
+    this.deferPeerUpdates = defer || this.offlineReviewActive;
+  }
+
+  /** Merged state (mine + queued peer updates) for conflict detection only. */
+  getDeferredMergedState(): Uint8Array {
+    const shadow = new Y.Doc();
+    Y.applyUpdate(shadow, Y.encodeStateAsUpdate(this.doc));
+    for (const update of this.deferredPeerUpdates) {
+      Y.applyUpdate(shadow, update);
+    }
+    const merged = Y.encodeStateAsUpdate(shadow);
+    shadow.destroy();
+    return merged;
+  }
+
+  /** Apply queued peer updates after a clean auto-merge (no conflicts). */
+  releaseDeferredPeerUpdates(): void {
+    if (this.destroyed) return;
+    for (const update of this.deferredPeerUpdates) {
+      Y.applyUpdate(this.doc, update, this.origin);
+    }
+    this.deferredPeerUpdates = [];
+    if (!this.offlineReviewActive) {
+      this.deferPeerUpdates = false;
+    }
+  }
+
+  /** Drop queued peer updates once conflicts are resolved manually. */
+  discardDeferredPeerUpdates(): void {
+    this.deferredPeerUpdates = [];
+    if (!this.offlineReviewActive) {
+      this.deferPeerUpdates = false;
+    }
+  }
+
+  private queueDeferredPeerUpdate(update: Uint8Array): void {
+    if (update.length === 0) return;
+    this.deferredPeerUpdates.push(update);
+    this.markPeerDataReceived();
+    this.setSynced(true);
+    this.peerUpdatesDeferredListener?.();
   }
 
   onCatchupComplete(listener: SyncListener): () => void {
@@ -219,7 +345,7 @@ export class SupabaseYjsProvider {
 
   /** Immediately persist the current Y.Doc state (bypasses debounce). */
   flushPersist(): void {
-    if (this.destroyed || !this.persist) return;
+    if (this.destroyed || !this.persist || this.offlineReviewActive) return;
     if (this.persistTimer != null) {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
@@ -296,6 +422,7 @@ export class SupabaseYjsProvider {
     this.listeners.clear();
     this.catchupListeners.clear();
     this.authErrorListeners.clear();
+    this.blockResolutionListeners.clear();
   }
 
   private setAuthFailed(next: boolean) {
@@ -343,7 +470,7 @@ export class SupabaseYjsProvider {
     const wasSynced = this.synced;
     if (this.synced === next) return;
     this.synced = next;
-    if (next && !wasSynced) {
+    if (next && !wasSynced && !this.offlineReviewActive) {
       void this.broadcastPendingLocalUpdates();
     }
     for (const listener of this.listeners) {
@@ -363,7 +490,17 @@ export class SupabaseYjsProvider {
    * before the provider connected (e.g. offline edits). The step1/step2 exchange
    * only pulls remote changes into this client — it does not push local ops out.
    */
-  private async broadcastPendingLocalUpdates() {
+  /** Push offline edits to peers after conflict review completes. */
+  broadcastPendingLocalUpdates(): void {
+    void this.broadcastPendingLocalUpdatesInternal();
+  }
+
+  /** Align broadcast baseline with the current doc (e.g. after conflict resolution). */
+  resetBroadcastBaseline(): void {
+    this.unsentBaselineVector = Y.encodeStateVector(this.doc);
+  }
+
+  private async broadcastPendingLocalUpdatesInternal() {
     if (this.destroyed) return;
 
     const update = this.unsentBaselineVector
@@ -379,7 +516,7 @@ export class SupabaseYjsProvider {
   }
 
   private schedulePersist = () => {
-    if (this.destroyed || !this.persist) return;
+    if (this.destroyed || !this.persist || this.offlineReviewActive) return;
     if (this.persistTimer != null) {
       window.clearTimeout(this.persistTimer);
     }
@@ -439,7 +576,15 @@ export class SupabaseYjsProvider {
 
     this.receivedPeerDataSinceConnect = false;
     this.soloSyncedWithoutPeer = false;
-    this.catchupRequiresPeer = this.hasPendingLocalBroadcast();
+    this.catchupRequiresPeer =
+      this.hasPendingLocalBroadcast() || this.offlineReviewActive;
+
+    if (!this.offlineReviewActive) {
+      this.deferredPeerUpdates = [];
+    }
+    if (this.catchupRequiresPeer || this.offlineReviewActive) {
+      this.deferPeerUpdates = true;
+    }
 
     // First connect only: baseline is current doc (usually empty diff after sync).
     if (!this.unsentBaselineVector) {
@@ -461,6 +606,9 @@ export class SupabaseYjsProvider {
     });
     channel.on("broadcast", { event: EVENT_AWARENESS }, ({ payload }) => {
       this.applyEncodedAwareness(payload as { data?: string });
+    });
+    channel.on("broadcast", { event: EVENT_BLOCK_RESOLVED }, ({ payload }) => {
+      this.applyBlockResolution(payload as { data?: string });
     });
 
     channel.subscribe((status) => {
@@ -546,7 +694,14 @@ export class SupabaseYjsProvider {
   }
 
   private handleDocUpdate = (update: Uint8Array, origin: unknown) => {
-    if (origin === this.origin || this.destroyed) return;
+    if (
+      origin === this.origin ||
+      this.destroyed ||
+      this.offlineReviewActive ||
+      this.suppressOutgoingUpdates
+    ) {
+      return;
+    }
     void this.send(EVENT_UPDATE, update);
   };
 
@@ -569,7 +724,38 @@ export class SupabaseYjsProvider {
 
   private applyEncodedMessage(payload: { data?: string }) {
     if (!payload?.data || this.destroyed) return;
-    const decoder = decoding.createDecoder(base64ToUint8(payload.data));
+    const bytes = base64ToUint8(payload.data);
+
+    if (this.deferPeerUpdates) {
+      const decoder = decoding.createDecoder(bytes);
+      const encoder = encoding.createEncoder();
+      const shadow = new Y.Doc();
+      Y.applyUpdate(shadow, Y.encodeStateAsUpdate(this.doc));
+
+      const syncMessageType = syncProtocol.readSyncMessage(
+        decoder,
+        encoder,
+        shadow,
+        this.origin,
+      );
+
+      if (encoding.length(encoder) > 1) {
+        void this.send(EVENT_SYNC, encoding.toUint8Array(encoder));
+      }
+
+      if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
+        const peerDelta = Y.encodeStateAsUpdate(
+          shadow,
+          Y.encodeStateVector(this.doc),
+        );
+        this.queueDeferredPeerUpdate(peerDelta);
+      }
+
+      shadow.destroy();
+      return;
+    }
+
+    const decoder = decoding.createDecoder(bytes);
     const encoder = encoding.createEncoder();
     const syncMessageType = syncProtocol.readSyncMessage(
       decoder,
@@ -589,8 +775,13 @@ export class SupabaseYjsProvider {
 
   private applyEncodedUpdate(payload: { data?: string }) {
     if (!payload?.data || this.destroyed) return;
+    const update = base64ToUint8(payload.data);
+    if (this.deferPeerUpdates) {
+      this.queueDeferredPeerUpdate(update);
+      return;
+    }
     this.markPeerDataReceived();
-    Y.applyUpdate(this.doc, base64ToUint8(payload.data), this.origin);
+    Y.applyUpdate(this.doc, update, this.origin);
     this.setSynced(true);
   }
 
@@ -601,5 +792,23 @@ export class SupabaseYjsProvider {
       base64ToUint8(payload.data),
       this.origin,
     );
+  }
+
+  private applyBlockResolution(payload: { data?: string }) {
+    if (!payload?.data || this.destroyed) return;
+    try {
+      const json = new TextDecoder().decode(base64ToUint8(payload.data));
+      const parsed = JSON.parse(json) as BlockResolutionPayload;
+      if (typeof parsed?.blockId !== "string" || !parsed.block) return;
+      for (const listener of this.blockResolutionListeners) {
+        try {
+          listener(parsed);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore malformed payloads */
+    }
   }
 }

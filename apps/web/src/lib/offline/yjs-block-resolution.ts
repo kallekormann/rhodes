@@ -23,6 +23,23 @@ function findBlockRange(
   return { from: targetPos, to: targetPos + targetNodeSize };
 }
 
+export function blockJsonFromPlainText(
+  editor: Editor,
+  blockId: string,
+  text: string,
+): ProseMirrorJsonNode | null {
+  const range = findBlockRange(editor, blockId);
+  if (!range) return null;
+  const node = editor.state.doc.nodeAt(range.from);
+  if (!node) return null;
+
+  return {
+    type: node.type.name,
+    attrs: { ...node.attrs, blockId },
+    content: text ? [{ type: "text", text }] : [],
+  };
+}
+
 /** Replace a top-level block from ProseMirror JSON (preserves marks e.g. bold). */
 export function setBlockFromJson(
   editor: Editor,
@@ -71,6 +88,25 @@ export function setBlockPlainText(
         tr.insertText(nextText, from, to);
       }
       return true;
-    })
+      })
     .run();
+}
+
+/**
+ * Replace an entire block node (structural) so Yjs does not character-merge
+ * with the peer's concurrent edit.
+ */
+export function replaceBlockForConflict(
+  editor: Editor,
+  blockId: string,
+  text: string,
+  blockJson?: ProseMirrorJsonNode,
+): ProseMirrorJsonNode | null {
+  const json =
+    blockJson?.type != null
+      ? blockJson
+      : blockJsonFromPlainText(editor, blockId, text);
+  if (!json) return null;
+  if (!setBlockFromJson(editor, blockId, json)) return null;
+  return json;
 }
