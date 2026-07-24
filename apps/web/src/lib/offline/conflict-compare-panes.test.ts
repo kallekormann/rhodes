@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildBlockReviewModel } from "@/lib/offline/base-aligned-review";
 import { conflictComparePanes } from "@/lib/offline/conflict-compare-panes";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 
@@ -40,18 +41,28 @@ function blockCluster(
 }
 
 describe("conflictComparePanes", () => {
-  it("diffs mine against theirs, not each side against base", () => {
+  it("uses base-relative segments for each pane", () => {
     const cluster = blockCluster(
       "Hello world",
       "Hello A world",
       "Hello B world",
     );
-    const panes = conflictComparePanes(cluster);
+    const review = buildBlockReviewModel({
+      blockId: cluster.blockId,
+      blockIndex: cluster.blockIndex,
+      baseText: cluster.baseText,
+      mineText: cluster.mineText,
+      theirsText: cluster.theirsText,
+    });
+    const panes = conflictComparePanes(cluster, review);
 
-    expect(panes.mine.label).toBe("Your version");
-    expect(panes.mine.text).toBe("Hello A world");
-    expect(panes.mine.otherText).toBe("Hello B world");
-    expect(panes.theirs.text).toBe("Hello B world");
-    expect(panes.theirs.otherText).toBe("Hello A world");
+    expect(panes.mine.label).toBe("Your changes");
+    expect(panes.mine.segments.some((segment) => segment.role === "mine_add")).toBe(
+      true,
+    );
+    expect(panes.theirs.segments.some((segment) => segment.role === "peer_add")).toBe(
+      true,
+    );
+    expect(panes.mine.changeHint).toContain("You added");
   });
 });

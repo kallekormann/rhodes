@@ -1,13 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Button } from "@/components/Button";
+import {
+  clusterReviewSummary,
+  reviewForBlock,
+  type BlockReviewModel,
+} from "@/lib/offline/base-aligned-review";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 import "@/components/CommentsTab.css";
 import "./DocumentConflictFloat.css";
 
 type DocumentConflictFloatProps = {
   clusters: SpanConflictCluster[];
+  reviews: BlockReviewModel[];
   activeClusterId: string | null;
   onActiveClusterChange: (clusterId: string) => void;
   onShowConflict: (cluster: SpanConflictCluster) => void;
@@ -17,38 +23,27 @@ type DocumentConflictFloatProps = {
 
 export function DocumentConflictFloat({
   clusters,
+  reviews,
   activeClusterId,
   onActiveClusterChange,
   onShowConflict,
   onKeep,
   onDismiss,
 }: DocumentConflictFloatProps) {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [clusters]);
-
-  useEffect(() => {
-    if (!activeClusterId) return;
+  const activeIndex = useMemo(() => {
+    if (clusters.length === 0) return -1;
+    if (!activeClusterId) return 0;
     const index = clusters.findIndex((cluster) => cluster.id === activeClusterId);
-    if (index >= 0) setActiveIndex(index);
+    return index >= 0 ? index : 0;
   }, [activeClusterId, clusters]);
 
   const active =
-    clusters.length > 0
-      ? clusters[Math.min(activeIndex, clusters.length - 1)]
-      : null;
-
-  useEffect(() => {
-    if (active) onActiveClusterChange(active.id);
-  }, [active, onActiveClusterChange]);
+    activeIndex >= 0 ? clusters[activeIndex] ?? null : null;
 
   const goToIndex = useCallback(
     (index: number) => {
       if (clusters.length === 0) return;
       const next = ((index % clusters.length) + clusters.length) % clusters.length;
-      setActiveIndex(next);
       const cluster = clusters[next];
       if (cluster) onActiveClusterChange(cluster.id);
     },
@@ -63,26 +58,28 @@ export function DocumentConflictFloat({
   const handleKeep = useCallback(() => {
     if (!active) return;
     onKeep(active.id);
-    if (clusters.length > 1) {
-      setActiveIndex((index) => Math.min(index, clusters.length - 2));
-    }
-  }, [active, clusters.length, onKeep]);
+  }, [active, onKeep]);
 
   const handleDismiss = useCallback(() => {
     if (!active) return;
     onDismiss(active.id);
-    if (clusters.length > 1) {
-      setActiveIndex((index) => Math.min(index, clusters.length - 2));
-    }
-  }, [active, clusters.length, onDismiss]);
+  }, [active, onDismiss]);
+
+  const clusterSummary = useMemo(() => {
+    if (!active) return null;
+    const review = reviewForBlock(reviews, active.blockId);
+    if (!review) return null;
+    return clusterReviewSummary(review, active.id);
+  }, [active, reviews]);
 
   if (!active) return null;
 
-  const position = Math.min(activeIndex, clusters.length - 1) + 1;
+  const position = activeIndex + 1;
   const message =
-    clusters.length === 1
+    clusterSummary ??
+    (clusters.length === 1
       ? "1 conflicting change needs your decision."
-      : `${clusters.length} conflicting changes need your decision.`;
+      : `${clusters.length} conflicting changes need your decision.`);
 
   return (
     <aside

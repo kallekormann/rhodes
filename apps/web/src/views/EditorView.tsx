@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutTemplate, MessageSquare, SlidersHorizontal, Star } from "lucide-react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
@@ -12,6 +12,7 @@ import type { Editor } from "@tiptap/react";
 import { scrollEditorToExcerpt } from "@/lib/documents/comment-navigation";
 import type { ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
+import { conflictReviewColors } from "@/lib/offline/conflict-review-colors";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { EditorTitleField } from "@/components/EditorTitleField";
 import { IconLabelButton } from "@/components/IconLabelButton";
@@ -106,6 +107,7 @@ function EditorViewContent() {
     collaborationUser,
     offlineConflictBlocks,
     offlineConflictClusters,
+    offlineConflictReviews,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
@@ -117,6 +119,15 @@ function EditorViewContent() {
 
   const editorEditable =
     (isTemplateMode || canEditDocument) && !offlineConflictReviewPending;
+
+  const offlineConflictColors = useMemo(
+    () =>
+      conflictReviewColors({
+        localUserId: collaborationUser?.userId,
+        peerUserId: remoteCursors[0]?.userId,
+      }),
+    [collaborationUser?.userId, remoteCursors],
+  );
 
   const {
     insights,
@@ -510,6 +521,7 @@ function EditorViewContent() {
                 {offlineConflictReviewPending && offlineConflictClusters.length > 0 && (
                   <DocumentConflictFloat
                     clusters={offlineConflictClusters}
+                    reviews={offlineConflictReviews}
                     activeClusterId={activeConflictClusterId}
                     onActiveClusterChange={setActiveConflictClusterId}
                     onShowConflict={handleShowConflictCluster}
@@ -564,6 +576,8 @@ function EditorViewContent() {
                   onActiveBlockChange={onActiveBlockChange}
                   onSelectionChange={onEditorSelectionChange}
                   offlineConflictClusters={offlineConflictClusters}
+                  offlineConflictReviews={offlineConflictReviews}
+                  conflictReviewColors={offlineConflictColors}
                   activeOfflineConflictClusterId={activeConflictClusterId}
                   onActivateOfflineConflictCluster={handleActivateConflictCluster}
                   onResolveOfflineCluster={resolveOfflineCluster}
@@ -640,6 +654,8 @@ function EditorViewContent() {
 
       <ConflictCompareModal
         cluster={activeConflictCluster}
+        reviews={offlineConflictReviews}
+        colors={offlineConflictColors}
         open={conflictCompareOpen && offlineConflictReviewPending}
         onClose={() => setConflictCompareOpen(false)}
         onKeep={() => {

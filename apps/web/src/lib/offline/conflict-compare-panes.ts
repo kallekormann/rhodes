@@ -1,43 +1,55 @@
+import {
+  buildBlockReviewModel,
+  clusterReviewSummary,
+  type BlockReviewModel,
+  type ReviewSegment,
+} from "@/lib/offline/base-aligned-review";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 
 export type ConflictComparePane = {
   label: string;
-  /** Diff baseline for this pane (the other side's version). */
-  otherText: string;
-  /** Full text shown in this pane. */
-  text: string;
-  variant: "mine" | "theirs";
+  segments: ReviewSegment[];
+  variant: "mine" | "peer";
   /** Short hint for the modal header. */
   changeHint: string;
 };
 
-/** Side-by-side mine vs theirs for the compare modal (not base-relative). */
+/** Base-relative columns for the compare modal (not mine-vs-theirs). */
 export function conflictComparePanes(
   cluster: SpanConflictCluster,
+  review?: BlockReviewModel,
 ): { mine: ConflictComparePane; theirs: ConflictComparePane } {
-  const mineVariant = cluster.variants.find((v) => v.side === "mine");
-  const theirsVariant = cluster.variants.find((v) => v.side === "theirs");
-  const mineText = cluster.mineText;
-  const theirsText = cluster.theirsText;
+  const model =
+    review ??
+    buildBlockReviewModel({
+      blockId: cluster.blockId,
+      blockIndex: cluster.blockIndex,
+      baseText: cluster.baseText,
+      mineText: cluster.mineText,
+      theirsText: cluster.theirsText,
+    });
+
   const changeHint =
-    mineVariant?.hunkText ??
-    theirsVariant?.hunkText ??
-    cluster.baseSlice ??
-    mineText;
+    clusterReviewSummary(model, cluster.id) ||
+    cluster.variants.find((variant) => variant.side === "mine")?.hunkText ||
+    cluster.baseSlice ||
+    cluster.mineText;
+
+  const theirsLabel =
+    cluster.variants.find((variant) => variant.side === "theirs")?.authorName ??
+    "Their changes";
 
   return {
     mine: {
-      label: "Your version",
-      otherText: theirsText,
-      text: mineText,
+      label: "Your changes",
+      segments: model.mineSegments,
       variant: "mine",
       changeHint,
     },
     theirs: {
-      label: "Their version",
-      otherText: mineText,
-      text: theirsText,
-      variant: "theirs",
+      label: theirsLabel,
+      segments: model.peerSegments,
+      variant: "peer",
       changeHint,
     },
   };

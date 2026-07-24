@@ -50,6 +50,8 @@ import {
   type ConflictInlineState,
 } from "@/components/editor/extensions/ConflictInlineExtension";
 import type { SpanConflictCluster, SpanConflictVariantSide } from "@/lib/offline/span-conflict-clusters";
+import type { BlockReviewModel } from "@/lib/offline/base-aligned-review";
+import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
 import "@/components/editor/extensions/ConflictInline.css";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
@@ -124,6 +126,8 @@ type TipTapEditorProps = {
   onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
   onSelectionChange?: (from: number, to: number) => void;
   offlineConflictClusters?: SpanConflictCluster[];
+  offlineConflictReviews?: BlockReviewModel[];
+  conflictReviewColors?: ConflictReviewColors | null;
   activeOfflineConflictClusterId?: string | null;
   onActivateOfflineConflictCluster?: (clusterId: string) => void;
   onResolveOfflineCluster?: (
@@ -243,6 +247,8 @@ export function TipTapEditor({
   onActiveBlockChange,
   onSelectionChange,
   offlineConflictClusters = [],
+  offlineConflictReviews = [],
+  conflictReviewColors = null,
   activeOfflineConflictClusterId = null,
   onActivateOfflineConflictCluster,
   onResolveOfflineCluster,
@@ -915,13 +921,21 @@ export function TipTapEditor({
     };
     const next: ConflictInlineState = {
       clusters: offlineConflictClusters,
+      reviews: offlineConflictReviews,
+      colors: conflictReviewColors,
       activeClusterId:
         activeOfflineConflictClusterId ??
         offlineConflictClusters[0]?.id ??
         null,
     };
     storage.refresh(next);
-  }, [activeOfflineConflictClusterId, editor, offlineConflictClusters]);
+  }, [
+    activeOfflineConflictClusterId,
+    conflictReviewColors,
+    editor,
+    offlineConflictClusters,
+    offlineConflictReviews,
+  ]);
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>

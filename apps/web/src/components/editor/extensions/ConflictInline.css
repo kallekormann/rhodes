@@ -1,13 +1,74 @@
+.editor-conflict-context {
+  color: var(--color-text-tertiary);
+  box-decoration-break: clone;
+}
+
+.editor-conflict-mine-add {
+  border-radius: 2px;
+  background: var(--conflict-mine-muted);
+  color: var(--color-text);
+  box-decoration-break: clone;
+  cursor: pointer;
+}
+
+.editor-conflict-mine-add--active {
+  background: color-mix(in srgb, var(--conflict-mine) 28%, transparent);
+  box-shadow: 0 0 0 1px var(--conflict-mine-strong);
+}
+
+.editor-conflict-phantom {
+  border-radius: 2px;
+  box-decoration-break: clone;
+  pointer-events: none;
+}
+
+.editor-conflict-phantom--mine.editor-conflict-phantom--del {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--conflict-mine);
+  background: var(--conflict-mine-muted);
+}
+
+.editor-conflict-phantom--mine.editor-conflict-phantom--add {
+  background: var(--conflict-mine-muted);
+  color: var(--color-text);
+}
+
+.editor-conflict-phantom--peer {
+  opacity: 0.72;
+}
+
+.editor-conflict-phantom--peer.editor-conflict-phantom--del {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--conflict-peer);
+  background: var(--conflict-peer-muted);
+}
+
+.editor-conflict-phantom--peer.editor-conflict-phantom--add {
+  background: var(--conflict-peer-muted);
+  color: var(--color-text);
+}
+
+.editor-conflict-phantom--active {
+  box-shadow: 0 0 0 1px var(--conflict-mine-strong);
+}
+
+.editor-conflict-clickable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Legacy class kept for scroll-to-cluster during transition */
 .editor-conflict-span {
   border-radius: 2px;
-  background: var(--color-comment-highlight);
-  color: var(--color-comment-highlight-text);
+  background: var(--conflict-mine-muted);
+  color: var(--color-text);
   box-decoration-break: clone;
   cursor: pointer;
 }
 
 .editor-conflict-span--active {
-  background: color-mix(in srgb, var(--color-comment-highlight) 55%, white);
-  color: var(--color-comment-highlight-text);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-comment-highlight) 70%, var(--color-text));
+  background: color-mix(in srgb, var(--conflict-mine) 28%, transparent);
+  box-shadow: 0 0 0 1px var(--conflict-mine-strong);
 }

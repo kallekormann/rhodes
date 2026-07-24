@@ -2,24 +2,18 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import {
-  getTopLevelBlockRangeForConflict,
-  mapBlockCharRangeToDoc,
-} from "@/lib/documents/block-positions";
-import {
-  conflictCharRangesForBlock,
-  shiftCharRangesToDisplayText,
-  type CharRange,
-} from "@/lib/offline/conflict-highlight-ranges";
-import type {
-  SpanConflictCluster,
-  SpanConflictVariantSide,
-} from "@/lib/offline/span-conflict-clusters";
+import { getTopLevelBlockRangeForConflict } from "@/lib/documents/block-positions";
+import { mapBlockCharRangeToDoc } from "@/lib/documents/block-positions";
+import type { BlockReviewModel, ReviewSegment } from "@/lib/offline/base-aligned-review";
+import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
+import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 
 export const conflictInlineKey = new PluginKey("rhodesConflictInline");
 
 export type ConflictInlineState = {
   clusters: SpanConflictCluster[];
+  reviews: BlockReviewModel[];
+  colors: ConflictReviewColors | null;
   activeClusterId: string | null;
 };
 
@@ -29,86 +23,126 @@ type ConflictInlineStorage = {
   onActivate?: (clusterId: string) => void;
 };
 
-function normalizeHighlightRanges(
-  ranges: CharRange[],
-  textLength: number,
-): CharRange[] {
-  return ranges
-    .map((range) => {
-      const start = Math.max(0, Math.min(range.start, textLength));
-      const end = Math.max(start, Math.min(range.end, textLength));
-      if (end > start) return { start, end };
-      if (start < textLength) return { start, end: start + 1 };
-      return null;
-    })
-    .filter((range): range is CharRange => range != null);
+function cssVars(colors: ConflictReviewColors): string {
+  return [
+    `--conflict-mine:${colors.mine}`,
+    `--conflict-mine-muted:${colors.mineMuted}`,
+    `--conflict-mine-strong:${colors.mineStrong}`,
+    `--conflict-peer:${colors.peer}`,
+    `--conflict-peer-muted:${colors.peerMuted}`,
+  ].join(";");
 }
 
-function highlightRangesForCluster(
-  cluster: SpanConflictCluster,
-  blockText: string,
-): CharRange[] {
-  const snapshotText = cluster.mineText;
-  const displayText = blockText || snapshotText;
-  const blockRanges = conflictCharRangesForBlock({
-    baseText: cluster.baseText,
-    mineText: snapshotText,
-    theirsText: cluster.theirsText,
-  });
+function createPhantomElement(
+  segment: ReviewSegment,
+  colors: ConflictReviewColors,
+  activeClusterId: string | null,
+): HTMLElement {
+  const span = document.createElement("span");
+  const isPeer = segment.role.startsWith("peer");
+  const active = segment.clusterId === activeClusterId;
 
-  let ranges: CharRange[];
-  if (
-    displayText === snapshotText ||
-    displayText.trim() === snapshotText.trim()
-  ) {
-    const precomputed: CharRange = {
-      start: cluster.highlightStart,
-      end: cluster.highlightEnd,
-    };
-    ranges =
-      precomputed.end > precomputed.start
-        ? [precomputed]
-        : blockRanges.length > 0
-          ? blockRanges
-          : [{ start: 0, end: snapshotText.length }];
-  } else {
-    ranges = shiftCharRangesToDisplayText(
-      blockRanges,
-      snapshotText,
-      displayText,
-    );
+  span.className = [
+    "editor-conflict-phantom",
+    isPeer ? "editor-conflict-phantom--peer" : "editor-conflict-phantom--mine",
+    segment.role.endsWith("_del") ? "editor-conflict-phantom--del" : "editor-conflict-phantom--add",
+    segment.clickable ? "editor-conflict-clickable" : "",
+    active ? "editor-conflict-phantom--active" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  span.style.cssText = cssVars(colors);
+  span.textContent = segment.text;
+
+  if (segment.clusterId) {
+    span.dataset.clusterId = segment.clusterId;
   }
 
-  return normalizeHighlightRanges(
-    ranges.length > 0 ? ranges : blockRanges,
-    displayText.length,
-  );
+  return span;
+}
+
+function inlineClassForSegment(
+  segment: ReviewSegment,
+  activeClusterId: string | null,
+): string {
+  const active = segment.clusterId === activeClusterId;
+  switch (segment.role) {
+    case "context":
+      return "editor-conflict-context";
+    case "mine_add":
+      return active
+        ? "editor-conflict-mine-add editor-conflict-mine-add--active editor-conflict-clickable"
+        : "editor-conflict-mine-add editor-conflict-clickable";
+    default:
+      return "editor-conflict-context";
+  }
+}
+
+function buildReviewDecorations(
+  doc: ProseMirrorNode,
+  review: BlockReviewModel,
+  colors: ConflictReviewColors,
+  activeClusterId: string | null,
+): Decoration[] {
+  const block = getTopLevelBlockRangeForConflict(doc, review);
+  if (!block) return [];
+
+  const decorations: Decoration[] = [];
+  const contentStart = block.from + 1;
+  let mineOffset = 0;
+
+  for (const segment of review.segments) {
+    if (segment.phantom) {
+      const pos = contentStart + mineOffset;
+      decorations.push(
+        Decoration.widget(
+          pos,
+          () => createPhantomElement(segment, colors, activeClusterId),
+          { side: -1, key: `${review.blockId}:${segment.id}` },
+        ),
+      );
+      continue;
+    }
+
+    const mapped = mapBlockCharRangeToDoc(
+      block.from,
+      block.node,
+      mineOffset,
+      mineOffset + segment.text.length,
+    );
+    if (!mapped) continue;
+
+    const attrs: Record<string, string> = {
+      class: inlineClassForSegment(segment, activeClusterId),
+      style: cssVars(colors),
+    };
+    if (segment.clusterId) {
+      attrs["data-cluster-id"] = segment.clusterId;
+    }
+
+    decorations.push(Decoration.inline(mapped.from, mapped.to, attrs));
+    mineOffset += segment.text.length;
+  }
+
+  return decorations;
 }
 
 function buildConflictDecorations(
   doc: ProseMirrorNode,
   state: ConflictInlineState,
 ): DecorationSet {
+  if (!state.colors) return DecorationSet.empty;
+
   const decorations: Decoration[] = [];
-
-  for (const cluster of state.clusters) {
-    const block = getTopLevelBlockRangeForConflict(doc, cluster);
-    if (!block) continue;
-
-    const isActive = cluster.id === state.activeClusterId;
-
-    for (const { start, end } of highlightRangesForCluster(cluster, block.text)) {
-      const mapped = mapBlockCharRangeToDoc(block.from, block.node, start, end);
-      if (!mapped) continue;
-      decorations.push(
-        Decoration.inline(mapped.from, mapped.to, {
-          class: isActive
-            ? "editor-conflict-span editor-conflict-span--active"
-            : "editor-conflict-span",
-          "data-cluster-id": cluster.id,
-        }),
-      );
-    }
+  for (const review of state.reviews) {
+    decorations.push(
+      ...buildReviewDecorations(
+        doc,
+        review,
+        state.colors,
+        state.activeClusterId,
+      ),
+    );
   }
 
   if (decorations.length === 0) return DecorationSet.empty;
@@ -138,7 +172,12 @@ export const ConflictInlineExtension = Extension.create<
 
   addStorage() {
     return {
-      state: { clusters: [], activeClusterId: null },
+      state: {
+        clusters: [],
+        reviews: [],
+        colors: null,
+        activeClusterId: null,
+      },
       refresh: () => undefined,
       onActivate: undefined,
     };
@@ -210,5 +249,3 @@ export const ConflictInlineExtension = Extension.create<
     ];
   },
 });
-
-export type { SpanConflictVariantSide };

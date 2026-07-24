@@ -353,6 +353,7 @@ export function useEditorSession() {
   const {
     offlineConflictBlocks,
     offlineConflictClusters,
+    offlineConflictReviews,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,
@@ -1111,6 +1112,7 @@ export function useEditorSession() {
     collaborationUser,
     offlineConflictBlocks,
     offlineConflictClusters,
+    offlineConflictReviews,
     offlineConflictReviewPending,
     keepOfflineMine,
     takeOfflineTheirs,

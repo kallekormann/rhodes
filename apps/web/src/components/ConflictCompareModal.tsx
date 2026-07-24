@@ -2,13 +2,18 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/Button";
-import { ConflictDiffText } from "@/components/ConflictDiffText";
+import { ConflictReviewText } from "@/components/ConflictReviewText";
 import { conflictComparePanes } from "@/lib/offline/conflict-compare-panes";
+import type { BlockReviewModel } from "@/lib/offline/base-aligned-review";
+import { reviewForBlock } from "@/lib/offline/base-aligned-review";
+import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 import "./ConflictCompareModal.css";
 
 type ConflictCompareModalProps = {
   cluster: SpanConflictCluster | null;
+  reviews: BlockReviewModel[];
+  colors: ConflictReviewColors;
   open: boolean;
   onClose: () => void;
   onKeep: () => void;
@@ -17,16 +22,18 @@ type ConflictCompareModalProps = {
 
 function ComparePane({
   label,
-  otherText,
-  text,
+  segments,
   variant,
+  colors,
+  activeClusterId,
   scrollRef,
   onScroll,
 }: {
   label: string;
-  otherText: string;
-  text: string;
-  variant: "mine" | "theirs";
+  segments: BlockReviewModel["mineSegments"];
+  variant: "mine" | "peer";
+  colors: ConflictReviewColors;
+  activeClusterId: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScroll: (event: React.UIEvent<HTMLDivElement>) => void;
 }) {
@@ -39,7 +46,12 @@ function ComparePane({
         onScroll={onScroll}
       >
         <div className="conflict-compare-modal__body">
-          <ConflictDiffText otherText={otherText} text={text} variant={variant} />
+          <ConflictReviewText
+            segments={segments}
+            variant={variant}
+            colors={colors}
+            activeClusterId={activeClusterId}
+          />
         </div>
       </div>
     </section>
@@ -48,6 +60,8 @@ function ComparePane({
 
 export function ConflictCompareModal({
   cluster,
+  reviews,
+  colors,
   open,
   onClose,
   onKeep,
@@ -81,7 +95,8 @@ export function ConflictCompareModal({
 
   if (!open || !cluster) return null;
 
-  const panes = conflictComparePanes(cluster);
+  const review = reviewForBlock(reviews, cluster.blockId);
+  const panes = conflictComparePanes(cluster, review);
 
   return (
     <div className="conflict-compare-modal__backdrop" role="presentation">
@@ -98,10 +113,7 @@ export function ConflictCompareModal({
               Compare versions
             </h2>
             <p className="conflict-compare-modal__hint">
-              Conflicting change:{" "}
-              <span className="conflict-compare-modal__change">
-                {panes.mine.changeHint}
-              </span>
+              {panes.mine.changeHint}
             </p>
           </div>
           <Button size="small" variant="ghost" onClick={onClose} aria-label="Close">
@@ -112,9 +124,10 @@ export function ConflictCompareModal({
         <div className="conflict-compare-modal__columns">
           <ComparePane
             label={panes.mine.label}
-            otherText={panes.mine.otherText}
-            text={panes.mine.text}
+            segments={panes.mine.segments}
             variant={panes.mine.variant}
+            colors={colors}
+            activeClusterId={cluster.id}
             scrollRef={leftScrollRef}
             onScroll={(event) =>
               syncScroll(event.currentTarget, rightScrollRef.current)
@@ -122,9 +135,10 @@ export function ConflictCompareModal({
           />
           <ComparePane
             label={panes.theirs.label}
-            otherText={panes.theirs.otherText}
-            text={panes.theirs.text}
+            segments={panes.theirs.segments}
             variant={panes.theirs.variant}
+            colors={colors}
+            activeClusterId={cluster.id}
             scrollRef={rightScrollRef}
             onScroll={(event) =>
               syncScroll(event.currentTarget, leftScrollRef.current)

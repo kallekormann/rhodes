@@ -10,6 +10,10 @@ import {
   isOfflineMergeSettled,
 } from "@/lib/offline/yjs-offline-divergence";
 import {
+  buildBlockReviewModels,
+  type BlockReviewModel,
+} from "@/lib/offline/base-aligned-review";
+import {
   clustersFromBlockConflicts,
   type SpanConflictCluster,
   type SpanConflictVariantSide,
@@ -129,6 +133,7 @@ export function useOfflineYjsConflict(params: {
   } = params;
   const [conflicts, setConflicts] = useState<BlockConflict[]>([]);
   const [clusters, setClusters] = useState<SpanConflictCluster[]>([]);
+  const [reviews, setReviews] = useState<BlockReviewModel[]>([]);
   const [reviewPending, setReviewPending] = useState(false);
   const workingBlockTextRef = useRef<Map<string, string>>(new Map());
   const pendingBaseSnapshotRef = useRef<Uint8Array | null>(null);
@@ -309,6 +314,7 @@ export function useOfflineYjsConflict(params: {
       syncConflictBlocksToMine(ydoc, mineBytes);
 
       const nextClusters = clustersFromBlockConflicts(found);
+      const nextReviews = buildBlockReviewModels(found, nextClusters);
       workingBlockTextRef.current = new Map(
         found.map((c) => [
           `${c.blockId}:${c.blockIndex}`,
@@ -317,6 +323,7 @@ export function useOfflineYjsConflict(params: {
       );
       setConflicts(found);
       setClusters(nextClusters);
+      setReviews(nextReviews);
       setReviewPending(true);
       return;
     }
@@ -329,6 +336,7 @@ export function useOfflineYjsConflict(params: {
       lastCheckedMergedRef.current = null;
       setConflicts([]);
       setClusters([]);
+      setReviews([]);
       setReviewPending(false);
       endOfflineReview();
       providerRef.current?.resetBroadcastBaseline();
@@ -587,6 +595,7 @@ export function useOfflineYjsConflict(params: {
     manualConflictResolutionRef.current = false;
     setConflicts([]);
     setClusters([]);
+    setReviews([]);
     setReviewPending(false);
   }, [documentId]);
 
@@ -743,6 +752,9 @@ export function useOfflineYjsConflict(params: {
               ),
           ),
         );
+        setReviews((prev) =>
+          prev.filter((review) => review.blockId !== cluster.blockId),
+        );
       }
     },
     [broadcastResolvedBlock, clusters, getEditor, resolveBlock, ydoc],
@@ -774,6 +786,7 @@ export function useOfflineYjsConflict(params: {
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
       setClusters((prev) => prev.filter((c) => c.blockId !== blockId));
+      setReviews((prev) => prev.filter((review) => review.blockId !== blockId));
     },
     [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc],
   );
@@ -799,6 +812,7 @@ export function useOfflineYjsConflict(params: {
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
       setClusters((prev) => prev.filter((c) => c.blockId !== blockId));
+      setReviews((prev) => prev.filter((review) => review.blockId !== blockId));
     },
     [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc],
   );
@@ -828,6 +842,7 @@ export function useOfflineYjsConflict(params: {
     }
     setConflicts([]);
     setClusters([]);
+    setReviews([]);
   }, [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc]);
 
   const takeAllTheirs = useCallback(async () => {
@@ -850,6 +865,7 @@ export function useOfflineYjsConflict(params: {
     }
     setConflicts([]);
     setClusters([]);
+    setReviews([]);
   }, [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc]);
 
   useEffect(() => {
@@ -888,6 +904,7 @@ export function useOfflineYjsConflict(params: {
   return {
     offlineConflictBlocks: conflicts,
     offlineConflictClusters: clusters,
+    offlineConflictReviews: reviews,
     offlineConflictReviewPending: reviewPending,
     snapshotOfflineBase: snapshotBase,
     keepOfflineMine: keepMine,
