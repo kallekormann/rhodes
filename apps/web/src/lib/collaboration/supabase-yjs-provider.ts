@@ -117,6 +117,11 @@ export class SupabaseYjsProvider {
   private suppressOutgoingUpdates = false;
   /** Another peer is reviewing offline conflicts — defer their leaked updates and block persist. */
   private remoteConflictReviewActive = false;
+  /** Browser reported offline — block outbound sync until back online. */
+  private clientNetworkOffline = false;
+  /** User went offline with an active editing session (before conflict review arms). */
+  private offlineSessionPending = false;
+  private reconnectAfterOnlineTimer: number | null = null;
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
   private static readonly AWARENESS_TIMEOUT_MS = 6_000;
@@ -200,18 +205,81 @@ export class SupabaseYjsProvider {
   private handleBrowserOffline = () => {
     // Capture before offline edits so peers can receive them after reconnect.
     this.unsentBaselineVector = Y.encodeStateVector(this.doc);
-    // Only queue peer updates during an active offline conflict review.
-    if (this.offlineReviewActive) {
+    this.clientNetworkOffline = true;
+    if (this.offlineReviewActive || this.offlineSessionPending) {
       this.deferPeerUpdates = true;
     }
+    void this.disconnectTransport();
   };
 
   private handleBrowserOnline = () => {
-    // Let offline-conflict capture listeners restore mine before reconnect.
-    window.setTimeout(() => {
+    this.clientNetworkOffline = false;
+    if (this.reconnectAfterOnlineTimer != null) {
+      window.clearTimeout(this.reconnectAfterOnlineTimer);
+    }
+    // Capture-phase conflict listeners arm the review shield first; then reconnect.
+    this.reconnectAfterOnlineTimer = window.setTimeout(() => {
+      this.reconnectAfterOnlineTimer = null;
       void this.reconnect();
-    }, 100);
+    }, 0);
   };
+
+  /** Called when the user starts an offline editing session (base snapshot taken). */
+  setOfflineSessionPending(pending: boolean): void {
+    this.offlineSessionPending = pending;
+    if (pending) {
+      this.deferPeerUpdates = true;
+      return;
+    }
+    if (!this.offlineReviewActive) {
+      this.deferPeerUpdates = false;
+      this.deferredPeerUpdates = [];
+    }
+    this.maybeNudgeLocalAwareness();
+  }
+
+  get isOfflineSessionPending(): boolean {
+    return this.offlineSessionPending;
+  }
+
+  private async disconnectTransport(): Promise<void> {
+    if (!this.channel) {
+      this.setSynced(false);
+      return;
+    }
+    this.intentionalDisconnect = true;
+    try {
+      // Tell peers to drop our caret, but keep local awareness so we can re-announce
+      // after reconnect (CollaborationCursor + user fields stay intact).
+      const leaveUpdate = encodeAwarenessUpdate(
+        this.awareness,
+        [],
+        [this.doc.clientID],
+      );
+      if (leaveUpdate.length > 0) {
+        await this.channel.send({
+          type: "broadcast",
+          event: EVENT_AWARENESS,
+          payload: { data: uint8ToBase64(leaveUpdate) },
+        });
+      }
+      await this.supabase.removeChannel(this.channel);
+    } catch {
+      /* channel may already be gone */
+    }
+    this.channel = null;
+    this.intentionalDisconnect = false;
+    this.setSynced(false);
+    this.onDisconnected?.();
+  }
+
+  private shouldBlockOutboundBroadcast(): boolean {
+    return (
+      this.offlineReviewActive ||
+      this.offlineSessionPending ||
+      this.clientNetworkOffline
+    );
+  }
 
   get isSynced(): boolean {
     return this.synced;
@@ -283,9 +351,10 @@ export class SupabaseYjsProvider {
       this.deferPeerUpdates = true;
       return;
     }
-    if (!this.remoteConflictReviewActive) {
+    if (!this.remoteConflictReviewActive && !this.offlineSessionPending) {
       this.deferPeerUpdates = false;
       this.deferredPeerUpdates = [];
+      this.maybeNudgeLocalAwareness();
     }
   }
 
@@ -293,7 +362,27 @@ export class SupabaseYjsProvider {
    * While true, peer sync/update messages are queued instead of applied to the live doc.
    */
   setDeferPeerUpdates(defer: boolean): void {
-    this.deferPeerUpdates = defer || this.offlineReviewActive;
+    this.deferPeerUpdates =
+      defer || this.offlineReviewActive || this.offlineSessionPending;
+  }
+
+  /** Re-broadcast local cursor/presence after reconnect or offline session end. */
+  nudgeLocalAwareness(): void {
+    if (this.destroyed || this.clientNetworkOffline || !this.channel) return;
+    const local = this.awareness.getLocalState();
+    if (local == null) return;
+    this.awareness.setLocalState({ ...local });
+  }
+
+  private maybeNudgeLocalAwareness(): void {
+    if (
+      this.offlineReviewActive ||
+      this.offlineSessionPending ||
+      this.clientNetworkOffline
+    ) {
+      return;
+    }
+    this.nudgeLocalAwareness();
   }
 
   /** Merged state (mine + queued peer updates) for conflict detection only. */
@@ -315,7 +404,7 @@ export class SupabaseYjsProvider {
       Y.applyUpdate(this.doc, update, this.origin);
     }
     this.deferredPeerUpdates = [];
-    if (!this.offlineReviewActive) {
+    if (!this.offlineReviewActive && !this.offlineSessionPending) {
       this.deferPeerUpdates = false;
     }
   }
@@ -323,7 +412,7 @@ export class SupabaseYjsProvider {
   /** Drop queued peer updates once conflicts are resolved manually. */
   discardDeferredPeerUpdates(): void {
     this.deferredPeerUpdates = [];
-    if (!this.offlineReviewActive) {
+    if (!this.offlineReviewActive && !this.offlineSessionPending) {
       this.deferPeerUpdates = false;
     }
   }
@@ -422,6 +511,10 @@ export class SupabaseYjsProvider {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    if (this.reconnectAfterOnlineTimer != null) {
+      window.clearTimeout(this.reconnectAfterOnlineTimer);
+      this.reconnectAfterOnlineTimer = null;
+    }
     if (this.persistTimer != null) {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
@@ -492,7 +585,7 @@ export class SupabaseYjsProvider {
     const wasSynced = this.synced;
     if (this.synced === next) return;
     this.synced = next;
-    if (next && !wasSynced && !this.offlineReviewActive) {
+    if (next && !wasSynced && !this.shouldBlockOutboundBroadcast()) {
       void this.broadcastPendingLocalUpdates();
     }
     for (const listener of this.listeners) {
@@ -523,7 +616,7 @@ export class SupabaseYjsProvider {
   }
 
   private async broadcastPendingLocalUpdatesInternal() {
-    if (this.destroyed) return;
+    if (this.destroyed || this.shouldBlockOutboundBroadcast()) return;
 
     const update = this.unsentBaselineVector
       ? Y.encodeStateAsUpdate(this.doc, this.unsentBaselineVector)
@@ -629,12 +722,15 @@ export class SupabaseYjsProvider {
     this.receivedPeerDataSinceConnect = false;
     this.soloSyncedWithoutPeer = false;
     this.catchupRequiresPeer =
-      this.hasPendingLocalBroadcast() || this.offlineReviewActive;
+      this.hasPendingLocalBroadcast() ||
+      this.offlineReviewActive ||
+      this.offlineSessionPending;
 
     // Only the offline conflict returner queues peer updates — never block
     // passive viewers or catch-up from receiving live edits.
-    this.deferPeerUpdates = this.offlineReviewActive;
-    if (!this.offlineReviewActive) {
+    this.deferPeerUpdates =
+      this.offlineReviewActive || this.offlineSessionPending;
+    if (!this.offlineReviewActive && !this.offlineSessionPending) {
       this.deferredPeerUpdates = [];
     }
 
@@ -667,6 +763,7 @@ export class SupabaseYjsProvider {
       if (status === "SUBSCRIBED" && !this.destroyed) {
         void this.sendSyncStep1();
         this.scheduleSoloSyncFallback();
+        this.maybeNudgeLocalAwareness();
         return;
       }
       if (
@@ -705,7 +802,7 @@ export class SupabaseYjsProvider {
   }
 
   private async send(event: string, bytes: Uint8Array) {
-    if (!this.channel || this.destroyed) return;
+    if (!this.channel || this.destroyed || this.clientNetworkOffline) return;
 
     const payload = {
       type: "broadcast" as const,
@@ -750,6 +847,7 @@ export class SupabaseYjsProvider {
       origin === this.origin ||
       this.destroyed ||
       this.offlineReviewActive ||
+      this.clientNetworkOffline ||
       this.suppressOutgoingUpdates
     ) {
       return;
@@ -771,6 +869,7 @@ export class SupabaseYjsProvider {
     // Ignore remote-applied updates; still allow local leave during destroy.
     if (origin === this.origin) return;
     if (this.destroyed && origin !== "local") return;
+    if (this.clientNetworkOffline) return;
     const changed = added.concat(updated, removed);
     if (changed.length === 0) return;
     const update = encodeAwarenessUpdate(this.awareness, changed);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/Button";
 import { ConflictDiffText } from "@/components/ConflictDiffText";
+import { conflictComparePanes } from "@/lib/offline/conflict-compare-panes";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 import "./ConflictCompareModal.css";
 
@@ -16,14 +17,14 @@ type ConflictCompareModalProps = {
 
 function ComparePane({
   label,
-  baseText,
+  otherText,
   text,
   variant,
   scrollRef,
   onScroll,
 }: {
   label: string;
-  baseText: string;
+  otherText: string;
   text: string;
   variant: "mine" | "theirs";
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -38,7 +39,7 @@ function ComparePane({
         onScroll={onScroll}
       >
         <div className="conflict-compare-modal__body">
-          <ConflictDiffText baseText={baseText} text={text} variant={variant} />
+          <ConflictDiffText otherText={otherText} text={text} variant={variant} />
         </div>
       </div>
     </section>
@@ -80,9 +81,7 @@ export function ConflictCompareModal({
 
   if (!open || !cluster) return null;
 
-  const position =
-    cluster.variants.find((v) => v.side === "mine")?.hunkText ??
-    cluster.baseSlice;
+  const panes = conflictComparePanes(cluster);
 
   return (
     <div className="conflict-compare-modal__backdrop" role="presentation">
@@ -99,8 +98,10 @@ export function ConflictCompareModal({
               Compare versions
             </h2>
             <p className="conflict-compare-modal__hint">
-              Changed text:{" "}
-              <span className="conflict-compare-modal__change">{position}</span>
+              Conflicting change:{" "}
+              <span className="conflict-compare-modal__change">
+                {panes.mine.changeHint}
+              </span>
             </p>
           </div>
           <Button size="small" variant="ghost" onClick={onClose} aria-label="Close">
@@ -110,20 +111,20 @@ export function ConflictCompareModal({
 
         <div className="conflict-compare-modal__columns">
           <ComparePane
-            label="Your offline edit"
-            baseText={cluster.baseText}
-            text={cluster.mineText}
-            variant="mine"
+            label={panes.mine.label}
+            otherText={panes.mine.otherText}
+            text={panes.mine.text}
+            variant={panes.mine.variant}
             scrollRef={leftScrollRef}
             onScroll={(event) =>
               syncScroll(event.currentTarget, rightScrollRef.current)
             }
           />
           <ComparePane
-            label="Online edit (others)"
-            baseText={cluster.baseText}
-            text={cluster.theirsText}
-            variant="theirs"
+            label={panes.theirs.label}
+            otherText={panes.theirs.otherText}
+            text={panes.theirs.text}
+            variant={panes.theirs.variant}
             scrollRef={rightScrollRef}
             onScroll={(event) =>
               syncScroll(event.currentTarget, leftScrollRef.current)

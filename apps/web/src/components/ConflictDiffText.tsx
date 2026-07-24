@@ -4,7 +4,8 @@ import { diffWords, type TextDiffSegment } from "@/lib/documents/text-diff";
 import "./ConflictDiffText.css";
 
 type ConflictDiffTextProps = {
-  baseText: string;
+  /** Prior version to diff against (typically the other side's text). */
+  otherText: string;
   text: string;
   variant: "mine" | "theirs";
 };
@@ -33,8 +34,8 @@ function DiffSegments({ segments }: { segments: TextDiffSegment[] }) {
   );
 }
 
-export function ConflictDiffText({ baseText, text, variant }: ConflictDiffTextProps) {
-  const segments = diffWords(baseText, text);
+export function ConflictDiffText({ otherText, text, variant }: ConflictDiffTextProps) {
+  const segments = diffWords(otherText, text);
 
   return (
     <p

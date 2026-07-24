@@ -293,6 +293,9 @@ export function useYjsCollaboration(params: {
       if (cancelled) {
         unsub();
         unsubCatchup();
+        (
+          nextProvider as SupabaseYjsProvider & { _unsubAwareness?: () => void }
+        )._unsubAwareness?.();
         nextProvider.destroy();
         return;
       }
@@ -305,6 +308,21 @@ export function useYjsCollaboration(params: {
       (
         nextProvider as SupabaseYjsProvider & { _unsubCatchup?: () => void }
       )._unsubCatchup = unsubCatchup;
+
+      const refreshAwareness = () => {
+        nextProvider.awareness.setLocalStateField("user", {
+          name: displayName || "Collaborator",
+          color: userColor(userId),
+        });
+        nextProvider.nudgeLocalAwareness();
+      };
+      refreshAwareness();
+      const unsubAwareness = nextProvider.onSynced((isSynced) => {
+        if (isSynced) refreshAwareness();
+      });
+      (
+        nextProvider as SupabaseYjsProvider & { _unsubAwareness?: () => void }
+      )._unsubAwareness = unsubAwareness;
 
       if (serverPullTimer == null) {
         serverPullTimer = window.setInterval(() => {
@@ -399,6 +417,9 @@ export function useYjsCollaboration(params: {
         | null;
       current?._unsub?.();
       current?._unsubCatchup?.();
+      (
+        current as SupabaseYjsProvider & { _unsubAwareness?: () => void }
+      )?._unsubAwareness?.();
       current?.destroy();
       providerRef.current = null;
       idbPersistence?.destroy();

@@ -83,9 +83,8 @@ export function useDocumentRealtime({
     async (remoteUpdatedAt: string) => {
       if (remoteUpdatedAt === lastAppliedUpdatedAtRef.current) return;
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      // Soft-defer while actively dirty — title/metadata rarely change from
-      // peers mid-keystroke, and the next poll/realtime tick will catch up.
-      if (isDirtyRef.current) return;
+      // Title/metadata/comments always apply — body is guarded in applyRemoteDocument
+      // when Yjs collab is active.
 
       const latest = await fetchLatest();
       if (!latest) return;

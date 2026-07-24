@@ -1,8 +1,8 @@
 # Phase 09 — Offline Sync
 
-**Status:** in progress  
+**Status:** in progress — **M1 exit:** [09-m1-exit-collab-offline.md](09-m1-exit-collab-offline.md)  
 **Depends on:** Phase 05  
-**Blocks:** Phase 13  
+**Blocks:** ~~Phase 13~~ (VPS deferred to M10 per roadmap)  
 **Estimated duration:** 5–7 days  
 **Can parallel with:** Phases 10–12 (after Phase 08 recommended for conflict UX)
 

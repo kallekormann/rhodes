@@ -106,24 +106,6 @@ function collectBlockIds(
   return [...ids];
 }
 
-/** When Yjs delta isolation fails, infer peer text from the merged doc. */
-function resolveTheirsText(
-  baseText: string,
-  mineText: string,
-  theirsText: string,
-  mergedText: string,
-): string {
-  if (
-    theirsText === baseText &&
-    mineText !== baseText &&
-    mergedText !== mineText &&
-    mergedText !== baseText
-  ) {
-    return mergedText;
-  }
-  return theirsText;
-}
-
 /**
  * True when every block we edited offline has peer changes merged in cleanly.
  * Returns false while peer edits are still in flight (merged still equals mine).
@@ -144,12 +126,7 @@ export function isOfflineMergeSettled(
     const mineText = mineBlocks.get(blockId)?.text ?? "";
     const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks.get(blockId)?.text ?? "";
-    const theirsText = resolveTheirsText(
-      baseText,
-      mineText,
-      rawTheirsText,
-      mergedText,
-    );
+    const theirsText = rawTheirsText;
 
     if (mineText === baseText) continue;
 
@@ -162,6 +139,94 @@ export function isOfflineMergeSettled(
   }
 
   return true;
+}
+
+/**
+ * Peer text for conflict detection on a single block.
+ * When the offline user edited a block and deferred merge left it unchanged,
+ * the peer did not touch this block — use base, not a polluted Yjs reconstruction.
+ */
+export function resolveTheirsForOfflineConflict(
+  baseText: string,
+  mineText: string,
+  rawTheirsText: string,
+  mergedText: string | undefined,
+): string {
+  if (
+    mineText !== baseText &&
+    mergedText !== undefined &&
+    mergedText === mineText
+  ) {
+    return baseText;
+  }
+  return rawTheirsText;
+}
+
+/**
+ * Whether the offline returner must manually review this block (Case C overlap).
+ * Blocks only edited by peers while offline auto-merge — never shown in conflict UI.
+ */
+export function blockNeedsConflictReview(
+  baseText: string,
+  mineText: string,
+  theirsText: string,
+  mergedText: string | undefined,
+  catchupComplete: boolean,
+): boolean {
+  if (mineText === theirsText) return false;
+  if (mineText === baseText && theirsText === baseText) return false;
+
+  const offlineEdited = mineText !== baseText;
+  if (!offlineEdited) return false;
+
+  const peerEditedThisBlock = theirsText !== baseText;
+
+  // Case A — only the offline returner edited this block; peer left it alone.
+  // Auto-merge without review even if CRDT merged state differs slightly on this block.
+  if (!peerEditedThisBlock) {
+    return false;
+  }
+
+  if (
+    !catchupComplete &&
+    mergedText !== undefined &&
+    mergedText === mineText
+  ) {
+    return false;
+  }
+
+  const merge = threeWayMergeText(baseText, mineText, theirsText);
+  const peerDiverged = peerEditedThisBlock && mineText !== theirsText;
+
+  const crdtGarbled =
+    catchupComplete &&
+    mergedText !== undefined &&
+    peerDiverged &&
+    mergedText !== mineText &&
+    mergedText !== theirsText &&
+    (!merge.ok || (merge.ok && merge.text !== mergedText));
+
+  const peerDivergedButMergedLocal =
+    catchupComplete &&
+    mergedText !== undefined &&
+    mergedText === mineText &&
+    peerDiverged;
+
+  const peerWonSilently =
+    catchupComplete &&
+    mergedText !== undefined &&
+    mineText !== theirsText &&
+    mergedText === theirsText;
+
+  return (
+    crdtGarbled ||
+    peerDivergedButMergedLocal ||
+    peerWonSilently ||
+    !merge.ok ||
+    (merge.ok &&
+      mergedText !== undefined &&
+      merge.text !== mergedText)
+  );
 }
 
 /**
@@ -187,60 +252,25 @@ export function detectOfflineBlockConflicts(
     const mineText = mineBlocks.get(blockId)?.text ?? "";
     const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks?.get(blockId)?.text ?? "";
-    const theirsText = resolveTheirsText(
+    const theirsText = resolveTheirsForOfflineConflict(
       baseText,
       mineText,
       rawTheirsText,
-      mergedText,
+      mergedBlocks ? mergedText : undefined,
     );
 
-    if (mineText === theirsText) continue;
-    if (mineText === baseText && theirsText === baseText) continue;
-
-    const offlineEdited = mineText !== baseText;
-    const mergedDivergedFromMine =
-      mergedBlocks != null &&
-      mergedText !== mineText &&
-      mergedText !== baseText;
-
-    // Only blocks we edited offline — or where a leaked CRDT merge diverged from mine.
-    if (!offlineEdited && !mergedDivergedFromMine) continue;
-
-    // Peer not merged yet — wait for another detection pass.
-    if (!catchupComplete && mergedText === mineText) continue;
-
-    const merge = threeWayMergeText(baseText, mineText, theirsText);
-
-    const peerDiverged =
-      theirsText !== baseText && mineText !== theirsText;
-
-    const crdtGarbled =
-      catchupComplete &&
-      mergedBlocks != null &&
-      peerDiverged &&
-      mergedText !== mineText &&
-      mergedText !== theirsText &&
-      (!merge.ok || (merge.ok && merge.text !== mergedText));
-
-    const peerDivergedButMergedLocal =
-      catchupComplete &&
-      mergedText === mineText &&
-      peerDiverged;
-
-    const peerWonSilently =
-      catchupComplete &&
-      mineText !== baseText &&
-      mineText !== theirsText &&
-      mergedText === theirsText;
-
-    const needsReview =
-      crdtGarbled ||
-      peerDivergedButMergedLocal ||
-      peerWonSilently ||
-      !merge.ok ||
-      (merge.ok && merge.text !== mergedText);
-
-    if (!needsReview) continue;
+    const mergedForBlock = mergedBlocks ? mergedText : undefined;
+    if (
+      !blockNeedsConflictReview(
+        baseText,
+        mineText,
+        theirsText,
+        mergedForBlock,
+        catchupComplete,
+      )
+    ) {
+      continue;
+    }
 
     const blockIndex = findBlockIndexInDoc(mineDoc, blockId, mineText);
 

@@ -186,6 +186,9 @@ export function useEditorSession() {
   const debouncedSaveTitleRef = useRef<DebouncedCallback<
     (title: string) => void
   > | null>(null);
+  const debouncedSaveCommentsRef = useRef<DebouncedCallback<
+    (nextComments: StoredDocumentComment[]) => void
+  > | null>(null);
   const contentPlainRef = useRef("");
   const [publishingTemplate, setPublishingTemplate] = useState(false);
   const [comments, setComments] = useState<StoredDocumentComment[]>([]);
@@ -699,8 +702,10 @@ export function useEditorSession() {
     const flushPendingSave = () => {
       debouncedSaveContentRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
+      debouncedSaveCommentsRef.current?.flush();
     };
     const cancelPendingSave = () => {
+      debouncedSaveCommentsRef.current?.flush();
       debouncedSaveContentRef.current?.cancel();
       debouncedSaveTitleRef.current?.cancel();
     };
@@ -711,6 +716,7 @@ export function useEditorSession() {
       window.removeEventListener("offline", cancelPendingSave, { capture: true });
       debouncedSaveContentRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
+      debouncedSaveCommentsRef.current?.flush();
     };
   }, []);
 
@@ -869,6 +875,7 @@ export function useEditorSession() {
     },
     400,
   );
+  debouncedSaveCommentsRef.current = debouncedSaveComments;
 
   const addComment = useCallback(
     (input: {
