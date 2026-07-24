@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/Button";
 import { ConflictReviewText } from "@/components/ConflictReviewText";
 import { conflictComparePanes } from "@/lib/offline/conflict-compare-panes";
+import type { ConflictComparePane } from "@/lib/offline/conflict-compare-panes";
 import type { BlockReviewModel } from "@/lib/offline/base-aligned-review";
 import { reviewForBlock } from "@/lib/offline/base-aligned-review";
 import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
@@ -25,13 +26,11 @@ function ComparePane({
   segments,
   variant,
   colors,
+  peerUserId,
   activeClusterId,
   scrollRef,
   onScroll,
-}: {
-  label: string;
-  segments: BlockReviewModel["mineSegments"];
-  variant: "mine" | "peer";
+}: ConflictComparePane & {
   colors: ConflictReviewColors;
   activeClusterId: string | null;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -51,6 +50,7 @@ function ComparePane({
             variant={variant}
             colors={colors}
             activeClusterId={activeClusterId}
+            peerUserId={peerUserId}
           />
         </div>
       </div>
@@ -112,9 +112,7 @@ export function ConflictCompareModal({
             <h2 id="conflict-compare-title" className="conflict-compare-modal__title">
               Compare versions
             </h2>
-            <p className="conflict-compare-modal__hint">
-              {panes.mine.changeHint}
-            </p>
+            <p className="conflict-compare-modal__hint">{panes.changeHint}</p>
           </div>
           <Button size="small" variant="ghost" onClick={onClose} aria-label="Close">
             Close
@@ -123,9 +121,7 @@ export function ConflictCompareModal({
 
         <div className="conflict-compare-modal__columns">
           <ComparePane
-            label={panes.mine.label}
-            segments={panes.mine.segments}
-            variant={panes.mine.variant}
+            {...panes.mine}
             colors={colors}
             activeClusterId={cluster.id}
             scrollRef={leftScrollRef}
@@ -133,17 +129,20 @@ export function ConflictCompareModal({
               syncScroll(event.currentTarget, rightScrollRef.current)
             }
           />
-          <ComparePane
-            label={panes.theirs.label}
-            segments={panes.theirs.segments}
-            variant={panes.theirs.variant}
-            colors={colors}
-            activeClusterId={cluster.id}
-            scrollRef={rightScrollRef}
-            onScroll={(event) =>
-              syncScroll(event.currentTarget, leftScrollRef.current)
-            }
-          />
+          <div className="conflict-compare-modal__peer-stack" ref={rightScrollRef}>
+            {panes.peers.map((peerPane) => (
+              <ComparePane
+                key={`${peerPane.label}:${peerPane.peerUserId ?? "peer"}`}
+                {...peerPane}
+                colors={colors}
+                activeClusterId={cluster.id}
+                scrollRef={rightScrollRef}
+                onScroll={(event) =>
+                  syncScroll(event.currentTarget, leftScrollRef.current)
+                }
+              />
+            ))}
+          </div>
         </div>
 
         <footer className="conflict-compare-modal__actions">

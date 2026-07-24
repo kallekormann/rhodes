@@ -1,3 +1,4 @@
+import { coalesceSpanClustersByBlock } from "@/lib/offline/conflict-cluster-coalesce";
 import {
   applyHunkToText,
   getTextTokens,
@@ -342,7 +343,7 @@ export function clustersFromBlockConflicts(
   }>,
   theirsAuthorName?: string,
 ): SpanConflictCluster[] {
-  return conflicts.flatMap((block, blockIdx) => {
+  const clusters = conflicts.flatMap((block, blockIdx) => {
     const clusters = detectSpanConflictClusters({
       ...block,
       theirsAuthorName,
@@ -405,4 +406,6 @@ export function clustersFromBlockConflicts(
     const mineHighlight = clusterMineHighlightRange(draft);
     return [{ ...draft, highlightStart: mineHighlight.start, highlightEnd: mineHighlight.end }];
   });
+
+  return coalesceSpanClustersByBlock(clusters);
 }

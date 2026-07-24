@@ -9,7 +9,7 @@ function blockCluster(
   theirsText: string,
 ): SpanConflictCluster {
   return {
-    id: "c1",
+    id: "b1:0",
     blockId: "b1",
     blockIndex: 0,
     baseText,
@@ -53,16 +53,17 @@ describe("conflictComparePanes", () => {
       baseText: cluster.baseText,
       mineText: cluster.mineText,
       theirsText: cluster.theirsText,
+      spanClusterId: cluster.id,
     });
     const panes = conflictComparePanes(cluster, review);
 
-    expect(panes.mine.label).toBe("Your changes");
+    expect(panes.mine.label).toBe("Your version");
     expect(panes.mine.segments.some((segment) => segment.role === "mine_add")).toBe(
       true,
     );
-    expect(panes.theirs.segments.some((segment) => segment.role === "peer_add")).toBe(
+    expect(panes.peers[0]?.segments.some((segment) => segment.role === "peer_add")).toBe(
       true,
     );
-    expect(panes.mine.changeHint).toContain("You added");
+    expect(panes.changeHint).toContain("You");
   });
 });

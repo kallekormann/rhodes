@@ -7,6 +7,7 @@ import {
   reviewForBlock,
   type BlockReviewModel,
 } from "@/lib/offline/base-aligned-review";
+import { collaborationColorForUser } from "@/lib/offline/conflict-review-colors";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 import "@/components/CommentsTab.css";
 import "./DocumentConflictFloat.css";
@@ -72,14 +73,20 @@ export function DocumentConflictFloat({
     return clusterReviewSummary(review, active.id);
   }, [active, reviews]);
 
+  const peerLegend = useMemo(() => {
+    if (!active) return [];
+    const review = reviewForBlock(reviews, active.blockId);
+    return review?.peerContributors ?? [];
+  }, [active, reviews]);
+
   if (!active) return null;
 
   const position = activeIndex + 1;
   const message =
     clusterSummary ??
     (clusters.length === 1
-      ? "1 conflicting change needs your decision."
-      : `${clusters.length} conflicting changes need your decision.`);
+      ? "1 section needs your decision."
+      : `${clusters.length} sections need your decision.`);
 
   return (
     <aside
@@ -104,6 +111,20 @@ export function DocumentConflictFloat({
               </div>
             </header>
             <p className="comments-tab__message-text">{message}</p>
+            {peerLegend.length > 0 && (
+              <ul className="document-conflict-float__legend" aria-label="Other editors">
+                {peerLegend.map((peer) => (
+                  <li key={peer.userId}>
+                    <span
+                      className="document-conflict-float__legend-swatch"
+                      style={{ backgroundColor: collaborationColorForUser(peer.userId) }}
+                      aria-hidden="true"
+                    />
+                    {peer.displayName}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

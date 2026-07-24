@@ -10,15 +10,18 @@ export type ConflictComparePane = {
   label: string;
   segments: ReviewSegment[];
   variant: "mine" | "peer";
-  /** Short hint for the modal header. */
-  changeHint: string;
+  peerUserId?: string;
 };
 
 /** Base-relative columns for the compare modal (not mine-vs-theirs). */
 export function conflictComparePanes(
   cluster: SpanConflictCluster,
   review?: BlockReviewModel,
-): { mine: ConflictComparePane; theirs: ConflictComparePane } {
+): {
+  mine: ConflictComparePane;
+  peers: ConflictComparePane[];
+  changeHint: string;
+} {
   const model =
     review ??
     buildBlockReviewModel({
@@ -35,22 +38,32 @@ export function conflictComparePanes(
     cluster.baseSlice ||
     cluster.mineText;
 
-  const theirsLabel =
-    cluster.variants.find((variant) => variant.side === "theirs")?.authorName ??
-    "Their changes";
+  const peers =
+    model.peerAuthorSegments.length > 0
+      ? model.peerAuthorSegments.map((author) => ({
+          label: author.displayName,
+          segments: author.segments,
+          variant: "peer" as const,
+          peerUserId: author.userId,
+        }))
+      : [
+          {
+            label:
+              cluster.variants.find((variant) => variant.side === "theirs")
+                ?.authorName ?? "Others",
+            segments: model.peerSegments,
+            variant: "peer" as const,
+            peerUserId: "peer-merged",
+          },
+        ];
 
   return {
     mine: {
-      label: "Your changes",
+      label: "Your version",
       segments: model.mineSegments,
       variant: "mine",
-      changeHint,
     },
-    theirs: {
-      label: theirsLabel,
-      segments: model.peerSegments,
-      variant: "peer",
-      changeHint,
-    },
+    peers,
+    changeHint,
   };
 }

@@ -4,6 +4,8 @@ import {
   hunksAgainstBaseText,
   type TextHunk,
 } from "@/lib/documents/text-diff";
+import type { PeerEditContributor } from "@/lib/offline/peer-edit-contributions";
+import { peerContributorSummary } from "@/lib/offline/peer-edit-contributions";
 
 export type ReviewSegmentRole =
   | "context"
@@ -20,6 +22,8 @@ export type ReviewSegment = {
   clusterId: string;
   /** When true, text is not in mineText — render as a widget decoration. */
   phantom: boolean;
+  /** Peer author when role is peer_* — drives per-user highlight color. */
+  peerUserId?: string;
 };
 
 export type BlockReviewModel = {
@@ -28,12 +32,19 @@ export type BlockReviewModel = {
   baseText: string;
   mineText: string;
   theirsText: string;
+  peerContributors: PeerEditContributor[];
   /** Inline editor stream (mine text + phantom peer / deleted segments). */
   segments: ReviewSegment[];
   /** Modal left column: base → mine. */
   mineSegments: ReviewSegment[];
-  /** Modal right column: base → theirs. */
+  /** Modal right column: base → merged peers (or per-author in modal). */
   peerSegments: ReviewSegment[];
+  /** Per-author modal columns when multiple peers edited this block. */
+  peerAuthorSegments: Array<{
+    userId: string;
+    displayName: string;
+    segments: ReviewSegment[];
+  }>;
 };
 
 function nextSegmentId(counter: { value: number }): string {
@@ -42,7 +53,17 @@ function nextSegmentId(counter: { value: number }): string {
   return id;
 }
 
-/** Assign cluster ids to consecutive non-context runs. */
+/** One decision cluster per block — all contested spans share the same id. */
+export function assignBlockClusterId(
+  segments: ReviewSegment[],
+  clusterId: string,
+): void {
+  for (const segment of segments) {
+    segment.clusterId = segment.role === "context" ? "" : clusterId;
+  }
+}
+
+/** @deprecated Prefer assignBlockClusterId for offline review. */
 export function assignClusterIds(segments: ReviewSegment[]): void {
   let clusterIdx = 0;
   let inCluster = false;
@@ -129,6 +150,7 @@ function peerPhantomSegmentsForRange(
   end: number,
   counter: { value: number },
   emitted: Set<string>,
+  peerUserId?: string,
 ): ReviewSegment[] {
   const hunks = hunksAgainstBaseText(base, theirs);
   const segments: ReviewSegment[] = [];
@@ -153,6 +175,7 @@ function peerPhantomSegmentsForRange(
           clickable: false,
           clusterId: "",
           phantom: true,
+          peerUserId,
         });
       }
     }
@@ -168,6 +191,7 @@ function peerPhantomSegmentsForRange(
           clickable: false,
           clusterId: "",
           phantom: true,
+          peerUserId,
         });
       }
     }
@@ -184,6 +208,7 @@ export function buildInlineReviewSegments(
   base: string,
   mine: string,
   theirs: string,
+  peerContributors: PeerEditContributor[] = [],
 ): ReviewSegment[] {
   const output: ReviewSegment[] = [];
   const counter = { value: 0 };
@@ -191,6 +216,10 @@ export function buildInlineReviewSegments(
   let baseChar = 0;
 
   const mineDiff = diffWords(base, mine);
+  const contributorRanges =
+    peerContributors.length > 0
+      ? peerContributors
+      : [{ userId: "peer-merged", displayName: "Others", blockText: theirs } as PeerEditContributor];
 
   const push = (segment: Omit<ReviewSegment, "id" | "clusterId">) => {
     output.push({
@@ -201,15 +230,18 @@ export function buildInlineReviewSegments(
   };
 
   const pushPeerRange = (start: number, end: number) => {
-    for (const segment of peerPhantomSegmentsForRange(
-      base,
-      theirs,
-      start,
-      end,
-      counter,
-      emittedPeer,
-    )) {
-      output.push(segment);
+    for (const contributor of contributorRanges) {
+      for (const segment of peerPhantomSegmentsForRange(
+        base,
+        contributor.blockText || theirs,
+        start,
+        end,
+        counter,
+        emittedPeer,
+        contributor.userId,
+      )) {
+        output.push(segment);
+      }
     }
   };
 
@@ -251,7 +283,6 @@ export function buildInlineReviewSegments(
 
   pushPeerRange(baseChar, base.length);
 
-  assignClusterIds(output);
   return output;
 }
 
@@ -261,7 +292,10 @@ export function buildBlockReviewModel(params: {
   baseText: string;
   mineText: string;
   theirsText: string;
+  peerContributors?: PeerEditContributor[];
+  spanClusterId?: string;
 }): BlockReviewModel {
+  const peerContributors = params.peerContributors ?? [];
   const mineSegments = segmentsFromBaseDiff(
     params.baseText,
     params.mineText,
@@ -276,16 +310,48 @@ export function buildBlockReviewModel(params: {
     params.baseText,
     params.mineText,
     params.theirsText,
+    peerContributors,
   );
 
-  assignClusterIds(mineSegments);
-  assignClusterIds(peerSegments);
+  const clusterId = params.spanClusterId ?? "c1";
+  assignBlockClusterId(inlineSegments, clusterId);
+  assignBlockClusterId(mineSegments, clusterId);
+  assignBlockClusterId(peerSegments, clusterId);
+
+  const peerAuthorSegments =
+    peerContributors.length > 0
+      ? peerContributors.map((contributor) => {
+          const segments = segmentsFromBaseDiff(
+            params.baseText,
+            contributor.blockText || params.theirsText,
+            "peer",
+          );
+          assignBlockClusterId(segments, clusterId);
+          return {
+            userId: contributor.userId,
+            displayName: contributor.displayName,
+            segments,
+          };
+        })
+      : [
+          {
+            userId: "peer-merged",
+            displayName: "Others",
+            segments: peerSegments,
+          },
+        ];
 
   return {
-    ...params,
+    blockId: params.blockId,
+    blockIndex: params.blockIndex,
+    baseText: params.baseText,
+    mineText: params.mineText,
+    theirsText: params.theirsText,
+    peerContributors,
     segments: inlineSegments,
     mineSegments,
     peerSegments,
+    peerAuthorSegments,
   };
 }
 
@@ -301,37 +367,35 @@ export function alignReviewClusterIds(
   review: BlockReviewModel,
   spanClusters: Array<{ id: string; blockId: string; baseStart: number }>,
 ): BlockReviewModel {
-  const blockClusters = spanClusters
+  const blockCluster = spanClusters
     .filter((cluster) => cluster.blockId === review.blockId)
-    .sort((a, b) => a.baseStart - b.baseStart);
+    .sort((a, b) => a.baseStart - b.baseStart)[0];
 
-  const remapSegments = (segments: ReviewSegment[]) => {
-    let runIndex = -1;
-    let mappedId = "";
+  if (!blockCluster) return review;
 
-    for (const segment of segments) {
-      if (segment.role === "context") {
-        mappedId = "";
-        continue;
-      }
-
-      if (!mappedId) {
-        runIndex += 1;
-        mappedId = blockClusters[runIndex]?.id ?? segment.clusterId;
-      }
-      segment.clusterId = mappedId;
-    }
-  };
-
+  const clusterId = blockCluster.id;
   const segments = review.segments.map((segment) => ({ ...segment }));
   const mineSegments = review.mineSegments.map((segment) => ({ ...segment }));
   const peerSegments = review.peerSegments.map((segment) => ({ ...segment }));
+  const peerAuthorSegments = review.peerAuthorSegments.map((author) => ({
+    ...author,
+    segments: author.segments.map((segment) => ({ ...segment })),
+  }));
 
-  remapSegments(segments);
-  remapSegments(mineSegments);
-  remapSegments(peerSegments);
+  assignBlockClusterId(segments, clusterId);
+  assignBlockClusterId(mineSegments, clusterId);
+  assignBlockClusterId(peerSegments, clusterId);
+  for (const author of peerAuthorSegments) {
+    assignBlockClusterId(author.segments, clusterId);
+  }
 
-  return { ...review, segments, mineSegments, peerSegments };
+  return {
+    ...review,
+    segments,
+    mineSegments,
+    peerSegments,
+    peerAuthorSegments,
+  };
 }
 
 export function buildBlockReviewModels(
@@ -343,13 +407,21 @@ export function buildBlockReviewModels(
     theirsText: string;
   }>,
   spanClusters: Array<{ id: string; blockId: string; baseStart: number }>,
+  peerContributorsByBlock?: Map<string, PeerEditContributor[]>,
 ): BlockReviewModel[] {
-  return conflicts.map((conflict) =>
-    alignReviewClusterIds(
-      buildBlockReviewModel(conflict),
+  return conflicts.map((conflict) => {
+    const blockClusterId = spanClusters.find(
+      (cluster) => cluster.blockId === conflict.blockId,
+    )?.id;
+    return alignReviewClusterIds(
+      buildBlockReviewModel({
+        ...conflict,
+        peerContributors: peerContributorsByBlock?.get(conflict.blockId) ?? [],
+        spanClusterId: blockClusterId,
+      }),
       spanClusters,
-    ),
-  );
+    );
+  });
 }
 
 /** Human-readable summary for the conflict float / modal header. */
@@ -362,6 +434,10 @@ export function clusterReviewSummary(
     return "";
   }
 
+  const mineChanged = parts.some((segment) => segment.role.startsWith("mine"));
+  const peerChanged = parts.some((segment) => segment.role.startsWith("peer"));
+  const peerNames = peerContributorSummary(review.peerContributors);
+
   const mineDels = parts
     .filter((segment) => segment.role === "mine_del")
     .map((segment) => segment.text.trim())
@@ -370,34 +446,48 @@ export function clusterReviewSummary(
     .filter((segment) => segment.role === "mine_add")
     .map((segment) => segment.text.trim())
     .filter(Boolean);
-  const peerAdds = parts
-    .filter((segment) => segment.role === "peer_add")
-    .map((segment) => segment.text.trim())
-    .filter(Boolean);
-  const peerDels = parts
-    .filter((segment) => segment.role === "peer_del")
-    .map((segment) => segment.text.trim())
-    .filter(Boolean);
 
-  const bits: string[] = [];
-  if (mineDels.length > 0) {
-    bits.push(`You removed ${truncateQuote(mineDels.join(" "))}`);
-  }
-  if (mineAdds.length > 0) {
-    bits.push(`You added ${truncateQuote(mineAdds.join(" "))}`);
-  }
-  if (peerAdds.length > 0) {
-    bits.push(`Others added ${truncateQuote(peerAdds.join(" "))}`);
-  }
-  if (peerDels.length > 0) {
-    bits.push(`Others removed ${truncateQuote(peerDels.join(" "))}`);
+  if (mineChanged && peerChanged) {
+    if (mineDels.length > 0 && mineAdds.length === 0) {
+      return `You removed text in this section. ${peerNames} also edited the same area.`;
+    }
+    if (mineAdds.length > 0 && mineDels.length === 0) {
+      return `You rewrote this section. ${peerNames} also edited the same area.`;
+    }
+    return `You and ${peerNames} both changed this section.`;
   }
 
-  return bits.join(" · ");
+  if (mineChanged) {
+    return mineDels.length > 0
+      ? `You removed text in this section.`
+      : `You edited this section.`;
+  }
+
+  if (peerChanged) {
+    return `${peerNames} edited this section while you were offline.`;
+  }
+
+  return "This section needs your decision.";
 }
 
-function truncateQuote(text: string, max = 72): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= max) return `"${compact}"`;
-  return `"${compact.slice(0, max - 1)}…"`;
+/** Mine text offsets for one cluster — used for a single inline highlight band. */
+export function clusterMineHighlightOffsets(
+  review: BlockReviewModel,
+  clusterId: string,
+): { start: number; end: number } | null {
+  let start = -1;
+  let end = 0;
+  let offset = 0;
+
+  for (const segment of review.segments) {
+    if (segment.phantom) continue;
+    if (segment.clusterId === clusterId) {
+      if (start < 0) start = offset;
+      end = offset + segment.text.length;
+    }
+    offset += segment.text.length;
+  }
+
+  if (start < 0) return null;
+  return { start, end };
 }

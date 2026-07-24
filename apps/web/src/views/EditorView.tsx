@@ -120,14 +120,24 @@ function EditorViewContent() {
   const editorEditable =
     (isTemplateMode || canEditDocument) && !offlineConflictReviewPending;
 
-  const offlineConflictColors = useMemo(
-    () =>
-      conflictReviewColors({
-        localUserId: collaborationUser?.userId,
-        peerUserId: remoteCursors[0]?.userId,
-      }),
-    [collaborationUser?.userId, remoteCursors],
-  );
+  const offlineConflictColors = useMemo(() => {
+    const peerUserIds = [
+      ...new Set(
+        offlineConflictReviews.flatMap((review) =>
+          review.peerContributors.map((peer) => peer.userId),
+        ),
+      ),
+    ];
+    if (peerUserIds.length === 0) {
+      for (const cursor of remoteCursors) {
+        peerUserIds.push(cursor.userId);
+      }
+    }
+    return conflictReviewColors({
+      localUserId: collaborationUser?.userId,
+      peerUserIds,
+    });
+  }, [collaborationUser?.userId, offlineConflictReviews, remoteCursors]);
 
   const {
     insights,

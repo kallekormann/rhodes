@@ -4,8 +4,16 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { getTopLevelBlockRangeForConflict } from "@/lib/documents/block-positions";
 import { mapBlockCharRangeToDoc } from "@/lib/documents/block-positions";
-import type { BlockReviewModel, ReviewSegment } from "@/lib/offline/base-aligned-review";
-import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
+import {
+  clusterMineHighlightOffsets,
+  type BlockReviewModel,
+  type ReviewSegment,
+} from "@/lib/offline/base-aligned-review";
+import {
+  conflictReviewColors,
+  peerColorsForUser,
+  type ConflictReviewColors,
+} from "@/lib/offline/conflict-review-colors";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 
 export const conflictInlineKey = new PluginKey("rhodesConflictInline");
@@ -23,13 +31,24 @@ type ConflictInlineStorage = {
   onActivate?: (clusterId: string) => void;
 };
 
-function cssVars(colors: ConflictReviewColors): string {
+function cssVars(colors: {
+  mine: string;
+  mineMuted: string;
+  mineStrong: string;
+}): string {
   return [
     `--conflict-mine:${colors.mine}`,
     `--conflict-mine-muted:${colors.mineMuted}`,
     `--conflict-mine-strong:${colors.mineStrong}`,
-    `--conflict-peer:${colors.peer}`,
-    `--conflict-peer-muted:${colors.peerMuted}`,
+  ].join(";");
+}
+
+function peerCssVars(peerUserId: string | undefined, colors: ConflictReviewColors): string {
+  const peer = peerColorsForUser(colors, peerUserId);
+  return [
+    `--conflict-peer:${peer.color}`,
+    `--conflict-peer-muted:${peer.muted}`,
+    `--conflict-peer-strong:${peer.strong}`,
   ].join(";");
 }
 
@@ -41,6 +60,7 @@ function createPhantomElement(
   const span = document.createElement("span");
   const isPeer = segment.role.startsWith("peer");
   const active = segment.clusterId === activeClusterId;
+  const peerPalette = peerColorsForUser(colors, segment.peerUserId);
 
   span.className = [
     "editor-conflict-phantom",
@@ -51,36 +71,29 @@ function createPhantomElement(
   ]
     .filter(Boolean)
     .join(" ");
-  span.style.cssText = cssVars(colors);
+
+  if (isPeer) {
+    span.style.cssText = peerCssVars(segment.peerUserId, colors);
+  } else {
+    span.style.cssText = cssVars(colors);
+  }
+
   span.textContent = segment.text;
 
   if (segment.clusterId) {
     span.dataset.clusterId = segment.clusterId;
   }
+  if (segment.peerUserId) {
+    span.dataset.peerUserId = segment.peerUserId;
+  }
 
   return span;
-}
-
-function inlineClassForSegment(
-  segment: ReviewSegment,
-  activeClusterId: string | null,
-): string {
-  const active = segment.clusterId === activeClusterId;
-  switch (segment.role) {
-    case "context":
-      return "editor-conflict-context";
-    case "mine_add":
-      return active
-        ? "editor-conflict-mine-add editor-conflict-mine-add--active editor-conflict-clickable"
-        : "editor-conflict-mine-add editor-conflict-clickable";
-    default:
-      return "editor-conflict-context";
-  }
 }
 
 function buildReviewDecorations(
   doc: ProseMirrorNode,
   review: BlockReviewModel,
+  blockClusters: SpanConflictCluster[],
   colors: ConflictReviewColors,
   activeClusterId: string | null,
 ): Decoration[] {
@@ -89,8 +102,35 @@ function buildReviewDecorations(
 
   const decorations: Decoration[] = [];
   const contentStart = block.from + 1;
-  let mineOffset = 0;
+  const blockClusterIds = blockClusters
+    .filter((cluster) => cluster.blockId === review.blockId)
+    .map((cluster) => cluster.id);
 
+  for (const clusterId of blockClusterIds) {
+    const band = clusterMineHighlightOffsets(review, clusterId);
+    if (band) {
+      const mapped = mapBlockCharRangeToDoc(
+        block.from,
+        block.node,
+        band.start,
+        band.end,
+      );
+      if (mapped) {
+        const active = clusterId === activeClusterId;
+        decorations.push(
+          Decoration.inline(mapped.from, mapped.to, {
+            class: active
+              ? "editor-conflict-mine-band editor-conflict-mine-band--active editor-conflict-clickable"
+              : "editor-conflict-mine-band editor-conflict-clickable",
+            style: cssVars(colors),
+            "data-cluster-id": clusterId,
+          }),
+        );
+      }
+    }
+  }
+
+  let mineOffset = 0;
   for (const segment of review.segments) {
     if (segment.phantom) {
       const pos = contentStart + mineOffset;
@@ -104,23 +144,22 @@ function buildReviewDecorations(
       continue;
     }
 
-    const mapped = mapBlockCharRangeToDoc(
-      block.from,
-      block.node,
-      mineOffset,
-      mineOffset + segment.text.length,
-    );
-    if (!mapped) continue;
-
-    const attrs: Record<string, string> = {
-      class: inlineClassForSegment(segment, activeClusterId),
-      style: cssVars(colors),
-    };
-    if (segment.clusterId) {
-      attrs["data-cluster-id"] = segment.clusterId;
+    if (segment.role === "context") {
+      const mapped = mapBlockCharRangeToDoc(
+        block.from,
+        block.node,
+        mineOffset,
+        mineOffset + segment.text.length,
+      );
+      if (mapped) {
+        decorations.push(
+          Decoration.inline(mapped.from, mapped.to, {
+            class: "editor-conflict-context",
+          }),
+        );
+      }
     }
 
-    decorations.push(Decoration.inline(mapped.from, mapped.to, attrs));
     mineOffset += segment.text.length;
   }
 
@@ -139,6 +178,7 @@ function buildConflictDecorations(
       ...buildReviewDecorations(
         doc,
         review,
+        state.clusters,
         state.colors,
         state.activeClusterId,
       ),
@@ -249,3 +289,6 @@ export const ConflictInlineExtension = Extension.create<
     ];
   },
 });
+
+// Re-export for callers that build default palettes in tests.
+export { conflictReviewColors };

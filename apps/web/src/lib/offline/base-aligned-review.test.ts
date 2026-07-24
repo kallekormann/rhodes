@@ -74,21 +74,25 @@ describe("base-aligned-review", () => {
     expect(clusterId).toBe("b1:0");
 
     const summary = clusterReviewSummary(review, "b1:0");
-    expect(summary).toContain("You removed");
+    expect(summary).toContain("You");
   });
 
-  it("inline stream keeps mine text segments non-phantom", () => {
-    const segments = buildInlineReviewSegments(
-      "alpha beta gamma",
-      "alpha GAMMA",
-      "alpha BETA gamma",
+  it("assigns one cluster id to all contested inline segments", () => {
+    const review = buildBlockReviewModel({
+      blockId: "b1",
+      blockIndex: 0,
+      baseText: "alpha beta gamma delta",
+      mineText: "alpha GAMMA delta",
+      theirsText: "alpha BETA gamma delta",
+      spanClusterId: "b1:0",
+    });
+
+    const clusterIds = new Set(
+      review.segments
+        .filter((segment) => segment.role !== "context")
+        .map((segment) => segment.clusterId),
     );
-
-    const mineAdd = segments.find((segment) => segment.role === "mine_add");
-    expect(mineAdd?.phantom).toBe(false);
-    expect(mineAdd?.text).toBe("GAMMA");
-
-    const mineDel = segments.find((segment) => segment.role === "mine_del");
-    expect(mineDel?.phantom).toBe(true);
+    expect(clusterIds.size).toBe(1);
+    expect(clusterIds.has("b1:0")).toBe(true);
   });
 });

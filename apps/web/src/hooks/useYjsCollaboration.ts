@@ -274,6 +274,7 @@ export function useYjsCollaboration(params: {
       });
 
       nextProvider.awareness.setLocalStateField("user", {
+        id: userId,
         name: displayName || "Collaborator",
         color: userColor(userId),
       });
@@ -313,6 +314,7 @@ export function useYjsCollaboration(params: {
 
       const refreshAwareness = () => {
         nextProvider.awareness.setLocalStateField("user", {
+          id: userId,
           name: displayName || "Collaborator",
           color: userColor(userId),
         });

@@ -13,6 +13,7 @@ import {
   buildBlockReviewModels,
   type BlockReviewModel,
 } from "@/lib/offline/base-aligned-review";
+import { peerEditContributorsForBlock } from "@/lib/offline/peer-edit-contributions";
 import {
   clustersFromBlockConflicts,
   type SpanConflictCluster,
@@ -314,7 +315,28 @@ export function useOfflineYjsConflict(params: {
       syncConflictBlocksToMine(ydoc, mineBytes);
 
       const nextClusters = clustersFromBlockConflicts(found);
-      const nextReviews = buildBlockReviewModels(found, nextClusters);
+      const peerContributorsByBlock = new Map<string, ReturnType<typeof peerEditContributorsForBlock>>();
+      const deferredUpdates = providerRef.current?.getDeferredPeerUpdates() ?? [];
+      const awareness = providerRef.current?.awareness;
+      if (awareness && deferredUpdates.length > 0) {
+        for (const conflict of found) {
+          peerContributorsByBlock.set(
+            conflict.blockId,
+            peerEditContributorsForBlock({
+              baseSnapshot,
+              deferredUpdates,
+              awareness,
+              blockId: conflict.blockId,
+              blockIndex: conflict.blockIndex,
+            }),
+          );
+        }
+      }
+      const nextReviews = buildBlockReviewModels(
+        found,
+        nextClusters,
+        peerContributorsByBlock,
+      );
       workingBlockTextRef.current = new Map(
         found.map((c) => [
           `${c.blockId}:${c.blockIndex}`,

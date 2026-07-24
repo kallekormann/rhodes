@@ -2,6 +2,7 @@
 
 import type { ReviewSegment, ReviewSegmentRole } from "@/lib/offline/base-aligned-review";
 import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
+import { peerColorsForUser } from "@/lib/offline/conflict-review-colors";
 import "./ConflictReviewText.css";
 
 type ConflictReviewTextProps = {
@@ -9,6 +10,7 @@ type ConflictReviewTextProps = {
   variant: "mine" | "peer";
   colors: ConflictReviewColors;
   activeClusterId?: string | null;
+  peerUserId?: string;
 };
 
 function roleClass(role: ReviewSegmentRole): string {
@@ -33,7 +35,10 @@ export function ConflictReviewText({
   variant,
   colors,
   activeClusterId = null,
+  peerUserId,
 }: ConflictReviewTextProps) {
+  const peerPalette = peerColorsForUser(colors, peerUserId);
+
   return (
     <p
       className={`conflict-review conflict-review--${variant}`}
@@ -43,12 +48,13 @@ export function ConflictReviewText({
           "--conflict-mine": colors.mine,
           "--conflict-mine-muted": colors.mineMuted,
           "--conflict-mine-strong": colors.mineStrong,
-          "--conflict-peer": colors.peer,
-          "--conflict-peer-muted": colors.peerMuted,
+          "--conflict-peer": peerPalette.color,
+          "--conflict-peer-muted": peerPalette.muted,
         } as React.CSSProperties
       }
     >
       {segments.map((segment) => {
+        const segmentPeer = peerColorsForUser(colors, segment.peerUserId ?? peerUserId);
         const active = segment.clusterId === activeClusterId;
         const className = [
           roleClass(segment.role),
@@ -60,7 +66,16 @@ export function ConflictReviewText({
 
         if (segment.role === "mine_del" || segment.role === "peer_del") {
           return (
-            <del key={segment.id} className={className} data-cluster-id={segment.clusterId}>
+            <del
+              key={segment.id}
+              className={className}
+              data-cluster-id={segment.clusterId}
+              style={
+                segment.role.startsWith("peer")
+                  ? ({ "--conflict-peer": segmentPeer.color, "--conflict-peer-muted": segmentPeer.muted } as React.CSSProperties)
+                  : undefined
+              }
+            >
               {segment.text}
             </del>
           );
@@ -68,7 +83,16 @@ export function ConflictReviewText({
 
         if (segment.role === "mine_add" || segment.role === "peer_add") {
           return (
-            <mark key={segment.id} className={className} data-cluster-id={segment.clusterId}>
+            <mark
+              key={segment.id}
+              className={className}
+              data-cluster-id={segment.clusterId}
+              style={
+                segment.role.startsWith("peer")
+                  ? ({ "--conflict-peer-muted": segmentPeer.muted } as React.CSSProperties)
+                  : undefined
+              }
+            >
               {segment.text}
             </mark>
           );

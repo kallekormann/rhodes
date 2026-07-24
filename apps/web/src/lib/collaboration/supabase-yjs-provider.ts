@@ -72,6 +72,16 @@ export type BlockResolutionPayload = {
 
 type BlockResolutionListener = (payload: BlockResolutionPayload) => void;
 
+export type DeferredPeerUpdate = {
+  update: Uint8Array;
+  clientId: number | null;
+};
+
+type BroadcastPayload = {
+  data?: string;
+  clientId?: number;
+};
+
 export class SupabaseYjsProvider {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
@@ -108,7 +118,7 @@ export class SupabaseYjsProvider {
   private catchupListeners = new Set<SyncListener>();
   /** Hold peer updates during offline conflict review so the editor stays on mine. */
   private deferPeerUpdates = false;
-  private deferredPeerUpdates: Uint8Array[] = [];
+  private deferredPeerUpdates: DeferredPeerUpdate[] = [];
   /** Set while the offline returner has an active review session (from go-offline until resolved). */
   private offlineReviewActive = false;
   private peerUpdatesDeferredListener: (() => void) | null = null;
@@ -389,19 +399,23 @@ export class SupabaseYjsProvider {
   getDeferredMergedState(): Uint8Array {
     const shadow = new Y.Doc();
     Y.applyUpdate(shadow, Y.encodeStateAsUpdate(this.doc));
-    for (const update of this.deferredPeerUpdates) {
-      Y.applyUpdate(shadow, update);
+    for (const entry of this.deferredPeerUpdates) {
+      Y.applyUpdate(shadow, entry.update);
     }
     const merged = Y.encodeStateAsUpdate(shadow);
     shadow.destroy();
     return merged;
   }
 
+  getDeferredPeerUpdates(): DeferredPeerUpdate[] {
+    return [...this.deferredPeerUpdates];
+  }
+
   /** Apply queued peer updates after a clean auto-merge (no conflicts). */
   releaseDeferredPeerUpdates(): void {
     if (this.destroyed || this.offlineReviewActive) return;
-    for (const update of this.deferredPeerUpdates) {
-      Y.applyUpdate(this.doc, update, this.origin);
+    for (const entry of this.deferredPeerUpdates) {
+      Y.applyUpdate(this.doc, entry.update, this.origin);
     }
     this.deferredPeerUpdates = [];
     if (!this.offlineReviewActive && !this.offlineSessionPending) {
@@ -417,9 +431,15 @@ export class SupabaseYjsProvider {
     }
   }
 
-  private queueDeferredPeerUpdate(update: Uint8Array): void {
+  private queueDeferredPeerUpdate(
+    update: Uint8Array,
+    clientId?: number | null,
+  ): void {
     if (update.length === 0) return;
-    this.deferredPeerUpdates.push(update);
+    this.deferredPeerUpdates.push({
+      update,
+      clientId: clientId ?? null,
+    });
     this.markPeerDataReceived();
     this.setSynced(true);
     this.peerUpdatesDeferredListener?.();
@@ -747,16 +767,16 @@ export class SupabaseYjsProvider {
     this.channel = channel;
 
     channel.on("broadcast", { event: EVENT_SYNC }, ({ payload }) => {
-      this.applyEncodedMessage(payload as { data?: string });
+      this.applyEncodedMessage(payload as BroadcastPayload);
     });
     channel.on("broadcast", { event: EVENT_UPDATE }, ({ payload }) => {
-      this.applyEncodedUpdate(payload as { data?: string });
+      this.applyEncodedUpdate(payload as BroadcastPayload);
     });
     channel.on("broadcast", { event: EVENT_AWARENESS }, ({ payload }) => {
-      this.applyEncodedAwareness(payload as { data?: string });
+      this.applyEncodedAwareness(payload as BroadcastPayload);
     });
     channel.on("broadcast", { event: EVENT_BLOCK_RESOLVED }, ({ payload }) => {
-      this.applyBlockResolution(payload as { data?: string });
+      this.applyBlockResolution(payload as BroadcastPayload);
     });
 
     channel.subscribe((status) => {
@@ -807,7 +827,10 @@ export class SupabaseYjsProvider {
     const payload = {
       type: "broadcast" as const,
       event,
-      payload: { data: uint8ToBase64(bytes) },
+      payload: {
+        data: uint8ToBase64(bytes),
+        clientId: this.doc.clientID,
+      },
     };
 
     try {
@@ -876,7 +899,7 @@ export class SupabaseYjsProvider {
     void this.send(EVENT_AWARENESS, update);
   };
 
-  private applyEncodedMessage(payload: { data?: string }) {
+  private applyEncodedMessage(payload: BroadcastPayload) {
     if (!payload?.data || this.destroyed) return;
     const bytes = base64ToUint8(payload.data);
 
@@ -903,7 +926,7 @@ export class SupabaseYjsProvider {
           shadow,
           Y.encodeStateVector(this.doc),
         );
-        this.queueDeferredPeerUpdate(peerDelta);
+        this.queueDeferredPeerUpdate(peerDelta, payload.clientId);
       }
 
       shadow.destroy();
@@ -928,11 +951,11 @@ export class SupabaseYjsProvider {
     // Step1 is only a state-vector handshake — peer content arrives in step2/update.
   }
 
-  private applyEncodedUpdate(payload: { data?: string }) {
+  private applyEncodedUpdate(payload: BroadcastPayload) {
     if (!payload?.data || this.destroyed) return;
     const update = base64ToUint8(payload.data);
     if (this.shouldDeferIncomingUpdates()) {
-      this.queueDeferredPeerUpdate(update);
+      this.queueDeferredPeerUpdate(update, payload.clientId);
       return;
     }
     this.markPeerDataReceived();
@@ -940,7 +963,7 @@ export class SupabaseYjsProvider {
     this.setSynced(true);
   }
 
-  private applyEncodedAwareness(payload: { data?: string }) {
+  private applyEncodedAwareness(payload: BroadcastPayload) {
     if (!payload?.data || this.destroyed) return;
     applyAwarenessUpdate(
       this.awareness,
@@ -950,7 +973,7 @@ export class SupabaseYjsProvider {
     this.refreshRemoteConflictReview();
   }
 
-  private applyBlockResolution(payload: { data?: string }) {
+  private applyBlockResolution(payload: BroadcastPayload) {
     if (!payload?.data || this.destroyed) return;
     try {
       const json = new TextDecoder().decode(base64ToUint8(payload.data));

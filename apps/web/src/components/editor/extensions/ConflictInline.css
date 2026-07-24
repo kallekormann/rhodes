@@ -1,6 +1,22 @@
 .editor-conflict-context {
   color: var(--color-text-tertiary);
+  opacity: 0.72;
   box-decoration-break: clone;
+}
+
+.editor-conflict-mine-band {
+  border-radius: 3px;
+  background: var(--conflict-mine-muted);
+  box-decoration-break: clone;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 var(--conflict-mine);
+}
+
+.editor-conflict-mine-band--active {
+  background: color-mix(in srgb, var(--conflict-mine) 34%, transparent);
+  box-shadow:
+    inset 0 -2px 0 var(--conflict-mine-strong),
+    0 0 0 1px var(--conflict-mine-strong);
 }
 
 .editor-conflict-mine-add {
@@ -35,7 +51,7 @@
 }
 
 .editor-conflict-phantom--peer {
-  opacity: 0.72;
+  opacity: 0.92;
 }
 
 .editor-conflict-phantom--peer.editor-conflict-phantom--del {
