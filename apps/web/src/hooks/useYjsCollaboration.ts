@@ -14,6 +14,7 @@ import {
 import {
   clearOfflineSnapshots,
   clearStaleOfflineSnapshots,
+  hasOfflineSessionMarker,
 } from "@/lib/offline/yjs-offline-snapshot";
 import { clearYjsIndexedDbPersistence } from "@/lib/collaboration/yjs-idb";
 import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
@@ -282,6 +283,7 @@ export function useYjsCollaboration(params: {
         if (!cancelled && isSynced) {
           void fetchPersistedState(documentId).then((server) => {
             if (cancelled || !server.state || server.state.length === 0) return;
+            if (hasOfflineSessionMarker(documentId)) return;
             applyServerState(doc, server.state);
           });
         }
@@ -327,6 +329,7 @@ export function useYjsCollaboration(params: {
       if (serverPullTimer == null) {
         serverPullTimer = window.setInterval(() => {
           if (cancelled || !providerRef.current?.isSynced) return;
+          if (hasOfflineSessionMarker(documentId)) return;
           void fetchPersistedState(documentId).then((server) => {
             if (cancelled || !server.state || server.state.length === 0) return;
             applyServerState(doc, server.state);

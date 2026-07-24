@@ -237,11 +237,11 @@ Spec: [offline-conflict.spec.ts](../apps/web/tests/e2e/offline/offline-conflict.
 |------|--------|-------|
 | 1 Live typing | PASS | |
 | 2 Live block add | PASS | |
-| 3 Offline different blocks | PASS (re-test) | Auto-merge OK; cursor asymmetry fixed — re-verify both cursors visible |
-| 4 Offline overlap (Mode C) | FAIL → **re-test** | Float worked but merged text + wrong modal diff. Code fixes applied. |
+| 3 Offline different blocks | PASS | Auto-merge, both edits, both cursors after reconnect |
+| 4 Offline overlap (Mode C) | PASS | Structural Y.Doc restore during review; Keep applies full mine text; no drift on modal close |
 | 5 Comments | FAIL → **re-test** | Inline highlight without sidebar until hard refresh. Code fix applied. |
 | Hard refresh | | |
-| `pnpm test:offline` | PASS | 17 tests after fixes |
+| `pnpm test:offline` | PASS | 23 tests |
 | E2E conflict (optional) | | |
 
 **Decisions taken:** D1 __ · D2 __ · D3 __ · D4 __

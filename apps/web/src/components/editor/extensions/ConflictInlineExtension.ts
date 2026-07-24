@@ -29,18 +29,60 @@ type ConflictInlineStorage = {
   onActivate?: (clusterId: string) => void;
 };
 
+function normalizeHighlightRanges(
+  ranges: CharRange[],
+  textLength: number,
+): CharRange[] {
+  return ranges
+    .map((range) => {
+      const start = Math.max(0, Math.min(range.start, textLength));
+      const end = Math.max(start, Math.min(range.end, textLength));
+      if (end > start) return { start, end };
+      if (start < textLength) return { start, end: start + 1 };
+      return null;
+    })
+    .filter((range): range is CharRange => range != null);
+}
+
 function highlightRangesForCluster(
   cluster: SpanConflictCluster,
   blockText: string,
 ): CharRange[] {
   const snapshotText = cluster.mineText;
   const displayText = blockText || snapshotText;
-  const ranges = conflictCharRangesForBlock({
+  const blockRanges = conflictCharRangesForBlock({
     baseText: cluster.baseText,
     mineText: snapshotText,
     theirsText: cluster.theirsText,
   });
-  return shiftCharRangesToDisplayText(ranges, snapshotText, displayText);
+
+  let ranges: CharRange[];
+  if (
+    displayText === snapshotText ||
+    displayText.trim() === snapshotText.trim()
+  ) {
+    const precomputed: CharRange = {
+      start: cluster.highlightStart,
+      end: cluster.highlightEnd,
+    };
+    ranges =
+      precomputed.end > precomputed.start
+        ? [precomputed]
+        : blockRanges.length > 0
+          ? blockRanges
+          : [{ start: 0, end: snapshotText.length }];
+  } else {
+    ranges = shiftCharRangesToDisplayText(
+      blockRanges,
+      snapshotText,
+      displayText,
+    );
+  }
+
+  return normalizeHighlightRanges(
+    ranges.length > 0 ? ranges : blockRanges,
+    displayText.length,
+  );
 }
 
 function buildConflictDecorations(

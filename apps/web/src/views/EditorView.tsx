@@ -115,7 +115,8 @@ function EditorViewContent() {
     registerEditorForConflict,
   } = useEditorSession();
 
-  const editorEditable = isTemplateMode || canEditDocument;
+  const editorEditable =
+    (isTemplateMode || canEditDocument) && !offlineConflictReviewPending;
 
   const {
     insights,

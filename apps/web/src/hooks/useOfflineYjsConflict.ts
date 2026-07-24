@@ -14,8 +14,6 @@ import {
   type SpanConflictCluster,
   type SpanConflictVariantSide,
 } from "@/lib/offline/span-conflict-clusters";
-import { applyHunkToText } from "@/lib/documents/text-diff";
-import { blockJsonFromPlainText, replaceBlockForConflict, setBlockFromJson, setBlockPlainText } from "@/lib/offline/yjs-block-resolution";
 import {
   claimOfflineConflictReview,
   clearOfflineSnapshots,
@@ -31,22 +29,50 @@ import {
   storeOfflineBase,
   storeOfflineMine,
 } from "@/lib/offline/yjs-offline-snapshot";
+import { applyHunkToText } from "@/lib/documents/text-diff";
+import {
+  blockJsonFromPlainText,
+  replaceBlockForConflict,
+  setBlockFromJson,
+  setBlockPlainText,
+} from "@/lib/offline/yjs-block-resolution";
+import {
+  forceYDocBodyFromProsemirrorDoc,
+  forceYDocBodyFromSnapshot,
+  OFFLINE_CONFLICT_RESTORE_ORIGIN,
+  ydocBodyMatchesSnapshot,
+} from "@/lib/offline/yjs-offline-restore";
 import { base64ToUint8, uint8ToBase64 } from "@/lib/collaboration/supabase-yjs-provider";
 import type {
   BlockResolutionPayload,
   SupabaseYjsProvider,
 } from "@/lib/collaboration/supabase-yjs-provider";
 
-const OFFLINE_CONFLICT_ORIGIN = "offline-conflict-restore";
+function syncConflictBlocksToMine(ydoc: Y.Doc, mineBytes: Uint8Array): void {
+  forceYDocBodyFromSnapshot(ydoc, mineBytes, OFFLINE_CONFLICT_RESTORE_ORIGIN);
+}
 
-function restoreYDocToSnapshot(ydoc: Y.Doc, mineSnapshot: Uint8Array): void {
-  const mineDoc = new Y.Doc();
-  Y.applyUpdate(mineDoc, mineSnapshot);
-  const restore = Y.encodeStateAsUpdate(mineDoc, Y.encodeStateVector(ydoc));
-  if (restore.length > 0) {
-    Y.applyUpdate(ydoc, restore, OFFLINE_CONFLICT_ORIGIN);
+function restoreToMineSnapshot(ydoc: Y.Doc, mineSnapshot: Uint8Array): void {
+  forceYDocBodyFromSnapshot(ydoc, mineSnapshot, OFFLINE_CONFLICT_RESTORE_ORIGIN);
+}
+
+function syncResolvedYDoc(
+  ydoc: Y.Doc,
+  getEditor: () => Editor | null,
+  side: "mine" | "theirs",
+  mineBytes: Uint8Array | null,
+): void {
+  if (side === "mine" && mineBytes) {
+    forceYDocBodyFromSnapshot(ydoc, mineBytes, OFFLINE_CONFLICT_RESTORE_ORIGIN);
+    return;
   }
-  mineDoc.destroy();
+  const editor = getEditor();
+  if (!editor) return;
+  forceYDocBodyFromProsemirrorDoc(
+    ydoc,
+    editor.state.doc,
+    OFFLINE_CONFLICT_RESTORE_ORIGIN,
+  );
 }
 
 const TAB_ID =
@@ -113,6 +139,9 @@ export function useOfflineYjsConflict(params: {
   const offlineSessionActiveRef = useRef(false);
   const mineSnapshotLockedRef = useRef(false);
   const pendingBroadcastsRef = useRef<BlockResolutionPayload[]>([]);
+  const manualConflictResolutionRef = useRef(false);
+  const conflictReviewArmedRef = useRef(false);
+  const reviewShieldApplyingRef = useRef(false);
   const remoteUpdateOriginRef = useRef(remoteUpdateOrigin);
   remoteUpdateOriginRef.current = remoteUpdateOrigin;
   const providerRef = useRef(provider);
@@ -139,6 +168,8 @@ export function useOfflineYjsConflict(params: {
 
   const captureMine = useCallback(() => {
     if (!ydoc || mineSnapshotLockedRef.current) return;
+    if (typeof navigator !== "undefined" && navigator.onLine) return;
+    if (!pendingBaseSnapshotRef.current) return;
     pendingMineSnapshotRef.current = snapshotYDoc(ydoc);
     if (documentId) {
       void storeOfflineMine(documentId, pendingMineSnapshotRef.current);
@@ -170,7 +201,7 @@ export function useOfflineYjsConflict(params: {
       if (!ydoc) return;
       mineSnapshotLockedRef.current = true;
       providerRef.current?.setOfflineReviewActive(true);
-      restoreYDocToSnapshot(ydoc, mineBytes);
+      restoreToMineSnapshot(ydoc, mineBytes);
       lastCheckedMergedRef.current = null;
     },
     [ydoc],
@@ -181,7 +212,7 @@ export function useOfflineYjsConflict(params: {
       if (!ydoc) return;
       const liveBytes = snapshotYDoc(ydoc);
       if (uint8ToBase64(liveBytes) !== uint8ToBase64(mineBytes)) {
-        restoreYDocToSnapshot(ydoc, mineBytes);
+        restoreToMineSnapshot(ydoc, mineBytes);
       }
       lastCheckedMergedRef.current = null;
     },
@@ -197,7 +228,9 @@ export function useOfflineYjsConflict(params: {
     ) {
       return;
     }
-    if (reviewPending || conflicts.length > 0) return;
+    if (conflictReviewArmedRef.current || reviewPending || conflicts.length > 0) {
+      return;
+    }
 
     const baseSnapshot =
       pendingBaseSnapshotRef.current != null
@@ -224,7 +257,7 @@ export function useOfflineYjsConflict(params: {
     // Peer merge leaked into the live doc — restore mine before detecting.
     const liveBytes = snapshotYDoc(ydoc);
     if (uint8ToBase64(liveBytes) !== uint8ToBase64(mineBytes)) {
-      restoreYDocToSnapshot(ydoc, mineBytes);
+      restoreToMineSnapshot(ydoc, mineBytes);
     }
 
     const mergedState = (() => {
@@ -271,12 +304,15 @@ export function useOfflineYjsConflict(params: {
     theirsDoc.destroy();
 
     if (found.length > 0) {
+      conflictReviewArmedRef.current = true;
       armOfflineReviewShield(mineBytes);
+      syncConflictBlocksToMine(ydoc, mineBytes);
+
       const nextClusters = clustersFromBlockConflicts(found);
       workingBlockTextRef.current = new Map(
         found.map((c) => [
           `${c.blockId}:${c.blockIndex}`,
-          c.baseText,
+          c.mineText,
         ]),
       );
       setConflicts(found);
@@ -285,7 +321,7 @@ export function useOfflineYjsConflict(params: {
       return;
     }
 
-    if (settled) {
+    if (settled && !conflictReviewArmedRef.current) {
       providerRef.current?.releaseDeferredPeerUpdates();
       await clearOfflineSnapshots(documentId);
       pendingBaseSnapshotRef.current = null;
@@ -309,6 +345,7 @@ export function useOfflineYjsConflict(params: {
     flushPendingBroadcasts,
     online,
     clearOfflineConflictSession,
+    getEditor,
     reviewPending,
     synced,
     ydoc,
@@ -327,6 +364,9 @@ export function useOfflineYjsConflict(params: {
 
   const beginOnlineReview = useCallback(() => {
     if (!ydoc || !documentId) return;
+
+    // Freeze the offline mine snapshot before reconnect / server sync can merge peer edits in.
+    mineSnapshotLockedRef.current = true;
 
     const startMergeCheck = (mineBytes: Uint8Array) => {
       restoreToMineIfNeeded(mineBytes);
@@ -382,6 +422,7 @@ export function useOfflineYjsConflict(params: {
     void resetOfflineConflictClaim(documentId);
     void storeOfflineBase(documentId, base);
     void storeOfflineMine(documentId, base);
+    markOfflineSessionPending(documentId);
     providerRef.current?.setOfflineSessionPending(true);
   }, [documentId, ydoc]);
 
@@ -455,6 +496,7 @@ export function useOfflineYjsConflict(params: {
     const onMineUpdate = (_update: Uint8Array, origin: unknown) => {
       if (!offlineSessionActiveRef.current || mineSnapshotLockedRef.current) return;
       if (!pendingBaseSnapshotRef.current) return;
+      if (origin === OFFLINE_CONFLICT_RESTORE_ORIGIN || origin === "offline-conflict") return;
       const remoteOrigin = remoteUpdateOriginRef.current;
       if (remoteOrigin != null && origin === remoteOrigin) return;
       captureMine();
@@ -507,8 +549,8 @@ export function useOfflineYjsConflict(params: {
     if (!hasOfflineSession()) return;
 
     const onDocUpdate = (_update: Uint8Array, origin: unknown) => {
-      if (origin === "offline-conflict" || origin === OFFLINE_CONFLICT_ORIGIN) return;
-      if (reviewPending || conflicts.length > 0) return;
+      if (origin === OFFLINE_CONFLICT_RESTORE_ORIGIN || origin === "offline-conflict") return;
+      if (reviewPending || conflicts.length > 0 || conflictReviewArmedRef.current) return;
       lastCheckedMergedRef.current = null;
       scheduleDetection();
     };
@@ -541,10 +583,38 @@ export function useOfflineYjsConflict(params: {
     providerRef.current?.setOfflineSessionPending(false);
     offlineSessionActiveRef.current = false;
     mineSnapshotLockedRef.current = false;
+    conflictReviewArmedRef.current = false;
+    manualConflictResolutionRef.current = false;
     setConflicts([]);
     setClusters([]);
     setReviewPending(false);
   }, [documentId]);
+
+  // Keep the live doc on the frozen mine snapshot for the entire review session.
+  useEffect(() => {
+    if (!reviewPending || !ydoc) return;
+    const mineBytes = pendingMineSnapshotRef.current;
+    if (!mineBytes) return;
+
+    const guard = () => {
+      if (reviewShieldApplyingRef.current) return;
+      if (ydocBodyMatchesSnapshot(ydoc, mineBytes)) return;
+      reviewShieldApplyingRef.current = true;
+      try {
+        syncConflictBlocksToMine(ydoc, mineBytes);
+      } finally {
+        reviewShieldApplyingRef.current = false;
+      }
+    };
+
+    guard();
+    ydoc.on("update", guard);
+    const interval = window.setInterval(guard, 400);
+    return () => {
+      ydoc.off("update", guard);
+      window.clearInterval(interval);
+    };
+  }, [reviewPending, ydoc]);
 
   const resolveBlock = useCallback(
     async (
@@ -571,6 +641,8 @@ export function useOfflineYjsConflict(params: {
 
   const broadcastResolvedBlock = useCallback(
     (blockId: string, blockIndex: number, block: ProseMirrorJsonNode) => {
+      manualConflictResolutionRef.current = true;
+      providerRef.current?.discardDeferredPeerUpdates();
       const payload: BlockResolutionPayload = { blockId, blockIndex, block };
       if (offlineSessionActiveRef.current) {
         pendingBroadcastsRef.current.push(payload);
@@ -619,18 +691,34 @@ export function useOfflineYjsConflict(params: {
 
       const blockKey = `${cluster.blockId}:${cluster.blockIndex}`;
       const working =
-        workingBlockTextRef.current.get(blockKey) ?? cluster.baseText;
-      const nextText = applyHunkToText(working, variant.hunk);
+        workingBlockTextRef.current.get(blockKey) ?? cluster.mineText;
+      const nextText =
+        side === "mine"
+          ? cluster.mineText
+          : side === "theirs"
+            ? cluster.theirsText
+            : applyHunkToText(working, variant.hunk);
+      const nextBlockJson =
+        side === "theirs" ? cluster.theirsBlock : cluster.mineBlock;
       workingBlockTextRef.current.set(blockKey, nextText);
 
-      const editor = getEditor();
-      if (editor) {
-        await resolveBlock(
+      const block =
+        (await resolveBlock(
           cluster.blockId,
           cluster.blockIndex,
           nextText,
-          cluster.mineBlock,
-        );
+          nextBlockJson,
+        )) ?? nextBlockJson;
+
+      if ((side === "mine" || side === "theirs") && ydoc) {
+        providerRef.current?.runWithoutOutgoingUpdates(() => {
+          syncResolvedYDoc(
+            ydoc,
+            getEditor,
+            side,
+            pendingMineSnapshotRef.current,
+          );
+        });
       }
 
       const nextClusters = clusters.filter((c) => c.id !== clusterId);
@@ -642,13 +730,6 @@ export function useOfflineYjsConflict(params: {
             c.blockId === cluster.blockId && c.blockIndex === cluster.blockIndex,
         )
       ) {
-        const block =
-          (await resolveBlock(
-            cluster.blockId,
-            cluster.blockIndex,
-            nextText,
-            cluster.mineBlock,
-          )) ?? cluster.mineBlock;
         if (block) {
           broadcastResolvedBlock(cluster.blockId, cluster.blockIndex, block);
         }
@@ -664,7 +745,7 @@ export function useOfflineYjsConflict(params: {
         );
       }
     },
-    [broadcastResolvedBlock, clusters, getEditor, resolveBlock],
+    [broadcastResolvedBlock, clusters, getEditor, resolveBlock, ydoc],
   );
 
   const keepMine = useCallback(
@@ -678,13 +759,23 @@ export function useOfflineYjsConflict(params: {
           conflict.mineText,
           conflict.mineBlock,
         )) ?? conflict.mineBlock;
+      if (ydoc) {
+        providerRef.current?.runWithoutOutgoingUpdates(() => {
+          syncResolvedYDoc(
+            ydoc,
+            getEditor,
+            "mine",
+            pendingMineSnapshotRef.current,
+          );
+        });
+      }
       if (block) {
         broadcastResolvedBlock(blockId, conflict.blockIndex, block);
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
       setClusters((prev) => prev.filter((c) => c.blockId !== blockId));
     },
-    [broadcastResolvedBlock, conflicts, resolveBlock],
+    [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc],
   );
 
   const takeTheirs = useCallback(
@@ -698,13 +789,18 @@ export function useOfflineYjsConflict(params: {
           conflict.theirsText,
           conflict.theirsBlock,
         )) ?? conflict.theirsBlock;
+      if (ydoc) {
+        providerRef.current?.runWithoutOutgoingUpdates(() => {
+          syncResolvedYDoc(ydoc, getEditor, "theirs", null);
+        });
+      }
       if (block) {
         broadcastResolvedBlock(blockId, conflict.blockIndex, block);
       }
       setConflicts((prev) => prev.filter((c) => c.blockId !== blockId));
       setClusters((prev) => prev.filter((c) => c.blockId !== blockId));
     },
-    [broadcastResolvedBlock, conflicts, resolveBlock],
+    [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc],
   );
 
   const keepAllMine = useCallback(async () => {
@@ -720,9 +816,19 @@ export function useOfflineYjsConflict(params: {
         broadcastResolvedBlock(conflict.blockId, conflict.blockIndex, block);
       }
     }
+    if (ydoc) {
+      providerRef.current?.runWithoutOutgoingUpdates(() => {
+        syncResolvedYDoc(
+          ydoc,
+          getEditor,
+          "mine",
+          pendingMineSnapshotRef.current,
+        );
+      });
+    }
     setConflicts([]);
     setClusters([]);
-  }, [broadcastResolvedBlock, conflicts, resolveBlock]);
+  }, [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc]);
 
   const takeAllTheirs = useCallback(async () => {
     for (const conflict of conflicts) {
@@ -737,9 +843,14 @@ export function useOfflineYjsConflict(params: {
         broadcastResolvedBlock(conflict.blockId, conflict.blockIndex, block);
       }
     }
+    if (ydoc) {
+      providerRef.current?.runWithoutOutgoingUpdates(() => {
+        syncResolvedYDoc(ydoc, getEditor, "theirs", null);
+      });
+    }
     setConflicts([]);
     setClusters([]);
-  }, [broadcastResolvedBlock, conflicts, resolveBlock]);
+  }, [broadcastResolvedBlock, conflicts, getEditor, resolveBlock, ydoc]);
 
   useEffect(() => {
     if (conflicts.length > 0 || clusters.length > 0 || !reviewPending) return;
@@ -747,8 +858,9 @@ export function useOfflineYjsConflict(params: {
 
     void (async () => {
       if (!(await ownsOfflineConflictReview(documentId, TAB_ID))) return;
-      providerRef.current?.releaseDeferredPeerUpdates();
+      providerRef.current?.discardDeferredPeerUpdates();
       await clearOfflineSnapshots(documentId);
+      conflictReviewArmedRef.current = false;
       setReviewPending(false);
       pendingBaseSnapshotRef.current = null;
       pendingMineSnapshotRef.current = null;
@@ -756,7 +868,11 @@ export function useOfflineYjsConflict(params: {
       endOfflineReview();
       providerRef.current?.resetBroadcastBaseline();
       flushPendingBroadcasts();
-      providerRef.current?.broadcastPendingLocalUpdates();
+      // Block resolution is authoritative — never re-push offline Yjs deltas on top.
+      if (!manualConflictResolutionRef.current) {
+        providerRef.current?.broadcastPendingLocalUpdates();
+      }
+      manualConflictResolutionRef.current = false;
       flushPersist();
     })();
   }, [

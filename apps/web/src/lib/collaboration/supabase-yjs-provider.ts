@@ -399,7 +399,7 @@ export class SupabaseYjsProvider {
 
   /** Apply queued peer updates after a clean auto-merge (no conflicts). */
   releaseDeferredPeerUpdates(): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.offlineReviewActive) return;
     for (const update of this.deferredPeerUpdates) {
       Y.applyUpdate(this.doc, update, this.origin);
     }
