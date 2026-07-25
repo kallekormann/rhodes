@@ -77,16 +77,35 @@ function resolveIdentity(
   awareness: Awareness,
   getPeerIdentity?: (clientId: number) => PeerIdentity,
 ): PeerIdentity {
-  if (entryIdentity?.displayName && entryIdentity.displayName !== "Other editor") {
-    return entryIdentity;
-  }
-  if (getPeerIdentity) {
-    const fromProvider = getPeerIdentity(clientId);
-    if (fromProvider.displayName !== "Other editor") return fromProvider;
-  }
+  // Pick the best displayName/userId source (first valid one wins), but
+  // never let that short-circuit drop lastLocalEditAt: whichever source was
+  // captured *before* the peer's genuine edit fired handleDocUpdate() won't
+  // have it set yet, while a fresher source (usually live awareness) will.
+  // Losing it here collapses a real, attributable author into "Others" in
+  // disambiguateContributors().
+  const fromProvider = getPeerIdentity?.(clientId);
   const fromAwareness = awarenessUserForClient(awareness, clientId);
-  if (fromAwareness.displayName !== "Other editor") return fromAwareness;
-  return entryIdentity ?? fromAwareness;
+
+  const base =
+    entryIdentity?.displayName && entryIdentity.displayName !== "Other editor"
+      ? entryIdentity
+      : fromProvider && fromProvider.displayName !== "Other editor"
+        ? fromProvider
+        : fromAwareness.displayName !== "Other editor"
+          ? fromAwareness
+          : entryIdentity ?? fromAwareness;
+
+  if (typeof base.lastLocalEditAt === "number") return base;
+
+  const freshestLastLocalEditAt = [
+    entryIdentity?.lastLocalEditAt,
+    fromProvider?.lastLocalEditAt,
+    fromAwareness.lastLocalEditAt,
+  ].find((value): value is number => typeof value === "number");
+
+  return freshestLastLocalEditAt == null
+    ? base
+    : { ...base, lastLocalEditAt: freshestLastLocalEditAt };
 }
 
 function mergedPeerBlockText(

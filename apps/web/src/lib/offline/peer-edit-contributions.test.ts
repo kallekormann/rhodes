@@ -460,6 +460,90 @@ describe("peer-edit-contributions", () => {
     awareness.destroy();
   });
 
+  it("merges a fresher lastLocalEditAt from live awareness even when entry identity already has a valid displayName", () => {
+    // Regression: the deferred update's attached identity can be captured
+    // before the sender's own handleDocUpdate() sets lastLocalEditAt on
+    // their awareness state (the update and the awareness broadcast race).
+    // If resolveIdentity() short-circuits on the entry identity's valid
+    // displayName alone, the real author's lastLocalEditAt is lost and
+    // disambiguateContributors() can't tell them apart from an idle
+    // bystander relaying identical content — collapsing a real, single
+    // conflicting party into "Others".
+    const capturedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = { state: uint8ToBase64(baseBytes), capturedAt };
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    const peerBParagraph = peerB.getXmlFragment("default").get(0) as Y.XmlElement;
+    const text = peerBParagraph.get(0) as Y.XmlText;
+    text.delete(0, text.length);
+    text.insert(0, "User B edit");
+
+    const peerC = new Y.Doc();
+    Y.applyUpdate(peerC, baseBytes);
+    const peerCParagraph = peerC.getXmlFragment("default").get(0) as Y.XmlElement;
+    const textC = peerCParagraph.get(0) as Y.XmlText;
+    textC.delete(0, textC.length);
+    textC.insert(0, "User B edit");
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    // B's live awareness state has the fresh lastLocalEditAt, but the
+    // deferred update's attached `identity` (captured earlier) does not.
+    const localDoc = new Y.Doc();
+    const awareness = new Awareness(localDoc);
+    const bAwarenessDoc = new Y.Doc();
+    Object.defineProperty(bAwarenessDoc, "clientID", { value: 42 });
+    const bAwareness = new Awareness(bAwarenessDoc);
+    bAwareness.setLocalStateField("user", { id: "user-b", name: "User B" });
+    bAwareness.setLocalStateField(
+      "lastLocalEditAt",
+      Date.parse(capturedAt) + 60_000,
+    );
+    applyAwarenessUpdate(
+      awareness,
+      encodeAwarenessUpdate(bAwareness, [42]),
+      "test",
+    );
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [
+        {
+          clientId: 42,
+          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
+          // Stale: valid displayName, but no lastLocalEditAt yet.
+          identity: { userId: "user-b", displayName: "User B" },
+        },
+        {
+          clientId: 99,
+          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
+          identity: { userId: "user-c", displayName: "User C" },
+        },
+      ],
+      awareness,
+      blockId: "b1",
+      blockIndex: 0,
+    });
+
+    expect(contributors.map((entry) => entry.displayName)).toEqual([
+      "User B",
+    ]);
+
+    base.destroy();
+    peerB.destroy();
+    peerC.destroy();
+    vectorDoc.destroy();
+    localDoc.destroy();
+    bAwarenessDoc.destroy();
+    bAwareness.destroy();
+    awareness.destroy();
+  });
+
   it("dedupes contributors by user id for summaries", () => {
     const summary = peerContributorSummary(
       uniquePeerContributors([
