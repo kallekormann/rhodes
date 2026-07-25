@@ -40,15 +40,101 @@ stateDiagram-v2
 | `auto_merging` | Silent merge + push (no float) |
 | `conflict_review` | Thin status bar + **inline** highlighted spans with variant rows below blocks |
 
-### Yjs offline conflict review (live collab path)
+### Yjs offline conflict (runtime truth)
+
+**Baseline for this rewrite:** `b6897c3` on `feature/phase-09-offline-wave-a`.
+
+Live collab offline conflicts are **not** driven by outbox HTTP 409. They are driven by the Yjs provider + `useOfflineYjsConflict` on the **reconnecting returner only**.
+
+```mermaid
+stateDiagram-v2
+  [*] --> OnlineIdle
+  OnlineIdle --> OfflineSession: browser_offline
+  OfflineSession --> OfflineDirty: local_ydoc_edit
+  OfflineDirty --> Detecting: browser_online
+  Detecting --> AutoMerged: no_Case_C
+  Detecting --> ConflictReview: Case_C_or_structural
+  ConflictReview --> Committed: all_Keep_Dismiss_done
+  AutoMerged --> OnlineIdle
+  Committed --> OnlineIdle
+```
+
+#### Flags and storage
+
+| Layer | Flag / key | Meaning |
+|-------|------------|---------|
+| Hook | `offlineSessionActiveRef` | This tab has an offline editing session |
+| Hook | `mineSnapshotLockedRef` | Mine frozen for review / reconnect |
+| Hook | `conflictReviewArmedRef` | Detection already opened review |
+| Hook | `reviewPending` | Conflict float / inline UI active |
+| Provider | `offlineSessionPending` | Defer peer updates from go-offline |
+| Provider | `offlineReviewActive` | Review shield; blocks outbound y-updates + persist on returner |
+| Provider | `deferPeerUpdates` | Queue peer sync/update instead of applying |
+| Awareness | `conflictReviewPending` | Peers can see returner is reviewing |
+| IDB | `offline_base:` / `offline_mine:` | Snapshots for detection |
+| sessionStorage | `rhodes:offline-session:{docId}` | Resume marker for this page load |
+
+#### Versions used in detection
+
+| Version | Source |
+|---------|--------|
+| **Base** | Yjs state when the tab went offline |
+| **Mine** | Yjs state after offline edits (refreshed on each local edit) |
+| **Peer / theirs** | Base ⊕ deferred peer updates (peer-only contribution) |
+| **Merged** | Live mine doc ⊕ deferred peer updates (shadow, detection only) |
+
+#### Product contract (A–D)
+
+| ID | Requirement |
+|----|-------------|
+| **A** | Conflict UI only when a real Case C / structural conflict exists |
+| **B** | Float + Diff Modal name only peers who touched that block |
+| **C** | After resolve / auto-merge, every client shows the same body |
+| **D** | After last Keep/Dismiss, conflict UI and inline decorations fully tear down |
+
+#### Convergence model (shipped)
+
+1. During review: Keep/Dismiss record **decisions as data** only; live Y.Doc stays on the mine shield.
+2. After all decisions: **absorb** deferred peer CRDT history → one body rewrite on the returner → broadcast as a **normal `y-update`**.
+3. Peers apply that update like any other edit. Do **not** force-replace peer fragments. `y-block-resolved` is retired (no-op stub only).
+4. Clean auto-merge (no Case C): `releaseDeferredPeerUpdates` → broadcast pending local updates → clear IDB snapshots.
+5. Teardown is atomic via `endConflictReviewSession` — clears `reviewPending`, clusters, reviews, shield, and decorations together.
+
+#### Manual UAT gates (S1–S9 + A–D)
+
+| ID | Scenario | Expect |
+|----|----------|--------|
+| S1 | A offline edits; nobody else changes | No float; A's edits on all clients |
+| S2 | A edits blk1; B edits blk2 | No float; both edits present |
+| S3 | A and B rewrite same span | Float; Keep→A; Dismiss→B; all clients identical |
+| S4 | A edits blk1; B deletes blk1 | Float with delete copy; Keep/Dismiss converge |
+| S5 | A deletes blk1; B edits blk1 | Float; Keep→gone; Dismiss→B text |
+| S6 | B adds blk while A offline | No float; A's edits + B's new block |
+| S7 | B and C both edit same block | Parties = only who touched; one commit |
+| S8 | Idle C online; only B conflicts | Parties = A+B only (**not** C) |
+| S9 | Second offline cycle after resolve | Clean baseline; no stuck UI |
+| **A** | Solo / non-overlap | No conflict UI |
+| **B** | Attribution | Float/modal names only touchers |
+| **C** | After resolve | Identical body on all clients (~2s) |
+| **D** | After last Keep/Dismiss | No phantoms/strikethrough; editor editable |
+
+#### UI (accepted for M1)
+
+- Document conflict float (Keep / Dismiss / Show me)
+- Conflict compare modal (base-aligned Your version vs peer columns)
+- Inline highlights + phantom segments via `ConflictInlineExtension`
+
+---
+
+### Yjs offline conflict review (legacy note)
 
 When a user edits offline while peers edit online, the **reconnecting client** enters `conflict_review`:
 
 - Peer Yjs updates are **deferred** on the returner; outbound sync is **blocked** until resolved.
-- Peers see `conflictReviewPending` via awareness and **do not persist** garbled merges to `document_yjs_state` while review is active.
-- Inline UI: highlighted spans in the editor + dimmed variant rows (Original / You / Others) below each affected block.
-- Resolution is **per span cluster** (overlapping hunks); auto Case A/B hunks merge silently.
-- After all clusters are resolved, authoritative `broadcastBlockResolution` + `broadcastPendingLocalUpdates` converge all clients and Postgres.
+- Peers see `conflictReviewPending` via awareness; only the **returner** pauses persist during their own review.
+- Inline UI: float + compare modal + highlighted spans (not variant rows below blocks).
+- Resolution decisions are recorded per block; a **single commit** converges all clients via normal Yjs updates.
+- Presence (`nudgeLocalAwareness`) continues during offline session/review so carets return after reconnect.
 
 
 ## Three-version merge (offline 409)

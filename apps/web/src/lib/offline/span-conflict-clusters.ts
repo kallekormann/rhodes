@@ -341,9 +341,16 @@ export function clustersFromBlockConflicts(
     mineBlock?: ProseMirrorJsonNode;
     theirsBlock?: ProseMirrorJsonNode;
   }>,
-  theirsAuthorName?: string,
+  /** Per-block peer author summary — never flatten all blocks into one name. */
+  theirsAuthorByBlock?: Map<string, string> | string,
 ): SpanConflictCluster[] {
+  const authorFor = (blockId: string): string => {
+    if (typeof theirsAuthorByBlock === "string") return theirsAuthorByBlock;
+    return theirsAuthorByBlock?.get(blockId) ?? "Others";
+  };
+
   const clusters = conflicts.flatMap((block, blockIdx) => {
+    const theirsAuthorName = authorFor(block.blockId);
     const clusters = detectSpanConflictClusters({
       ...block,
       theirsAuthorName,
@@ -392,7 +399,7 @@ export function clustersFromBlockConflicts(
           },
           {
             side: "theirs",
-            authorName: theirsAuthorName ?? "Others",
+            authorName: theirsAuthorName,
             blockText: block.theirsText,
             hunkText: block.theirsText,
             hunk: {

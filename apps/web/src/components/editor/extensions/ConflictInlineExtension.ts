@@ -170,7 +170,10 @@ function buildConflictDecorations(
   doc: ProseMirrorNode,
   state: ConflictInlineState,
 ): DecorationSet {
-  if (!state.colors) return DecorationSet.empty;
+  // Empty reviews ⇒ no widgets (Requirement D teardown).
+  if (!state.colors || state.reviews.length === 0 || state.clusters.length === 0) {
+    return DecorationSet.empty;
+  }
 
   const decorations: Decoration[] = [];
   for (const review of state.reviews) {

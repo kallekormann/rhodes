@@ -210,6 +210,9 @@ Spec: [offline-conflict.spec.ts](../apps/web/tests/e2e/offline/offline-conflict.
 |------|------|
 | Yjs init + server merge | `apps/web/src/hooks/useYjsCollaboration.ts` |
 | Offline conflict lifecycle | `apps/web/src/hooks/useOfflineYjsConflict.ts` |
+| Single commit builder | `apps/web/src/lib/offline/offline-conflict-commit.ts` |
+| Detection / structural kinds | `apps/web/src/lib/offline/yjs-offline-divergence.ts` |
+| Per-block peer attribution | `apps/web/src/lib/offline/peer-edit-contributions.ts` |
 | Realtime provider | `apps/web/src/lib/collaboration/supabase-yjs-provider.ts` |
 | Editor wiring | `apps/web/src/hooks/useEditorSession.ts`, `apps/web/src/views/EditorView.tsx` |
 | Conflict UI | `DocumentConflictFloat.tsx`, `ConflictCompareModal.tsx`, `ConflictInlineExtension.ts` |
@@ -217,6 +220,7 @@ Spec: [offline-conflict.spec.ts](../apps/web/tests/e2e/offline/offline-conflict.
 | Yjs persistence API | `apps/web/src/app/api/documents/[id]/yjs/route.ts` |
 | Migration | `supabase/migrations/00045_document_yjs_state.sql` |
 | Title/metadata sync | `apps/web/src/lib/offline/sync-engine.ts` |
+| Runtime conflict docs | `docs/12-offline-sync.md` (§ Yjs offline conflict) |
 
 ---
 

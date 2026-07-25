@@ -76,6 +76,43 @@ export function forceYDocBodyFromProsemirrorDoc(
   }, origin);
 }
 
+/**
+ * Replace the live fragment by cloning Xml blocks from source Y.Docs.
+ * Avoids TipTap PM round-trips that mint empty paragraphs on commit.
+ */
+export function forceYDocBodyFromClonedBlocks(
+  liveDoc: Y.Doc,
+  blocks: Array<Y.XmlElement | Y.XmlText>,
+  origin: unknown = OFFLINE_CONFLICT_RESTORE_ORIGIN,
+  fragmentName: string = COLLAB_FRAGMENT,
+): void {
+  const liveFragment = liveDoc.getXmlFragment(fragmentName);
+
+  liveDoc.transact(() => {
+    if (liveFragment.length > 0) {
+      liveFragment.delete(0, liveFragment.length);
+    }
+    for (let index = 0; index < blocks.length; index += 1) {
+      liveFragment.insert(index, [cloneXmlItem(blocks[index])]);
+    }
+  }, origin);
+}
+
+/** Find a top-level XmlElement by blockId attribute. */
+export function findXmlBlockById(
+  doc: Y.Doc,
+  blockId: string,
+  fragmentName: string = COLLAB_FRAGMENT,
+): Y.XmlElement | null {
+  const fragment = doc.getXmlFragment(fragmentName);
+  for (let index = 0; index < fragment.length; index += 1) {
+    const item = fragment.get(index);
+    if (!(item instanceof Y.XmlElement)) continue;
+    if (item.getAttribute("blockId") === blockId) return item;
+  }
+  return null;
+}
+
 /** Semantic body check — Yjs byte encoding can differ while block text matches. */
 export function ydocBodyMatchesSnapshot(
   liveDoc: Y.Doc,

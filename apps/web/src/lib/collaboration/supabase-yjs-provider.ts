@@ -57,7 +57,6 @@ function isAuthSendError(error: unknown): boolean {
 const EVENT_SYNC = "y-sync";
 const EVENT_UPDATE = "y-update";
 const EVENT_AWARENESS = "y-awareness";
-const EVENT_BLOCK_RESOLVED = "y-block-resolved";
 
 export type BlockResolutionPayload = {
   blockId: string;
@@ -72,9 +71,14 @@ export type BlockResolutionPayload = {
 
 type BlockResolutionListener = (payload: BlockResolutionPayload) => void;
 
+export type PeerIdentity = { userId: string; displayName: string };
+
 export type DeferredPeerUpdate = {
   update: Uint8Array;
   clientId: number | null;
+  identity?: PeerIdentity;
+  /** sync step2 carries whole-room state — never use for per-peer attribution. */
+  source?: "sync" | "update";
 };
 
 type BroadcastPayload = {
@@ -119,6 +123,8 @@ export class SupabaseYjsProvider {
   /** Hold peer updates during offline conflict review so the editor stays on mine. */
   private deferPeerUpdates = false;
   private deferredPeerUpdates: DeferredPeerUpdate[] = [];
+  /** Last known Yjs user per remote client — survives awareness prune. */
+  private awarenessUsersByClientId = new Map<number, PeerIdentity>();
   /** Set while the offline returner has an active review session (from go-offline until resolved). */
   private offlineReviewActive = false;
   private peerUpdatesDeferredListener: (() => void) | null = null;
@@ -331,11 +337,12 @@ export class SupabaseYjsProvider {
     return () => this.blockResolutionListeners.delete(listener);
   }
 
-  /** Authoritative block content after offline conflict Keep/Dismiss — peers apply as-is. */
-  broadcastBlockResolution(payload: BlockResolutionPayload): void {
-    if (this.destroyed || !this.channel) return;
-    const bytes = new TextEncoder().encode(JSON.stringify(payload));
-    void this.send(EVENT_BLOCK_RESOLVED, bytes);
+  /**
+   * No-op: offline convergence is a single CRDT `y-update` commit.
+   * Kept for back-compat until callers stop invoking it.
+   */
+  broadcastBlockResolution(_payload: BlockResolutionPayload): void {
+    /* y-block-resolved is no longer authority */
   }
 
   runWithoutOutgoingUpdates<T>(fn: () => T): T {
@@ -385,13 +392,8 @@ export class SupabaseYjsProvider {
   }
 
   private maybeNudgeLocalAwareness(): void {
-    if (
-      this.offlineReviewActive ||
-      this.offlineSessionPending ||
-      this.clientNetworkOffline
-    ) {
-      return;
-    }
+    // Presence must re-announce during offline session / conflict review —
+    // only skip when the browser is offline or the channel is gone (handled in nudge).
     this.nudgeLocalAwareness();
   }
 
@@ -407,8 +409,68 @@ export class SupabaseYjsProvider {
     return merged;
   }
 
+  /**
+   * Peer document for offline conflict detection: offline base ⊕ deferred updates.
+   * Caller owns destroy(). Does not mutate the live doc.
+   */
+  buildPeerDocFromDeferred(baseSnapshot: {
+    state: string;
+    capturedAt: string;
+  }): Y.Doc {
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, base64ToUint8(baseSnapshot.state));
+    for (const entry of this.deferredPeerUpdates) {
+      if (entry.update.length > 0) {
+        Y.applyUpdate(peerDoc, entry.update);
+      }
+    }
+    return peerDoc;
+  }
+
   getDeferredPeerUpdates(): DeferredPeerUpdate[] {
     return [...this.deferredPeerUpdates];
+  }
+
+  /**
+   * Apply queued peer updates to the live doc with provider origin.
+   * Unlike releaseDeferredPeerUpdates, runs even while offlineReviewActive
+   * (commit absorbs before tearing the review down).
+   */
+  absorbDeferredPeerUpdates(): void {
+    if (this.destroyed) return;
+    for (const entry of this.deferredPeerUpdates) {
+      Y.applyUpdate(this.doc, entry.update, this.origin);
+    }
+    this.deferredPeerUpdates = [];
+  }
+
+  /**
+   * Commit the resolved offline body: clear outbound shields before mutate so
+   * handleDocUpdate broadcasts, then flush and re-announce presence.
+   */
+  commitResolvedDoc(mutate: () => void): void {
+    if (this.destroyed) return;
+    this.offlineReviewActive = false;
+    this.offlineSessionPending = false;
+    this.deferPeerUpdates = false;
+    this.deferredPeerUpdates = [];
+    this.suppressOutgoingUpdates = false;
+    this.awareness.setLocalStateField("conflictReviewPending", null);
+    mutate();
+    this.resetBroadcastBaseline();
+    this.broadcastPendingLocalUpdates();
+    this.flushPersist();
+    this.nudgeLocalAwareness();
+  }
+
+  /** Resolve a peer's identity from live awareness or the non-pruned cache. */
+  getPeerIdentity(clientId: number): PeerIdentity {
+    const resolved = this.resolveAwarenessUser(clientId);
+    if (resolved) return resolved;
+    return {
+      userId: `peer-${clientId}`,
+      displayName: "Other editor",
+    };
   }
 
   /** Apply queued peer updates after a clean auto-merge (no conflicts). */
@@ -434,11 +496,16 @@ export class SupabaseYjsProvider {
   private queueDeferredPeerUpdate(
     update: Uint8Array,
     clientId?: number | null,
+    source: "sync" | "update" = "update",
   ): void {
     if (update.length === 0) return;
+    const identity =
+      clientId != null ? this.resolveAwarenessUser(clientId) : undefined;
     this.deferredPeerUpdates.push({
       update,
       clientId: clientId ?? null,
+      identity,
+      source,
     });
     this.markPeerDataReceived();
     this.setSynced(true);
@@ -573,7 +640,7 @@ export class SupabaseYjsProvider {
   }
 
   private heartbeatAwareness() {
-    if (this.destroyed) return;
+    if (this.destroyed || this.clientNetworkOffline || !this.channel) return;
     const local = this.awareness.getLocalState();
     if (!local) return;
     // Re-set so lastUpdated stays fresh for peer prune timers.
@@ -775,9 +842,6 @@ export class SupabaseYjsProvider {
     channel.on("broadcast", { event: EVENT_AWARENESS }, ({ payload }) => {
       this.applyEncodedAwareness(payload as BroadcastPayload);
     });
-    channel.on("broadcast", { event: EVENT_BLOCK_RESOLVED }, ({ payload }) => {
-      this.applyBlockResolution(payload as BroadcastPayload);
-    });
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED" && !this.destroyed) {
@@ -881,6 +945,31 @@ export class SupabaseYjsProvider {
     }
   };
 
+  private captureAwarenessUsers = () => {
+    if (this.destroyed) return;
+    this.awareness.getStates().forEach((state, clientId) => {
+      if (clientId === this.doc.clientID) return;
+      const user = state?.user as { id?: string; name?: string } | undefined;
+      const userId = user?.id?.trim();
+      if (!userId) return;
+      const displayName = user?.name?.trim() || "";
+      this.awarenessUsersByClientId.set(clientId, { userId, displayName });
+    });
+  };
+
+  private resolveAwarenessUser(clientId: number): PeerIdentity | undefined {
+    const state = this.awareness.getStates().get(clientId);
+    const liveUser = state?.user as { id?: string; name?: string } | undefined;
+    const liveUserId = liveUser?.id?.trim();
+    if (liveUserId) {
+      const displayName = liveUser?.name?.trim() || "";
+      const identity = { userId: liveUserId, displayName };
+      this.awarenessUsersByClientId.set(clientId, identity);
+      return identity;
+    }
+    return this.awarenessUsersByClientId.get(clientId);
+  }
+
   private handleAwarenessUpdate = (
     {
       added,
@@ -926,7 +1015,7 @@ export class SupabaseYjsProvider {
           shadow,
           Y.encodeStateVector(this.doc),
         );
-        this.queueDeferredPeerUpdate(peerDelta, payload.clientId);
+        this.queueDeferredPeerUpdate(peerDelta, payload.clientId, "sync");
       }
 
       shadow.destroy();
@@ -955,7 +1044,7 @@ export class SupabaseYjsProvider {
     if (!payload?.data || this.destroyed) return;
     const update = base64ToUint8(payload.data);
     if (this.shouldDeferIncomingUpdates()) {
-      this.queueDeferredPeerUpdate(update, payload.clientId);
+      this.queueDeferredPeerUpdate(update, payload.clientId, "update");
       return;
     }
     this.markPeerDataReceived();
@@ -970,27 +1059,7 @@ export class SupabaseYjsProvider {
       base64ToUint8(payload.data),
       this.origin,
     );
+    this.captureAwarenessUsers();
     this.refreshRemoteConflictReview();
-  }
-
-  private applyBlockResolution(payload: BroadcastPayload) {
-    if (!payload?.data || this.destroyed) return;
-    try {
-      const json = new TextDecoder().decode(base64ToUint8(payload.data));
-      const parsed = JSON.parse(json) as BlockResolutionPayload;
-      if (typeof parsed?.blockId !== "string" || !parsed.block) return;
-      if (typeof parsed.blockIndex !== "number") {
-        parsed.blockIndex = 0;
-      }
-      for (const listener of this.blockResolutionListeners) {
-        try {
-          listener(parsed);
-        } catch {
-          /* ignore */
-        }
-      }
-    } catch {
-      /* ignore malformed payloads */
-    }
   }
 }

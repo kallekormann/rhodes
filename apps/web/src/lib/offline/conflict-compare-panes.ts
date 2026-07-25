@@ -4,6 +4,7 @@ import {
   type BlockReviewModel,
   type ReviewSegment,
 } from "@/lib/offline/base-aligned-review";
+import { peerContributorSummary } from "@/lib/offline/peer-edit-contributions";
 import type { SpanConflictCluster } from "@/lib/offline/span-conflict-clusters";
 
 export type ConflictComparePane = {
@@ -13,7 +14,10 @@ export type ConflictComparePane = {
   peerUserId?: string;
 };
 
-/** Base-relative columns for the compare modal (not mine-vs-theirs). */
+/**
+ * Two-column Diff Modal: Your version | Conflict version.
+ * Never one pane per open-document user — parties belong in the float legend.
+ */
 export function conflictComparePanes(
   cluster: SpanConflictCluster,
   review?: BlockReviewModel,
@@ -33,29 +37,21 @@ export function conflictComparePanes(
     });
 
   const changeHint =
-    clusterReviewSummary(model, cluster.id) ||
+    clusterReviewSummary(model, cluster.id, model.kind) ||
     cluster.variants.find((variant) => variant.side === "mine")?.hunkText ||
     cluster.baseSlice ||
     cluster.mineText;
 
-  const peers =
-    model.peerAuthorSegments.length > 0
-      ? model.peerAuthorSegments.map((author) => ({
-          label: author.displayName,
-          segments: author.segments,
-          variant: "peer" as const,
-          peerUserId: author.userId,
-        }))
-      : [
-          {
-            label:
-              cluster.variants.find((variant) => variant.side === "theirs")
-                ?.authorName ?? "Others",
-            segments: model.peerSegments,
-            variant: "peer" as const,
-            peerUserId: "peer-merged",
-          },
-        ];
+  const peerLabel =
+    model.peerContributors.length > 0
+      ? peerContributorSummary(model.peerContributors)
+      : (cluster.variants.find((variant) => variant.side === "theirs")
+          ?.authorName ?? "Conflict version");
+
+  const peerUserId =
+    model.peerContributors.length === 1
+      ? model.peerContributors[0].userId
+      : model.peerContributors[0]?.userId ?? "peer-merged";
 
   return {
     mine: {
@@ -63,7 +59,14 @@ export function conflictComparePanes(
       segments: model.mineSegments,
       variant: "mine",
     },
-    peers,
+    peers: [
+      {
+        label: peerLabel === "Others" ? "Conflict version" : peerLabel,
+        segments: model.peerSegments,
+        variant: "peer",
+        peerUserId,
+      },
+    ],
     changeHint,
   };
 }

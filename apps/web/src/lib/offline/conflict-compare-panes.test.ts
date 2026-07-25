@@ -58,6 +58,8 @@ describe("conflictComparePanes", () => {
     const panes = conflictComparePanes(cluster, review);
 
     expect(panes.mine.label).toBe("Your version");
+    expect(panes.peers).toHaveLength(1);
+    expect(panes.peers[0]?.label).toBe("Conflict version");
     expect(panes.mine.segments.some((segment) => segment.role === "mine_add")).toBe(
       true,
     );
@@ -65,5 +67,41 @@ describe("conflictComparePanes", () => {
       true,
     );
     expect(panes.changeHint).toContain("You");
+  });
+
+  it("labels the single conflict pane with the touching peer name", () => {
+    const cluster = blockCluster(
+      "Hello world",
+      "Hello A world",
+      "Hello B world",
+    );
+    const review = buildBlockReviewModel({
+      blockId: cluster.blockId,
+      blockIndex: cluster.blockIndex,
+      baseText: cluster.baseText,
+      mineText: cluster.mineText,
+      theirsText: cluster.theirsText,
+      spanClusterId: cluster.id,
+      peerContributors: [
+        {
+          clientId: 1,
+          userId: "user-b",
+          displayName: "User B",
+          blockText: "Hello B world",
+          blockIndex: 0,
+        },
+        {
+          clientId: 2,
+          userId: "user-c",
+          displayName: "User C",
+          blockText: "Hello C world",
+          blockIndex: 0,
+        },
+      ],
+    });
+    const panes = conflictComparePanes(cluster, review);
+    expect(panes.peers).toHaveLength(1);
+    expect(panes.peers[0]?.label).toBe("User B and User C");
+    expect(panes.peers[0]?.segments).toBe(review.peerSegments);
   });
 });

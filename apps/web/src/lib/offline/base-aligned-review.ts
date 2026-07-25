@@ -32,6 +32,7 @@ export type BlockReviewModel = {
   baseText: string;
   mineText: string;
   theirsText: string;
+  kind?: import("@/lib/offline/yjs-offline-divergence").BlockConflictKind;
   peerContributors: PeerEditContributor[];
   /** Inline editor stream (mine text + phantom peer / deleted segments). */
   segments: ReviewSegment[];
@@ -292,6 +293,7 @@ export function buildBlockReviewModel(params: {
   baseText: string;
   mineText: string;
   theirsText: string;
+  kind?: import("@/lib/offline/yjs-offline-divergence").BlockConflictKind;
   peerContributors?: PeerEditContributor[];
   spanClusterId?: string;
 }): BlockReviewModel {
@@ -347,6 +349,7 @@ export function buildBlockReviewModel(params: {
     baseText: params.baseText,
     mineText: params.mineText,
     theirsText: params.theirsText,
+    kind: params.kind,
     peerContributors,
     segments: inlineSegments,
     mineSegments,
@@ -405,6 +408,7 @@ export function buildBlockReviewModels(
     baseText: string;
     mineText: string;
     theirsText: string;
+    kind?: import("@/lib/offline/yjs-offline-divergence").BlockConflictKind;
   }>,
   spanClusters: Array<{ id: string; blockId: string; baseStart: number }>,
   peerContributorsByBlock?: Map<string, PeerEditContributor[]>,
@@ -428,7 +432,17 @@ export function buildBlockReviewModels(
 export function clusterReviewSummary(
   review: BlockReviewModel,
   clusterId: string,
+  kind?: import("@/lib/offline/yjs-offline-divergence").BlockConflictKind,
 ): string {
+  const peerNames = peerContributorSummary(review.peerContributors);
+
+  if (kind === "mine_edited_peer_deleted") {
+    return `You edited this block while ${peerNames} deleted it.`;
+  }
+  if (kind === "mine_deleted_peer_edited") {
+    return `You deleted this block while ${peerNames} edited it.`;
+  }
+
   const parts = review.segments.filter((segment) => segment.clusterId === clusterId);
   if (parts.length === 0) {
     return "";
@@ -436,7 +450,6 @@ export function clusterReviewSummary(
 
   const mineChanged = parts.some((segment) => segment.role.startsWith("mine"));
   const peerChanged = parts.some((segment) => segment.role.startsWith("peer"));
-  const peerNames = peerContributorSummary(review.peerContributors);
 
   const mineDels = parts
     .filter((segment) => segment.role === "mine_del")

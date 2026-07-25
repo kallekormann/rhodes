@@ -70,7 +70,7 @@ export function DocumentConflictFloat({
     if (!active) return null;
     const review = reviewForBlock(reviews, active.blockId);
     if (!review) return null;
-    return clusterReviewSummary(review, active.id);
+    return clusterReviewSummary(review, active.id, review.kind);
   }, [active, reviews]);
 
   const peerLegend = useMemo(() => {

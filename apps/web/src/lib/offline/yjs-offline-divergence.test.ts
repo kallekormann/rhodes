@@ -1,6 +1,37 @@
 import { describe, expect, it } from "vitest";
+import * as Y from "yjs";
 import { threeWayMergeText } from "@/lib/documents/text-diff";
-import { blockNeedsConflictReview, resolveTheirsForOfflineConflict } from "@/lib/offline/yjs-offline-divergence";
+import {
+  blockNeedsConflictReview,
+  detectOfflineBlockConflicts,
+  isOfflineMergeSettled,
+  offlineSessionHasOnlyLocalEdits,
+  peerTouchedBlock,
+  resolveTheirsForOfflineConflict,
+} from "@/lib/offline/yjs-offline-divergence";
+
+function seedParagraph(doc: Y.Doc, blockId: string, text: string): void {
+  const fragment = doc.getXmlFragment("default");
+  const paragraph = new Y.XmlElement("paragraph");
+  paragraph.setAttribute("blockId", blockId);
+  const xmlText = new Y.XmlText();
+  xmlText.insert(0, text);
+  paragraph.insert(0, [xmlText]);
+  fragment.insert(fragment.length, [paragraph]);
+}
+
+function setBlockText(doc: Y.Doc, index: number, text: string): void {
+  const fragment = doc.getXmlFragment("default");
+  const paragraph = fragment.get(index) as Y.XmlElement;
+  const xmlText = paragraph.get(0) as Y.XmlText;
+  xmlText.delete(0, xmlText.length);
+  xmlText.insert(0, text);
+}
+
+function deleteBlock(doc: Y.Doc, index: number): void {
+  const fragment = doc.getXmlFragment("default");
+  fragment.delete(index, 1);
+}
 
 describe("offline Yjs block overlap detection", () => {
   it("auto-merges when only one side changed", () => {
@@ -87,7 +118,9 @@ describe("offline Yjs block overlap detection", () => {
     const merged = mine;
 
     expect(
-      blockNeedsConflictReview(base, mine, theirs, merged, true),
+      blockNeedsConflictReview(base, mine, theirs, merged, true, {
+        peerTouched: false,
+      }),
     ).toBe(false);
   });
 
@@ -98,7 +131,9 @@ describe("offline Yjs block overlap detection", () => {
     const mergedWithNoise = "Block one offline edit "; // trailing space from CRDT
 
     expect(
-      blockNeedsConflictReview(base, mine, theirs, mergedWithNoise, true),
+      blockNeedsConflictReview(base, mine, theirs, mergedWithNoise, true, {
+        peerTouched: false,
+      }),
     ).toBe(false);
   });
 
@@ -108,7 +143,7 @@ describe("offline Yjs block overlap detection", () => {
         "block one base",
         "block one mine",
         "block one polluted from yjs",
-        "block one mine",
+        false,
       ),
     ).toBe("block one base");
   });
@@ -120,7 +155,150 @@ describe("offline Yjs block overlap detection", () => {
     const merged = "Hello offline online edit";
 
     expect(
-      blockNeedsConflictReview(base, mine, theirs, merged, true),
+      blockNeedsConflictReview(base, mine, theirs, merged, true, {
+        kind: "both_edited",
+        peerTouched: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("S1 solo: no conflict when peer did not touch", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Offline solo edit");
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+
+    const conflicts = detectOfflineBlockConflicts(base, mine, peer, mine, {
+      catchupComplete: true,
+    });
+    expect(conflicts).toHaveLength(0);
+    expect(offlineSessionHasOnlyLocalEdits(base, mine, peer)).toBe(true);
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+  });
+
+  it("S2 different blocks: no conflict", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one");
+    seedParagraph(base, "b2", "Block two");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Block one offline");
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+    setBlockText(peer, 1, "Block two online");
+
+    const conflicts = detectOfflineBlockConflicts(base, mine, peer, undefined, {
+      catchupComplete: true,
+    });
+    expect(conflicts).toHaveLength(0);
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+  });
+
+  it("S4 mine edit + peer delete detection", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Mine kept editing");
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+    deleteBlock(peer, 0);
+
+    expect(peerTouchedBlock("b1", base, peer)).toBe(true);
+
+    const conflicts = detectOfflineBlockConflicts(base, mine, peer, undefined, {
+      catchupComplete: true,
+    });
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].kind).toBe("mine_edited_peer_deleted");
+    expect(conflicts[0].blockId).toBe("b1");
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+  });
+
+  it("S13 settled when only local edits", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Local only");
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+
+    // Shielded merge still equals mine — must still settle for solo.
+    expect(offlineSessionHasOnlyLocalEdits(base, mine, peer)).toBe(true);
+    expect(isOfflineMergeSettled(base, mine, peer, mine)).toBe(true);
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+  });
+
+  it("no false delete from empty deferred (same block count, missing noisy id)", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+    // Replace with a different blockId — same top-level count, noisy missing id.
+    deleteBlock(peer, 0);
+    seedParagraph(peer, "b-noise", "Original");
+
+    expect(peerTouchedBlock("b1", base, peer)).toBe(false);
+    expect(peerTouchedBlock("missing-noise-id", base, peer)).toBe(false);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Mine edit");
+
+    const conflicts = detectOfflineBlockConflicts(base, mine, peer, undefined, {
+      catchupComplete: true,
+    });
+    expect(conflicts.some((c) => c.kind === "mine_edited_peer_deleted")).toBe(
+      false,
+    );
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+  });
+
+  it("structural delete kinds require peerTouched for review", () => {
+    expect(
+      blockNeedsConflictReview("base", "mine", "", undefined, true, {
+        kind: "mine_edited_peer_deleted",
+        peerTouched: false,
+      }),
+    ).toBe(false);
+    expect(
+      blockNeedsConflictReview("base", "mine", "", undefined, true, {
+        kind: "mine_edited_peer_deleted",
+        peerTouched: true,
+      }),
     ).toBe(true);
   });
 });

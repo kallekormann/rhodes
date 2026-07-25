@@ -97,6 +97,8 @@ export function ConflictCompareModal({
 
   const review = reviewForBlock(reviews, cluster.blockId);
   const panes = conflictComparePanes(cluster, review);
+  const conflictPane = panes.peers[0];
+  if (!conflictPane) return null;
 
   return (
     <div className="conflict-compare-modal__backdrop" role="presentation">
@@ -129,20 +131,15 @@ export function ConflictCompareModal({
               syncScroll(event.currentTarget, rightScrollRef.current)
             }
           />
-          <div className="conflict-compare-modal__peer-stack" ref={rightScrollRef}>
-            {panes.peers.map((peerPane) => (
-              <ComparePane
-                key={`${peerPane.label}:${peerPane.peerUserId ?? "peer"}`}
-                {...peerPane}
-                colors={colors}
-                activeClusterId={cluster.id}
-                scrollRef={rightScrollRef}
-                onScroll={(event) =>
-                  syncScroll(event.currentTarget, leftScrollRef.current)
-                }
-              />
-            ))}
-          </div>
+          <ComparePane
+            {...conflictPane}
+            colors={colors}
+            activeClusterId={cluster.id}
+            scrollRef={rightScrollRef}
+            onScroll={(event) =>
+              syncScroll(event.currentTarget, leftScrollRef.current)
+            }
+          />
         </div>
 
         <footer className="conflict-compare-modal__actions">

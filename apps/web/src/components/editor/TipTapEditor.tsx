@@ -922,7 +922,10 @@ export function TipTapEditor({
     const next: ConflictInlineState = {
       clusters: offlineConflictClusters,
       reviews: offlineConflictReviews,
-      colors: conflictReviewColors,
+      colors:
+        offlineConflictClusters.length > 0 && offlineConflictReviews.length > 0
+          ? conflictReviewColors
+          : null,
       activeClusterId:
         activeOfflineConflictClusterId ??
         offlineConflictClusters[0]?.id ??

@@ -9,6 +9,16 @@ export type BlockText = {
   text: string;
 };
 
+export type BlockConflictKind =
+  | "both_edited"
+  | "mine_edited_peer_deleted"
+  | "mine_deleted_peer_edited"
+  | "peer_added"
+  | "mine_added"
+  | "peer_deleted_clean";
+
+export type BlockEntry = BlockText & { node: ProseMirrorJsonNode };
+
 export type BlockConflict = BlockText & {
   baseText: string;
   mineText: string;
@@ -19,6 +29,7 @@ export type BlockConflict = BlockText & {
   highlightEnd: number;
   mineBlock?: ProseMirrorJsonNode;
   theirsBlock?: ProseMirrorJsonNode;
+  kind?: BlockConflictKind;
 };
 
 export type ProseMirrorJsonNode = {
@@ -46,6 +57,27 @@ export function extractBlockNode(
     if (node.attrs?.blockId === blockId) return node;
   }
   return null;
+}
+
+/** Ordered top-level blocks from a Y.Doc. */
+export function extractOrderedBlocks(doc: Y.Doc): BlockEntry[] {
+  const json = yDocToProsemirrorJSON(doc, "default") as {
+    content?: ProseMirrorJsonNode[];
+  };
+  const blocks: BlockEntry[] = [];
+
+  (json.content ?? []).forEach((node, index) => {
+    const blockId = node.attrs?.blockId;
+    if (typeof blockId !== "string" || !blockId) return;
+    blocks.push({
+      blockId,
+      blockIndex: index,
+      text: plainFromNode(node).trim(),
+      node,
+    });
+  });
+
+  return blocks;
 }
 
 /** Extract top-level block plain text keyed by blockId from a Y.Doc. */
@@ -106,9 +138,95 @@ function collectBlockIds(
   return [...ids];
 }
 
+/** Whether peer deferred updates changed this block relative to the offline base. */
+export function peerTouchedBlock(
+  blockId: string,
+  baseDoc: Y.Doc,
+  peerDoc: Y.Doc,
+): boolean {
+  const baseBlocks = extractBlockTexts(baseDoc);
+  const peerBlocks = extractBlockTexts(peerDoc);
+  const inBase = baseBlocks.has(blockId);
+  const inPeer = peerBlocks.has(blockId);
+  const baseText = baseBlocks.get(blockId)?.text ?? "";
+  const peerText = peerBlocks.get(blockId)?.text ?? "";
+
+  if (inBase && inPeer) {
+    return peerText !== baseText;
+  }
+  if (!inBase && inPeer) {
+    return true;
+  }
+  if (inBase && !inPeer) {
+    // Missing blockId in peer extract alone is often CRDT structure noise —
+    // require an actual block-count drop to treat as a peer delete.
+    return (
+      extractOrderedBlocks(peerDoc).length < extractOrderedBlocks(baseDoc).length
+    );
+  }
+  return false;
+}
+
+/** True when every offline edit is local — no peer changed any block we touched. */
+export function offlineSessionHasOnlyLocalEdits(
+  baseDoc: Y.Doc,
+  mineDoc: Y.Doc,
+  peerDoc: Y.Doc,
+): boolean {
+  const baseBlocks = extractBlockTexts(baseDoc);
+  const mineBlocks = extractBlockTexts(mineDoc);
+  let hasLocalEdit = false;
+
+  for (const blockId of collectBlockIds(baseBlocks, mineBlocks)) {
+    const baseText = baseBlocks.get(blockId)?.text ?? "";
+    const mineText = mineBlocks.get(blockId)?.text ?? "";
+    if (mineText === baseText) continue;
+    hasLocalEdit = true;
+    if (peerTouchedBlock(blockId, baseDoc, peerDoc)) {
+      return false;
+    }
+  }
+
+  return hasLocalEdit;
+}
+
+function inferConflictKind(params: {
+  inBase: boolean;
+  inMine: boolean;
+  inPeer: boolean;
+  baseText: string;
+  mineText: string;
+  peerText: string;
+}): BlockConflictKind | null {
+  const { inBase, inMine, inPeer, baseText, mineText, peerText } = params;
+
+  if (!inBase && !inMine && inPeer) return "peer_added";
+  if (!inBase && inMine && !inPeer) return "mine_added";
+  if (inBase && inMine && !inPeer && mineText === baseText) {
+    return "peer_deleted_clean";
+  }
+  if (inBase && inMine && !inPeer && mineText !== baseText) {
+    return "mine_edited_peer_deleted";
+  }
+  if (inBase && !inMine && inPeer && peerText !== baseText) {
+    return "mine_deleted_peer_edited";
+  }
+  if (
+    inMine &&
+    inPeer &&
+    mineText !== baseText &&
+    peerText !== baseText &&
+    mineText !== peerText
+  ) {
+    return "both_edited";
+  }
+  return null;
+}
+
 /**
  * True when every block we edited offline has peer changes merged in cleanly.
  * Returns false while peer edits are still in flight (merged still equals mine).
+ * Solo / local-only edits settle without waiting for merged !== mine.
  */
 export function isOfflineMergeSettled(
   baseDoc: Y.Doc,
@@ -126,14 +244,18 @@ export function isOfflineMergeSettled(
     const mineText = mineBlocks.get(blockId)?.text ?? "";
     const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks.get(blockId)?.text ?? "";
-    const theirsText = rawTheirsText;
 
     if (mineText === baseText) continue;
+
+    // Peer never touched this block — solo/local-only must settle immediately.
+    if (!peerTouchedBlock(blockId, baseDoc, theirsDoc)) {
+      continue;
+    }
 
     // Peer edits not applied yet on a block we changed — keep waiting.
     if (mergedText === mineText) return false;
 
-    const merge = threeWayMergeText(baseText, mineText, theirsText);
+    const merge = threeWayMergeText(baseText, mineText, rawTheirsText);
     if (!merge.ok) return false;
     if (merge.text !== mergedText) return false;
   }
@@ -143,20 +265,15 @@ export function isOfflineMergeSettled(
 
 /**
  * Peer text for conflict detection on a single block.
- * When the offline user edited a block and deferred merge left it unchanged,
- * the peer did not touch this block — use base, not a polluted Yjs reconstruction.
+ * Collapse to base only when the offline user edited and the peer did not touch.
  */
 export function resolveTheirsForOfflineConflict(
   baseText: string,
   mineText: string,
   rawTheirsText: string,
-  mergedText: string | undefined,
+  peerTouched: boolean,
 ): string {
-  if (
-    mineText !== baseText &&
-    mergedText !== undefined &&
-    mergedText === mineText
-  ) {
+  if (mineText !== baseText && !peerTouched) {
     return baseText;
   }
   return rawTheirsText;
@@ -172,17 +289,39 @@ export function blockNeedsConflictReview(
   theirsText: string,
   mergedText: string | undefined,
   catchupComplete: boolean,
+  options?: {
+    kind?: BlockConflictKind;
+    peerTouched?: boolean;
+  },
 ): boolean {
+  const kind = options?.kind;
+  const peerTouched = options?.peerTouched;
+
+  if (
+    kind === "peer_added" ||
+    kind === "mine_added" ||
+    kind === "peer_deleted_clean"
+  ) {
+    return false;
+  }
+
+  if (
+    kind === "mine_edited_peer_deleted" ||
+    kind === "mine_deleted_peer_edited"
+  ) {
+    return peerTouched === true;
+  }
+
   if (mineText === theirsText) return false;
   if (mineText === baseText && theirsText === baseText) return false;
 
   const offlineEdited = mineText !== baseText;
   if (!offlineEdited) return false;
 
-  const peerEditedThisBlock = theirsText !== baseText;
+  const peerEditedThisBlock =
+    peerTouched !== undefined ? peerTouched : theirsText !== baseText;
 
   // Case A — only the offline returner edited this block; peer left it alone.
-  // Auto-merge without review even if CRDT merged state differs slightly on this block.
   if (!peerEditedThisBlock) {
     return false;
   }
@@ -231,7 +370,7 @@ export function blockNeedsConflictReview(
 
 /**
  * Compare base / mine / theirs Y.Docs per block.
- * Returns blocks that need human review (Case C overlaps).
+ * Returns blocks that need human review (Case C overlaps + structural delete conflicts).
  */
 export function detectOfflineBlockConflicts(
   baseDoc: Y.Doc,
@@ -248,15 +387,50 @@ export function detectOfflineBlockConflicts(
   const conflicts: BlockConflict[] = [];
 
   for (const blockId of collectBlockIds(baseBlocks, mineBlocks, theirsBlocks)) {
+    const inBase = baseBlocks.has(blockId);
+    const inMine = mineBlocks.has(blockId);
+    const inPeer = theirsBlocks.has(blockId);
     const baseText = baseBlocks.get(blockId)?.text ?? "";
     const mineText = mineBlocks.get(blockId)?.text ?? "";
     const rawTheirsText = theirsBlocks.get(blockId)?.text ?? "";
     const mergedText = mergedBlocks?.get(blockId)?.text ?? "";
+    const peerTouched = peerTouchedBlock(blockId, baseDoc, theirsDoc);
+
+    // Noisy missing blockId with unchanged block count is not a peer delete.
+    const effectiveInPeer =
+      inPeer || (inBase && !inPeer && !peerTouched);
+
+    const kind = inferConflictKind({
+      inBase,
+      inMine,
+      inPeer: effectiveInPeer,
+      baseText,
+      mineText,
+      peerText: effectiveInPeer && !inPeer ? baseText : rawTheirsText,
+    });
+
+    if (
+      kind === "peer_added" ||
+      kind === "mine_added" ||
+      kind === "peer_deleted_clean"
+    ) {
+      continue;
+    }
+
+    // Structural delete kinds only when peer actually touched (count drop).
+    if (
+      (kind === "mine_edited_peer_deleted" ||
+        kind === "mine_deleted_peer_edited") &&
+      !peerTouched
+    ) {
+      continue;
+    }
+
     const theirsText = resolveTheirsForOfflineConflict(
       baseText,
       mineText,
       rawTheirsText,
-      mergedBlocks ? mergedText : undefined,
+      peerTouched,
     );
 
     const mergedForBlock = mergedBlocks ? mergedText : undefined;
@@ -267,6 +441,7 @@ export function detectOfflineBlockConflicts(
         theirsText,
         mergedForBlock,
         catchupComplete,
+        { kind: kind ?? undefined, peerTouched },
       )
     ) {
       continue;
@@ -295,6 +470,7 @@ export function detectOfflineBlockConflicts(
       highlightEnd: highlight.end,
       mineBlock: extractBlockNode(mineDoc, blockId) ?? undefined,
       theirsBlock: extractBlockNode(theirsDoc, blockId) ?? undefined,
+      kind: kind ?? undefined,
     });
   }
 
