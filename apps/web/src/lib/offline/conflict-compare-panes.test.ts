@@ -59,7 +59,10 @@ describe("conflictComparePanes", () => {
 
     expect(panes.mine.label).toBe("Your version");
     expect(panes.peers).toHaveLength(1);
-    expect(panes.peers[0]?.label).toBe("Conflict version");
+    // No peerContributors resolved yet (e.g. before the reactive
+    // re-attribution effect's first pass) — falls back to the cluster
+    // variant's author name rather than masking it as generic copy.
+    expect(panes.peers[0]?.label).toBe("Others");
     expect(panes.mine.segments.some((segment) => segment.role === "mine_add")).toBe(
       true,
     );
@@ -103,5 +106,32 @@ describe("conflictComparePanes", () => {
     expect(panes.peers).toHaveLength(1);
     expect(panes.peers[0]?.label).toBe("User B and User C");
     expect(panes.peers[0]?.segments).toBe(review.peerSegments);
+  });
+
+  it("shows 'Others' as-is instead of masking it as generic 'Conflict version' copy", () => {
+    const cluster = blockCluster(
+      "Hello world",
+      "Hello A world",
+      "Hello B world",
+    );
+    const review = buildBlockReviewModel({
+      blockId: cluster.blockId,
+      blockIndex: cluster.blockIndex,
+      baseText: cluster.baseText,
+      mineText: cluster.mineText,
+      theirsText: cluster.theirsText,
+      spanClusterId: cluster.id,
+      peerContributors: [
+        {
+          clientId: -1,
+          userId: "peer-merged",
+          displayName: "Others",
+          blockText: "Hello B world",
+          blockIndex: 0,
+        },
+      ],
+    });
+    const panes = conflictComparePanes(cluster, review);
+    expect(panes.peers[0]?.label).toBe("Others");
   });
 });

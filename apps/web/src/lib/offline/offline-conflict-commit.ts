@@ -267,3 +267,50 @@ export function buildResolvedXmlBlocks(
 
   return blocks;
 }
+
+export type ResolvedBlockPlanEntry = {
+  blockId: string;
+  side: "mine" | "peer";
+  xml: Y.XmlElement;
+};
+
+/**
+ * Same resolution as buildResolvedXmlBlocks, but also reports which side
+ * ("mine" untouched vs "peer" replacement/insert) each resolved block came
+ * from, so the commit can patch only what actually changed.
+ */
+export function buildResolvedBlockPlan(
+  params: BuildResolvedBlocksParams,
+): ResolvedBlockPlanEntry[] {
+  const { baseDoc, mineDoc, peerDoc, decisions } = params;
+  const baseList = extractOrderedBlocks(baseDoc);
+  const mineList = extractOrderedBlocks(mineDoc);
+  const peerList = extractOrderedBlocks(peerDoc);
+
+  const baseById = entryById(baseList);
+  const mineById = entryById(mineList);
+  const peerById = entryById(peerList);
+
+  const orderedIds = orderedBlockIdsForCommit(baseList, mineList, peerList);
+  const plan: ResolvedBlockPlanEntry[] = [];
+
+  for (const blockId of orderedIds) {
+    const baseEntry = baseById.get(blockId);
+    const mineEntry = mineById.get(blockId);
+    const peerEntry = peerById.get(blockId);
+    const blockIndex =
+      mineEntry?.blockIndex ?? peerEntry?.blockIndex ?? baseEntry?.blockIndex ?? 0;
+    const decision = decisionForBlock(decisions, blockId, blockIndex);
+    const side = resolveSideForBlock({ baseEntry, mineEntry, peerEntry, decision });
+
+    if (side === "omit") continue;
+
+    const sourceDoc = side === "mine" ? mineDoc : peerDoc;
+    const xml = findXmlBlockById(sourceDoc, blockId);
+    if (xml) {
+      plan.push({ blockId, side, xml });
+    }
+  }
+
+  return plan;
+}

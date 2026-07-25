@@ -71,7 +71,17 @@ export type BlockResolutionPayload = {
 
 type BlockResolutionListener = (payload: BlockResolutionPayload) => void;
 
-export type PeerIdentity = { userId: string; displayName: string };
+export type PeerIdentity = {
+  userId: string;
+  displayName: string;
+  /**
+   * Timestamp of this peer's last genuine local edit. Every online peer
+   * replies to a reconnecting client's sync handshake, so the same real
+   * change often arrives relayed through several distinct clientIds — this
+   * disambiguates the true author from bystanders who merely relay it.
+   */
+  lastLocalEditAt?: number;
+};
 
 export type DeferredPeerUpdate = {
   update: Uint8Array;
@@ -939,6 +949,8 @@ export class SupabaseYjsProvider {
     ) {
       return;
     }
+    // Marks this as a genuine local edit (not a relay) for peer attribution.
+    this.awareness.setLocalStateField("lastLocalEditAt", Date.now());
     void this.send(EVENT_UPDATE, update);
     if (update.length > 8_192) {
       this.flushPersist();
@@ -953,7 +965,12 @@ export class SupabaseYjsProvider {
       const userId = user?.id?.trim();
       if (!userId) return;
       const displayName = user?.name?.trim() || "";
-      this.awarenessUsersByClientId.set(clientId, { userId, displayName });
+      const lastLocalEditAt = state?.lastLocalEditAt as number | undefined;
+      this.awarenessUsersByClientId.set(clientId, {
+        userId,
+        displayName,
+        lastLocalEditAt,
+      });
     });
   };
 
@@ -961,9 +978,10 @@ export class SupabaseYjsProvider {
     const state = this.awareness.getStates().get(clientId);
     const liveUser = state?.user as { id?: string; name?: string } | undefined;
     const liveUserId = liveUser?.id?.trim();
+    const lastLocalEditAt = state?.lastLocalEditAt as number | undefined;
     if (liveUserId) {
       const displayName = liveUser?.name?.trim() || "";
-      const identity = { userId: liveUserId, displayName };
+      const identity = { userId: liveUserId, displayName, lastLocalEditAt };
       this.awarenessUsersByClientId.set(clientId, identity);
       return identity;
     }
@@ -1035,6 +1053,7 @@ export class SupabaseYjsProvider {
     }
     if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
       this.markPeerDataReceived();
+      this.resetBroadcastBaseline();
       this.setSynced(true);
     }
     // Step1 is only a state-vector handshake — peer content arrives in step2/update.
@@ -1049,6 +1068,7 @@ export class SupabaseYjsProvider {
     }
     this.markPeerDataReceived();
     Y.applyUpdate(this.doc, update, this.origin);
+    this.resetBroadcastBaseline();
     this.setSynced(true);
   }
 

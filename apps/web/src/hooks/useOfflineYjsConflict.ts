@@ -38,15 +38,15 @@ import {
   storeOfflineMine,
 } from "@/lib/offline/yjs-offline-snapshot";
 import {
-  buildResolvedXmlBlocks,
+  buildResolvedBlockPlan,
   decisionKey,
   OFFLINE_CONFLICT_COMMIT_ORIGIN,
   type ConflictDecision,
 } from "@/lib/offline/offline-conflict-commit";
 import {
-  forceYDocBodyFromClonedBlocks,
-  forceYDocBodyFromSnapshot,
   OFFLINE_CONFLICT_RESTORE_ORIGIN,
+  patchYDocBodyToResolvedBlocks,
+  patchYDocBodyToSnapshot,
   ydocBodyMatchesSnapshot,
 } from "@/lib/offline/yjs-offline-restore";
 import {
@@ -55,12 +55,16 @@ import {
 } from "@/lib/collaboration/supabase-yjs-provider";
 import type { SupabaseYjsProvider } from "@/lib/collaboration/supabase-yjs-provider";
 
+// Both of these re-assert the offline user's "mine" snapshot while a review
+// is pending. They run on essentially every incoming peer/awareness message,
+// so they must patch only the blocks that diverged rather than deleting and
+// re-cloning the entire fragment every time (see patchYDocBodyToSnapshot).
 function syncConflictBlocksToMine(ydoc: Y.Doc, mineBytes: Uint8Array): void {
-  forceYDocBodyFromSnapshot(ydoc, mineBytes, OFFLINE_CONFLICT_RESTORE_ORIGIN);
+  patchYDocBodyToSnapshot(ydoc, mineBytes, OFFLINE_CONFLICT_RESTORE_ORIGIN);
 }
 
 function restoreToMineSnapshot(ydoc: Y.Doc, mineSnapshot: Uint8Array): void {
-  forceYDocBodyFromSnapshot(ydoc, mineSnapshot, OFFLINE_CONFLICT_RESTORE_ORIGIN);
+  patchYDocBodyToSnapshot(ydoc, mineSnapshot, OFFLINE_CONFLICT_RESTORE_ORIGIN);
 }
 
 const TAB_ID =
@@ -228,19 +232,35 @@ export function useOfflineYjsConflict(params: {
       offlineSnapshotToDoc(baseSnapshot);
 
     try {
-      const xmlBlocks = buildResolvedXmlBlocks({
+      const blockPlan = buildResolvedBlockPlan({
         baseDoc,
         mineDoc,
         peerDoc,
         decisions,
       });
 
-      // Body rewrite already encodes peer decisions. Clearing deferred happens
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] commit sides",
+          JSON.stringify({
+            decisions: Array.from(decisions.entries()),
+            plan: blockPlan.map((entry) => ({
+              blockId: entry.blockId,
+              side: entry.side,
+              xmlPreview: entry.xml.toString().slice(0, 120),
+            })),
+            baseCapturedAt: baseSnapshot.capturedAt,
+          }),
+        );
+      }
+
+      // Body patch already encodes peer decisions. Clearing deferred happens
       // inside commitResolvedDoc after outbound shields drop.
       providerRef.current?.commitResolvedDoc(() => {
-        forceYDocBodyFromClonedBlocks(
+        patchYDocBodyToResolvedBlocks(
           ydoc,
-          xmlBlocks,
+          blockPlan,
           OFFLINE_CONFLICT_COMMIT_ORIGIN,
         );
       });
@@ -253,6 +273,54 @@ export function useOfflineYjsConflict(params: {
       committingRef.current = false;
     }
   }, [documentId, endConflictReviewSession, flushPersist, ydoc]);
+
+  /**
+   * A peer's disambiguating `lastLocalEditAt` awareness field can arrive up to
+   * one heartbeat cycle (2s) after their edit content lands via sync — well
+   * after the 50ms detection debounce below. Keep this pure/reusable so both
+   * the initial detection pass and the reactive re-attribution effect below
+   * stay in sync.
+   */
+  const computeContributorsForConflicts = useCallback(
+    (
+      conflictsList: BlockConflict[],
+      baseSnapshot: { state: string; capturedAt: string },
+    ) => {
+      const peerContributorsByBlock = new Map<
+        string,
+        ReturnType<typeof peerEditContributorsForBlock>
+      >();
+      const authorByBlock = new Map<string, string>();
+
+      const awareness = providerRef.current?.awareness;
+      if (!awareness) return { peerContributorsByBlock, authorByBlock };
+
+      const deferredUpdates =
+        providerRef.current?.getDeferredPeerUpdates() ?? [];
+      for (const conflict of conflictsList) {
+        const contributors = peerEditContributorsForBlock({
+          baseSnapshot,
+          deferredUpdates,
+          awareness,
+          localClientId: ydoc?.clientID,
+          blockId: conflict.blockId,
+          blockIndex: conflict.blockIndex,
+          getPeerIdentity: (clientId) =>
+            providerRef.current?.getPeerIdentity(clientId) ?? {
+              userId: `peer-${clientId}`,
+              displayName: "Other editor",
+            },
+        });
+        peerContributorsByBlock.set(conflict.blockId, contributors);
+        authorByBlock.set(
+          conflict.blockId,
+          peerContributorSummary(contributors),
+        );
+      }
+      return { peerContributorsByBlock, authorByBlock };
+    },
+    [ydoc],
+  );
 
   const runDetection = useCallback(async () => {
     if (!documentId || !ydoc || !online || !synced) return;
@@ -345,37 +413,8 @@ export function useOfflineYjsConflict(params: {
       reviewBaseSnapshotRef.current = baseSnapshot;
       decisionsRef.current = new Map();
 
-      const deferredUpdates =
-        providerRef.current?.getDeferredPeerUpdates() ?? [];
-      const awareness = providerRef.current?.awareness;
-      const peerContributorsByBlock = new Map<
-        string,
-        ReturnType<typeof peerEditContributorsForBlock>
-      >();
-      const authorByBlock = new Map<string, string>();
-
-      if (awareness) {
-        for (const conflict of found) {
-          const contributors = peerEditContributorsForBlock({
-            baseSnapshot,
-            deferredUpdates,
-            awareness,
-            localClientId: ydoc.clientID,
-            blockId: conflict.blockId,
-            blockIndex: conflict.blockIndex,
-            getPeerIdentity: (clientId) =>
-              providerRef.current?.getPeerIdentity(clientId) ?? {
-                userId: `peer-${clientId}`,
-                displayName: "Other editor",
-              },
-          });
-          peerContributorsByBlock.set(conflict.blockId, contributors);
-          authorByBlock.set(
-            conflict.blockId,
-            peerContributorSummary(contributors),
-          );
-        }
-      }
+      const { peerContributorsByBlock, authorByBlock } =
+        computeContributorsForConflicts(found, baseSnapshot);
 
       const nextClusters = clustersFromBlockConflicts(found, authorByBlock);
       const nextReviews = buildBlockReviewModels(
@@ -427,6 +466,7 @@ export function useOfflineYjsConflict(params: {
     armOfflineReviewShield,
     catchupComplete,
     clearOfflineConflictSession,
+    computeContributorsForConflicts,
     conflicts.length,
     documentId,
     flushPersist,
@@ -446,6 +486,56 @@ export function useOfflineYjsConflict(params: {
       void runDetection();
     }, 50);
   }, [documentId, hasOfflineSession, runDetection]);
+
+  // Re-attribute conflicting parties as peer awareness catches up. The initial
+  // detection pass runs ~50ms after reconnect, but a peer's disambiguating
+  // lastLocalEditAt only reaches us via their next heartbeat (up to 2s later)
+  // — without this, attribution permanently freezes on its first (often
+  // ambiguous) result and the real name never appears.
+  useEffect(() => {
+    if (!reviewPending || conflicts.length === 0) return;
+    const baseSnapshot = reviewBaseSnapshotRef.current;
+    const awareness = providerRef.current?.awareness;
+    if (!baseSnapshot || !awareness) return;
+
+    let debounceTimer: number | null = null;
+
+    const recompute = () => {
+      const currentConflicts = conflicts;
+      if (currentConflicts.length === 0) return;
+      const { peerContributorsByBlock, authorByBlock } =
+        computeContributorsForConflicts(currentConflicts, baseSnapshot);
+      const nextClusters = clustersFromBlockConflicts(
+        currentConflicts,
+        authorByBlock,
+      );
+      const nextReviews = buildBlockReviewModels(
+        currentConflicts,
+        nextClusters,
+        peerContributorsByBlock,
+      );
+      setClusters(nextClusters);
+      setReviews(nextReviews);
+    };
+
+    const onAwarenessUpdate = () => {
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        recompute();
+      }, 150);
+    };
+
+    awareness.on("update", onAwarenessUpdate);
+    // Covers disambiguating data that already arrived between initial
+    // detection and this effect mounting.
+    onAwarenessUpdate();
+
+    return () => {
+      awareness.off("update", onAwarenessUpdate);
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+    };
+  }, [computeContributorsForConflicts, conflicts, reviewPending]);
 
   const beginOnlineReview = useCallback(() => {
     if (!ydoc || !documentId) return;

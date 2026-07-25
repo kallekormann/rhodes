@@ -42,6 +42,12 @@ export function conflictComparePanes(
     cluster.baseSlice ||
     cluster.mineText;
 
+  // Never silently collapse a resolved "Others" fallback into the generic
+  // "Conflict version" copy — that masked whether attribution actually ran
+  // and failed vs. never had contributor data at all, making the underlying
+  // bug invisible during QA. Only fall back to "Conflict version" when there
+  // is truly no contributor data yet (e.g. before the reactive re-attribution
+  // effect gets its first pass).
   const peerLabel =
     model.peerContributors.length > 0
       ? peerContributorSummary(model.peerContributors)
@@ -61,7 +67,7 @@ export function conflictComparePanes(
     },
     peers: [
       {
-        label: peerLabel === "Others" ? "Conflict version" : peerLabel,
+        label: peerLabel,
         segments: model.peerSegments,
         variant: "peer",
         peerUserId,

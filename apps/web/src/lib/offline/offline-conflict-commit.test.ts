@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 import {
+  buildResolvedBlockPlan,
   buildResolvedBlocks,
   decisionKey,
   orderedBlockIdsForCommit,
@@ -10,6 +11,7 @@ import {
   clearedConflictReviewSession,
   isConflictReviewSessionCleared,
 } from "@/lib/offline/offline-conflict-session";
+import { patchYDocBodyToResolvedBlocks } from "@/lib/offline/yjs-offline-restore";
 
 function paragraph(blockId: string, text: string): ProseMirrorJsonNode {
   return {
@@ -174,5 +176,136 @@ describe("offline-conflict-commit", () => {
     baseDoc.destroy();
     mineDoc.destroy();
     peerDoc.destroy();
+  });
+
+  it("buildResolvedBlockPlan marks only the changed block as 'peer'", () => {
+    const baseDoc = docFromNodes([
+      paragraph("a", "A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const mineDoc = docFromNodes([
+      paragraph("a", "A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const peerDoc = docFromNodes([
+      paragraph("a", "A"),
+      paragraph("b", "Peer edited B"),
+      paragraph("c", "C"),
+    ]);
+
+    const plan = buildResolvedBlockPlan({
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      decisions: new Map([[decisionKey("b", 1), { side: "theirs" as const }]]),
+    });
+
+    expect(plan.map((entry) => entry.blockId)).toEqual(["a", "b", "c"]);
+    expect(plan.map((entry) => entry.side)).toEqual(["mine", "peer", "mine"]);
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    peerDoc.destroy();
+  });
+
+  it("end-to-end: conflict on block 1 (index 0), 'Keep' produces no stray empty blocks", () => {
+    // Reproduces the reported symptom via the exact pipeline the hook uses:
+    // buildResolvedBlockPlan -> patchYDocBodyToResolvedBlocks against a live
+    // doc pinned to "mine" (as it is throughout offline review).
+    const baseDoc = docFromNodes([
+      paragraph("a", "Base A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const mineDoc = docFromNodes([
+      paragraph("a", "Mine A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const peerDoc = docFromNodes([
+      paragraph("a", "Peer A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    // live mirrors mine exactly, as it does throughout offline review.
+    const live = docFromNodes([
+      paragraph("a", "Mine A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+
+    // User clicks "Keep" (mine) on the block-1 conflict.
+    const plan = buildResolvedBlockPlan({
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      decisions: new Map([[decisionKey("a", 0), { side: "mine" as const }]]),
+    });
+
+    patchYDocBodyToResolvedBlocks(live, plan);
+
+    const fragment = live.getXmlFragment("default");
+    const ids: string[] = [];
+    for (let i = 0; i < fragment.length; i += 1) {
+      const item = fragment.get(i);
+      expect(item instanceof Y.XmlElement).toBe(true);
+      if (item instanceof Y.XmlElement) ids.push(item.getAttribute("blockId") ?? "");
+    }
+    expect(ids).toEqual(["a", "b", "c"]);
+    expect(fragment.length).toBe(3);
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    peerDoc.destroy();
+    live.destroy();
+  });
+
+  it("end-to-end: conflict on block 1 (index 0), 'Take theirs' produces no stray empty blocks", () => {
+    const baseDoc = docFromNodes([
+      paragraph("a", "Base A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const mineDoc = docFromNodes([
+      paragraph("a", "Mine A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const peerDoc = docFromNodes([
+      paragraph("a", "Peer A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+    const live = docFromNodes([
+      paragraph("a", "Mine A"),
+      paragraph("b", "B"),
+      paragraph("c", "C"),
+    ]);
+
+    const plan = buildResolvedBlockPlan({
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      decisions: new Map([[decisionKey("a", 0), { side: "theirs" as const }]]),
+    });
+
+    patchYDocBodyToResolvedBlocks(live, plan);
+
+    const fragment = live.getXmlFragment("default");
+    const ids: string[] = [];
+    for (let i = 0; i < fragment.length; i += 1) {
+      const item = fragment.get(i);
+      expect(item instanceof Y.XmlElement).toBe(true);
+      if (item instanceof Y.XmlElement) ids.push(item.getAttribute("blockId") ?? "");
+    }
+    expect(ids).toEqual(["a", "b", "c"]);
+    expect(fragment.length).toBe(3);
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    peerDoc.destroy();
+    live.destroy();
   });
 });
