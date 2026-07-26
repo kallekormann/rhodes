@@ -23,6 +23,8 @@ apps/web/.data/
 .data/
 *.tsbuildinfo
 ui-mock/dist/
+apps/web/test-results/
+playwright-report/
 
 # Logs and OS
 *.log

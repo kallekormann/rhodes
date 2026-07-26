@@ -37,6 +37,7 @@ export async function GET(request: Request) {
     filter: searchParams.get("filter") ?? "recent",
     q: searchParams.get("q") ?? undefined,
     limit: searchParams.get("limit") ?? undefined,
+    since: searchParams.get("since") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -165,6 +166,10 @@ export async function GET(request: Request) {
     // Escape LIKE wildcards so user input is literal
     const needle = parsed.data.q.replace(/[%_\\]/g, "\\$&");
     query = query.ilike("title", `%${needle}%`);
+  }
+
+  if (parsed.data.since) {
+    query = query.gt("updated_at", parsed.data.since);
   }
 
   if (parsed.data.limit) {

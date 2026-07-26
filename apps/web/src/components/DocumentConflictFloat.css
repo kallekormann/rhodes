@@ -1,0 +1,62 @@
+/* Fixed position wrapper — card chrome from CommentsTab (.comments-tab__card). */
+.document-conflict-float {
+  position: fixed;
+  top: calc(var(--space-xl) + 72px);
+  right: max(16px, calc((100vw - min(720px, 100vw)) / 2 - 380px));
+  z-index: 40;
+  width: min(320px, calc(100vw - 32px));
+}
+
+.document-conflict-float__card {
+  width: 100%;
+}
+
+.document-conflict-float__footer {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.document-conflict-float__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.document-conflict-float__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.document-conflict-float__legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+
+@media (max-width: 1100px) {
+  .document-conflict-float {
+    right: 16px;
+  }
+}
+
+@media (max-width: 720px) {
+  .document-conflict-float {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    top: auto;
+    bottom: 16px;
+  }
+}

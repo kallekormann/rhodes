@@ -21,7 +21,11 @@ export type OfflineDocumentRecord = {
   title: string;
   content: Record<string, unknown> | null;
   content_plain: string | null;
+  metadata: Record<string, unknown> | null;
+  /** Last known server updated_at — used as expected_updated_at on push. */
+  server_updated_at: string;
   updated_at: string;
+  created_at: string;
   sync_status: OfflineSyncStatus;
 };
 
@@ -30,6 +34,8 @@ export type OfflineOutboxRecord = {
   document_id: string;
   mutation: "patch" | "create" | "delete";
   payload: Record<string, unknown>;
+  /** Server updated_at this patch is based on (optimistic concurrency). */
+  expected_updated_at: string;
   created_at: string;
   retries: number;
 };

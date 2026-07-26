@@ -35,6 +35,43 @@ export function readBlockId(node: ProseMirrorNode): string | null {
   return typeof blockId === "string" && blockId.length > 0 ? blockId : null;
 }
 
+/**
+ * Top-level blockIds that were added, edited (text changed), or removed
+ * between two ProseMirror doc snapshots — used to stamp the collaborative
+ * block-audit trail (see `@/lib/collaboration/block-audit`) so a reconnecting
+ * offline peer can learn exactly who touched a conflicting block.
+ */
+export function computeTouchedBlockIds(
+  before: ProseMirrorNode,
+  after: ProseMirrorNode,
+): string[] {
+  const beforeBlocks = new Map<string, string>();
+  for (let i = 0; i < before.childCount; i++) {
+    const node = before.child(i);
+    const blockId = readBlockId(node);
+    if (blockId) beforeBlocks.set(blockId, node.textContent);
+  }
+
+  const touched = new Set<string>();
+  const afterIds = new Set<string>();
+  for (let i = 0; i < after.childCount; i++) {
+    const node = after.child(i);
+    const blockId = readBlockId(node);
+    if (!blockId) continue;
+    afterIds.add(blockId);
+    const prevText = beforeBlocks.get(blockId);
+    if (prevText === undefined || prevText !== node.textContent) {
+      touched.add(blockId);
+    }
+  }
+
+  for (const blockId of beforeBlocks.keys()) {
+    if (!afterIds.has(blockId)) touched.add(blockId);
+  }
+
+  return [...touched];
+}
+
 /** Collect top-level blocks missing a block id. */
 export function collectMissingTopLevelBlockIds(
   doc: ProseMirrorNode,

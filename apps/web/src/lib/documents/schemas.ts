@@ -20,6 +20,10 @@ export const updateDocumentSchema = z.object({
   content: z.record(z.unknown()).optional(),
   content_plain: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
+  /** Optimistic concurrency — reject with 409 when server is newer. */
+  expected_updated_at: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
+  /** Conflict resolution — overwrite server without OCC check. */
+  force: z.boolean().optional(),
 });
 
 export const listDocumentsQuerySchema = z.object({
@@ -28,6 +32,8 @@ export const listDocumentsQuerySchema = z.object({
   /** Title search (Cmd+K / discovery). */
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
+  /** Pull cursor — documents with updated_at strictly after this ISO timestamp. */
+  since: z.string().min(1).optional(),
 });
 
 export type DocumentFilter = z.infer<typeof documentFilterSchema>;

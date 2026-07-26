@@ -6,7 +6,6 @@ import type { EnrichedActivityRecord } from "@/lib/documents/activity-display";
 import type { DocumentRecord } from "@/hooks/useDocument";
 import {
   mapActivityToRemoteNotice,
-  pickLatestOtherActivity,
   pickLatestOtherActivitySince,
   type DocumentRemoteNotice,
 } from "@/lib/documents/remote-document-notice";
@@ -16,16 +15,13 @@ type RemoteDocumentUpdate = {
   updated_at: string;
 };
 
-export type DocumentRemoteConflict = DocumentRemoteNotice;
 export type DocumentAwayNotice = DocumentRemoteNotice;
 
 type UseDocumentRealtimeOptions = {
   documentId: string | null;
   enabled?: boolean;
+  /** Skip applying a remote update while the user is actively typing/dirty. */
   isDirty: boolean;
-  isTyping: boolean;
-  currentUserId?: string;
-  getLocalContentPlain?: () => string;
   onRemoteUpdate: (record: DocumentRecord) => void | Promise<void>;
 };
 
@@ -35,114 +31,68 @@ const FALLBACK_POLL_MS = 15_000;
 async function fetchDocumentActivity(
   documentId: string,
 ): Promise<EnrichedActivityRecord[]> {
-  const response = await fetch(`/app/api/documents/${documentId}/activity?limit=20`);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) return [];
-  return (data.activity as EnrichedActivityRecord[]) ?? [];
+  if (typeof navigator !== "undefined" && !navigator.onLine) return [];
+  try {
+    const response = await fetch(
+      `/app/api/documents/${documentId}/activity?limit=20`,
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return [];
+    return (data.activity as EnrichedActivityRecord[]) ?? [];
+  } catch {
+    return [];
+  }
 }
 
+/**
+ * Notifies the editor session of title/metadata/comment changes made by
+ * other collaborators. The document body is owned by Yjs (see
+ * useYjsCollaboration) and is never applied from here.
+ */
 export function useDocumentRealtime({
   documentId,
   enabled = true,
   isDirty,
-  isTyping,
-  currentUserId,
-  getLocalContentPlain,
   onRemoteUpdate,
 }: UseDocumentRealtimeOptions) {
   const [live, setLive] = useState(false);
-  const [remoteConflict, setRemoteConflict] = useState<DocumentRemoteConflict | null>(
-    null,
-  );
   const lastAppliedUpdatedAtRef = useRef<string | null>(null);
   const isDirtyRef = useRef(isDirty);
-  const isTypingRef = useRef(isTyping);
   const liveRef = useRef(live);
-  const currentUserIdRef = useRef(currentUserId);
   const onRemoteUpdateRef = useRef(onRemoteUpdate);
-  const getLocalContentPlainRef = useRef(getLocalContentPlain);
   isDirtyRef.current = isDirty;
-  isTypingRef.current = isTyping;
   liveRef.current = live;
-  currentUserIdRef.current = currentUserId;
   onRemoteUpdateRef.current = onRemoteUpdate;
-  getLocalContentPlainRef.current = getLocalContentPlain;
-
-  const dismissConflict = useCallback(() => {
-    setRemoteConflict(null);
-  }, []);
-
-  const buildConflictNotice = useCallback(
-    async (updatedAt: string): Promise<DocumentRemoteConflict> => {
-      if (!documentId) {
-        return {
-          updatedAt,
-          actorId: null,
-          actorLabel: "A collaborator",
-          actionLabel: "edited the document",
-          detail: null,
-        };
-      }
-
-      const entries = await fetchDocumentActivity(documentId);
-      const entry = pickLatestOtherActivity(
-        entries,
-        currentUserIdRef.current ?? "",
-      );
-      if (entry) {
-        return mapActivityToRemoteNotice(entry);
-      }
-
-      return {
-        updatedAt,
-        actorId: null,
-        actorLabel: "A collaborator",
-        actionLabel: "edited the document",
-        detail: null,
-      };
-    },
-    [documentId],
-  );
-
-  const flagConflict = useCallback(
-    async (updatedAt: string) => {
-      const notice = await buildConflictNotice(updatedAt);
-      setRemoteConflict(notice);
-    },
-    [buildConflictNotice],
-  );
 
   const fetchLatest = useCallback(async (): Promise<DocumentRecord | null> => {
     if (!documentId) return null;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return null;
 
-    const response = await fetch(`/app/api/documents/${documentId}`);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return null;
-    return (data.document as DocumentRecord) ?? null;
+    try {
+      const response = await fetch(`/app/api/documents/${documentId}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return null;
+      return (data.document as DocumentRecord) ?? null;
+    } catch {
+      // Offline / network blip — never throw into React.
+      return null;
+    }
   }, [documentId]);
 
   const applyRemote = useCallback(
-    async (remoteUpdatedAt: string, force = false) => {
-      if (!force && remoteUpdatedAt === lastAppliedUpdatedAtRef.current) {
-        return;
-      }
-
-      if (!force && isDirtyRef.current) {
-        if (isTypingRef.current) {
-          return;
-        }
-        await flagConflict(remoteUpdatedAt);
-        return;
-      }
+    async (remoteUpdatedAt: string) => {
+      if (remoteUpdatedAt === lastAppliedUpdatedAtRef.current) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      // Title/metadata/comments always apply — body is guarded in applyRemoteDocument
+      // when Yjs collab is active.
 
       const latest = await fetchLatest();
       if (!latest) return;
 
       await onRemoteUpdateRef.current(latest);
       lastAppliedUpdatedAtRef.current = latest.updated_at;
-      setRemoteConflict(null);
     },
-    [fetchLatest, flagConflict],
+    [fetchLatest],
   );
 
   const reloadRemote = useCallback(async () => {
@@ -150,16 +100,8 @@ export function useDocumentRealtime({
     if (!latest) return null;
     await onRemoteUpdateRef.current(latest);
     lastAppliedUpdatedAtRef.current = latest.updated_at;
-    setRemoteConflict(null);
     return latest;
   }, [fetchLatest]);
-
-  const keepLocal = useCallback(() => {
-    if (remoteConflict?.updatedAt) {
-      lastAppliedUpdatedAtRef.current = remoteConflict.updatedAt;
-    }
-    setRemoteConflict(null);
-  }, [remoteConflict?.updatedAt]);
 
   const markSynced = useCallback((updatedAt: string) => {
     lastAppliedUpdatedAtRef.current = updatedAt;
@@ -209,32 +151,14 @@ export function useDocumentRealtime({
     // Prefer Realtime; only poll as a safety net (and skip while subscribed + clean).
     const poll = setInterval(() => {
       void (async () => {
-        if (liveRef.current && !isDirtyRef.current) {
-          return;
-        }
+        if (typeof navigator !== "undefined" && !navigator.onLine) return;
+        if (liveRef.current && !isDirtyRef.current) return;
 
         const latest = await fetchLatest();
         if (!latest) return;
+        if (latest.updated_at === lastAppliedUpdatedAtRef.current) return;
 
-        const remotePlain = latest.content_plain?.trim() ?? "";
-        const localPlain = getLocalContentPlainRef.current?.().trim() ?? "";
-        const timestampMatches =
-          latest.updated_at === lastAppliedUpdatedAtRef.current;
-        const contentDrift =
-          timestampMatches &&
-          localPlain !== remotePlain &&
-          !(isDirtyRef.current && isTypingRef.current);
-
-        if (timestampMatches && !contentDrift) {
-          return;
-        }
-
-        if (contentDrift && isDirtyRef.current) {
-          await flagConflict(latest.updated_at);
-          return;
-        }
-
-        await applyRemote(latest.updated_at, contentDrift);
+        await applyRemote(latest.updated_at);
       })();
     }, FALLBACK_POLL_MS);
 
@@ -244,14 +168,11 @@ export function useDocumentRealtime({
       void supabase.removeChannel(channel);
       setLive(false);
     };
-  }, [applyRemote, documentId, enabled, fetchLatest, flagConflict]);
+  }, [applyRemote, documentId, enabled, fetchLatest]);
 
   return {
     live,
-    remoteConflict,
-    dismissConflict,
     reloadRemote,
-    keepLocal,
     markSynced,
     setBaselineUpdatedAt: (updatedAt: string) => {
       lastAppliedUpdatedAtRef.current = updatedAt;
@@ -291,8 +212,20 @@ export function useDocumentAwayNotice(
       const docData = await docResponse.json().catch(() => ({}));
       if (!docResponse.ok || cancelled) return;
 
-      const updatedAt = (docData.document as DocumentRecord | undefined)?.updated_at;
+      const remote = docData.document as DocumentRecord | undefined;
+      const updatedAt = remote?.updated_at;
       if (!updatedAt) return;
+
+      try {
+        const collabKey = `rhodes:collab-session:${documentId}`;
+        if (sessionStorage.getItem(collabKey) === "1") {
+          sessionStorage.setItem(`rhodes:doc-seen:${documentId}`, updatedAt);
+          if (!cancelled) setAwayNotice(null);
+          return;
+        }
+      } catch {
+        /* private mode */
+      }
 
       const previousSeen = sessionStorage.getItem(storageKey);
       sessionStorage.setItem(storageKey, updatedAt);

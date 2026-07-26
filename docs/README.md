@@ -8,6 +8,16 @@ This folder is the **canonical specification** for building Rhodes. The incubato
 
 ---
 
+## Roadmap to production (start here for implementation status)
+
+| Doc | Topic |
+|-----|-------|
+| **[28-product-roadmap-to-production.md](28-product-roadmap-to-production.md)** | **CURRENT ROADMAP** — milestones M1–M13, sequencing, offline policy, path to VPS |
+
+Executable checklists: [`implementation_plan/`](../implementation_plan/00-README.md)
+
+---
+
 ## Reading order
 
 ### 1. Product & UX (start here)

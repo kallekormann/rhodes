@@ -57,6 +57,21 @@ export function scrollEditorToExcerpt(editor: Editor, excerpt: string): boolean 
   return true;
 }
 
+export function scrollEditorToBlockIndex(editor: Editor, blockIndex: number): boolean {
+  const { doc } = editor.state;
+  if (!Number.isInteger(blockIndex) || blockIndex < 0 || blockIndex >= doc.childCount) {
+    return false;
+  }
+
+  let pos = 0;
+  for (let i = 0; i < blockIndex; i++) {
+    pos += doc.child(i).nodeSize;
+  }
+
+  editor.chain().focus().setTextSelection(pos + 1).scrollIntoView().run();
+  return true;
+}
+
 export function scrollEditorToBlock(editor: Editor, blockId: string): boolean {
   const element = editor.view.dom.querySelector(`[data-block-id="${blockId}"]`);
   if (!element) return false;
