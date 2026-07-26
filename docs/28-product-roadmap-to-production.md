@@ -1,9 +1,9 @@
 # 28 — Product roadmap to production
 
 **Status:** accepted — **canonical living roadmap**  
-**Last updated:** July 24, 2026  
-**Current milestone:** **M1** — Phase 09 collab + offline exit ([09-m1-exit-collab-offline.md](../implementation_plan/09-m1-exit-collab-offline.md))  
-**Branch:** `feature/phase-09-offline-wave-a`
+**Last updated:** July 26, 2026  
+**Current milestone:** **M1b** — Encrypted, owner-opt-in offline app shell (Phase 25, plan doc pending)  
+**Branch:** `main` (M1 merged; `feature/phase-09-offline-wave-a` closed)
 
 > **This document is the single source of truth** for Rhodes’ path from today’s local Docker build to public production.  
 > Executable phase checklists live in [`implementation_plan/`](../implementation_plan/00-README.md). Product specs live in [`docs/`](README.md).
@@ -79,13 +79,13 @@ flowchart TB
 
 ---
 
-## M1 — Editor + collab exit (Phase 09) — **IN PROGRESS**
+## M1 — Editor + collab exit (Phase 09) — **COMPLETE**
 
 | ID | Deliverable |
 |----|-------------|
-| M1.1 | UAT steps 1–5 pass ([12-offline-sync.md](12-offline-sync.md)) |
-| M1.2 | `pnpm test:offline` green |
-| M1.3 | Merge to `dev` |
+| M1.1 | UAT steps 1–5 pass ([12-offline-sync.md](12-offline-sync.md)) — ✅ |
+| M1.2 | `pnpm test:offline` green — ✅ 70 tests |
+| M1.3 | Merge to `dev` — ✅ merged `dev` → `main` at `c779c77` (July 26, 2026) |
 
 **Execution plan:** [09-m1-exit-collab-offline.md](../implementation_plan/09-m1-exit-collab-offline.md)
 

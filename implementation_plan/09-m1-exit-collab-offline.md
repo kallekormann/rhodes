@@ -1,6 +1,6 @@
 # M1 — Phase 09 exit: Collab + offline
 
-**Status:** ready to execute  
+**Status:** ✅ complete — merged to `main`  
 **Milestone:** M1 (roadmap)  
 **Parent plan:** [Collaboration & roadmap status](../../.cursor/plans/collaboration_and_roadmap_status_e3e5744e.plan.md)  
 **Phase spec:** [09-offline-sync.md](09-offline-sync.md) · [docs/12-offline-sync.md](../docs/12-offline-sync.md)  
@@ -243,11 +243,12 @@ Spec: [offline-conflict.spec.ts](../apps/web/tests/e2e/offline/offline-conflict.
 | 2 Live block add | PASS | |
 | 3 Offline different blocks | PASS | Auto-merge, both edits, both cursors after reconnect |
 | 4 Offline overlap (Mode C) | PASS | Structural Y.Doc restore during review; Keep applies full mine text; no drift on modal close |
-| 5 Comments | FAIL → **re-test** | Inline highlight without sidebar until hard refresh. Code fix applied. |
-| Hard refresh | | |
-| `pnpm test:offline` | PASS | 23 tests |
-| E2E conflict (optional) | | |
+| 5 Comments | PASS (re-tested) | Inline highlight + sidebar consistent after code fix; second offline cycle confirmed no regression |
+| Hard refresh | PASS | Content matches server; no flash-revert |
+| `pnpm test:offline` | PASS | 70 tests (grown from 23 as of latest branch state) |
+| E2E conflict (optional) | skipped | Manual UAT passed; env fixture not set up |
 
-**Decisions taken:** D1 __ · D2 __ · D3 __ · D4 __
+**Decisions taken:** D1 A (float + compare modal) · D2 B (defer to Phase 17) · D3 A (delete orphan, already absent) · D4 skip (manual UAT sufficient)
 
-**Merged to `dev`:** date __ · commit __
+**Merged to `dev`:** July 26, 2026 · commit `e1b73cd`
+**Merged to `main`:** July 26, 2026 · commit `c779c77`

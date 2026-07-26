@@ -1,6 +1,6 @@
 # Phase 09 — Offline Sync
 
-**Status:** in progress — **M1 exit:** [09-m1-exit-collab-offline.md](09-m1-exit-collab-offline.md)  
+**Status:** ✅ complete — **M1 exit:** [09-m1-exit-collab-offline.md](09-m1-exit-collab-offline.md) — merged to `main` at `c779c77` (July 26, 2026)  
 **Depends on:** Phase 05  
 **Blocks:** ~~Phase 13~~ (VPS deferred to M10 per roadmap)  
 **Estimated duration:** 5–7 days  
@@ -146,15 +146,15 @@ PWA install deferred per open decision O-010. Optional service worker for backgr
 
 ## Testing checklist
 
-- [ ] Edit document while online → saves to server + IndexedDB
-- [ ] Go offline (DevTools) → edit → changes persist in IndexedDB
-- [ ] Go online → outbox drains → server updated
-- [ ] No data loss after offline edit + reconnect
-- [ ] Conflict: edit same doc on two tabs → toast + version branch created
-- [ ] Sync indicator shows pending during push
-- [ ] Logout clears local cache
-- [ ] Pull fetches remote changes from other device/session
-- [ ] Large document (100KB JSON) performs acceptably in IndexedDB
+- [x] Edit document while online → saves to server + IndexedDB
+- [x] Go offline (DevTools) → edit → changes persist in IndexedDB
+- [x] Go online → outbox drains → server updated
+- [x] No data loss after offline edit + reconnect
+- [x] Conflict: edit same doc on two tabs → toast + version branch created
+- [x] Sync indicator shows pending during push
+- [x] Logout clears local cache
+- [x] Pull fetches remote changes from other device/session
+- [x] Large document (100KB JSON) performs acceptably in IndexedDB
 
 ---
 
