@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  Awareness,
-  applyAwarenessUpdate,
-  encodeAwarenessUpdate,
-} from "y-protocols/awareness";
 import * as Y from "yjs";
+import { recordBlockAudit } from "@/lib/collaboration/block-audit";
 import { uint8ToBase64 } from "@/lib/collaboration/supabase-yjs-provider";
+import type { DeferredPeerUpdate } from "@/lib/collaboration/supabase-yjs-provider";
 import {
   peerContributorSummary,
   peerEditContributorsForBlock,
@@ -23,60 +20,32 @@ function seedParagraph(doc: Y.Doc, blockId: string, text: string): void {
   fragment.insert(fragment.length, [paragraph]);
 }
 
-function deleteBlock(doc: Y.Doc, index: number): void {
+function deleteBlockAt(doc: Y.Doc, index: number): void {
   const fragment = doc.getXmlFragment("default");
   fragment.delete(index, 1);
 }
 
+function editBlockText(doc: Y.Doc, index: number, text: string): void {
+  const paragraph = doc.getXmlFragment("default").get(index) as Y.XmlElement;
+  const xmlText = paragraph.get(0) as Y.XmlText;
+  xmlText.delete(0, xmlText.length);
+  xmlText.insert(0, text);
+}
+
+/** Encode a peer's doc as the delta a reconnecting client would receive. */
+function deferredUpdateFromDoc(
+  doc: Y.Doc,
+  vectorDoc: Y.Doc,
+  clientId: number,
+): DeferredPeerUpdate {
+  return {
+    clientId,
+    update: Y.encodeStateAsUpdate(doc, Y.encodeStateVector(vectorDoc)),
+  };
+}
+
 describe("peer-edit-contributions", () => {
-  it("uses sender identity attached to deferred updates", () => {
-    const base = new Y.Doc();
-    seedParagraph(base, "b1", "Original");
-    const baseSnapshot = {
-      state: uint8ToBase64(Y.encodeStateAsUpdate(base)),
-      capturedAt: new Date().toISOString(),
-    };
-
-    const peerDoc = new Y.Doc();
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(base));
-    const peerParagraph = peerDoc.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "Peer edit");
-
-    const awareness = new Awareness(new Y.Doc());
-    awareness.setLocalStateField("user", {
-      id: "local-user",
-      name: "You",
-    });
-
-    const contributors = peerEditContributorsForBlock({
-      baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerDoc, Y.encodeStateVector(base)),
-          identity: {
-            userId: "user-b",
-            displayName: "User B",
-          },
-        },
-      ],
-      awareness,
-      blockId: "b1",
-      blockIndex: 0,
-    });
-
-    expect(contributors).toHaveLength(1);
-    expect(contributors[0].displayName).toBe("User B");
-    expect(contributors[0].blockText).toBe("Peer edit");
-
-    base.destroy();
-    peerDoc.destroy();
-    awareness.destroy();
-  });
-
-  it("B deletes + C idle in awareness → contributors [User B] only", () => {
+  it("attributes a block edit to the user recorded in the block-audit trail", () => {
     const base = new Y.Doc();
     seedParagraph(base, "b1", "Original");
     const baseBytes = Y.encodeStateAsUpdate(base);
@@ -85,60 +54,192 @@ describe("peer-edit-contributions", () => {
       capturedAt: new Date().toISOString(),
     };
 
-    const peerB = new Y.Doc();
-    Y.applyUpdate(peerB, baseBytes);
-    deleteBlock(peerB, 0);
-
     const vectorDoc = new Y.Doc();
     Y.applyUpdate(vectorDoc, baseBytes);
 
-    const localDoc = new Y.Doc();
-    const awareness = new Awareness(localDoc);
-    awareness.setLocalStateField("user", {
-      id: "local-user",
-      name: "You",
-    });
-
-    // Idle peer C is present in awareness but contributed no deferred updates.
-    const remoteDoc = new Y.Doc();
-    const remoteAwareness = new Awareness(remoteDoc);
-    remoteAwareness.setLocalStateField("user", {
-      id: "user-c",
-      name: "User C",
-    });
-    applyAwarenessUpdate(
-      awareness,
-      encodeAwarenessUpdate(remoteAwareness, [remoteDoc.clientID]),
-      "test",
-    );
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    editBlockText(peerB, 0, "Peer edit");
+    recordBlockAudit(peerB, ["b1"], "user-b", "User B");
 
     const contributors = peerEditContributorsForBlock({
       baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-b", displayName: "User B" },
-        },
-      ],
-      awareness,
+      deferredUpdates: [deferredUpdateFromDoc(peerB, vectorDoc, 42)],
       blockId: "b1",
       blockIndex: 0,
     });
 
-    expect(contributors.map((entry) => entry.displayName)).toEqual(["User B"]);
-    expect(contributors.map((entry) => entry.displayName)).not.toContain(
-      "User C",
-    );
+    expect(contributors).toHaveLength(1);
+    expect(contributors[0].displayName).toBe("User B");
+    expect(contributors[0].userId).toBe("user-b");
+    expect(contributors[0].blockText).toBe("Peer edit");
+
+    base.destroy();
+    vectorDoc.destroy();
+    peerB.destroy();
+  });
+
+  it("attributes a pure block deletion (Yjs deletes carry no author metadata) via the audit trail", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = {
+      state: uint8ToBase64(baseBytes),
+      capturedAt: new Date().toISOString(),
+    };
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    recordBlockAudit(peerB, ["b1"], "user-b", "User B");
+    deleteBlockAt(peerB, 0);
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [deferredUpdateFromDoc(peerB, vectorDoc, 42)],
+      blockId: "b1",
+      blockIndex: 0,
+    });
+
+    expect(contributors.map((c) => c.displayName)).toEqual(["User B"]);
+
+    base.destroy();
+    vectorDoc.destroy();
+    peerB.destroy();
+  });
+
+  it("attributes only the real author, not a fully-synced bystander who merely relays the same change", () => {
+    // B deletes block 1. C is a separate online peer who is already in sync
+    // with B, so C's own catch-up reply to the reconnecting client also shows
+    // block 1 deleted — but only B's browser ever wrote the audit entry.
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = {
+      state: uint8ToBase64(baseBytes),
+      capturedAt: new Date().toISOString(),
+    };
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    recordBlockAudit(peerB, ["b1"], "user-b", "User B");
+    deleteBlockAt(peerB, 0);
+
+    // C's reply reflects the same resulting state (already synced with B)
+    // but never recorded an audit entry, because C never touched the block.
+    const peerC = new Y.Doc();
+    Y.applyUpdate(peerC, baseBytes);
+    deleteBlockAt(peerC, 0);
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [
+        deferredUpdateFromDoc(peerB, vectorDoc, 42),
+        deferredUpdateFromDoc(peerC, vectorDoc, 99),
+      ],
+      blockId: "b1",
+      blockIndex: 0,
+    });
+
+    expect(contributors.map((c) => c.displayName)).toEqual(["User B"]);
+    expect(contributors.map((c) => c.displayName)).not.toContain("User C");
     expect(peerContributorSummary(contributors)).toBe("User B");
 
     base.destroy();
-    peerB.destroy();
     vectorDoc.destroy();
-    localDoc.destroy();
-    remoteDoc.destroy();
-    remoteAwareness.destroy();
-    awareness.destroy();
+    peerB.destroy();
+    peerC.destroy();
+  });
+
+  it("resolves two independent conflicts in the same batch to their own distinct authors", () => {
+    // B deletes block 1; C, independently, edits block 2. Both updates are
+    // deferred together (a very common race on reconnect) — each block must
+    // resolve to exactly the person who actually touched it.
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original one");
+    seedParagraph(base, "b2", "Original two");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = {
+      state: uint8ToBase64(baseBytes),
+      capturedAt: new Date().toISOString(),
+    };
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    recordBlockAudit(peerB, ["b1"], "user-b", "User B");
+    deleteBlockAt(peerB, 0);
+
+    const peerC = new Y.Doc();
+    Y.applyUpdate(peerC, baseBytes);
+    editBlockText(peerC, 1, "C's word");
+    recordBlockAudit(peerC, ["b2"], "user-c", "User C");
+
+    const deferredUpdates = [
+      deferredUpdateFromDoc(peerB, vectorDoc, 42),
+      deferredUpdateFromDoc(peerC, vectorDoc, 99),
+    ];
+
+    const block1Contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates,
+      blockId: "b1",
+      blockIndex: 0,
+    });
+    const block2Contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates,
+      blockId: "b2",
+      blockIndex: 1,
+    });
+
+    expect(block1Contributors.map((c) => c.displayName)).toEqual(["User B"]);
+    expect(block2Contributors.map((c) => c.displayName)).toEqual(["User C"]);
+
+    base.destroy();
+    vectorDoc.destroy();
+    peerB.destroy();
+    peerC.destroy();
+  });
+
+  it("falls back to Others when the block genuinely changed but has no audit entry (pre-rollout document)", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = {
+      state: uint8ToBase64(baseBytes),
+      capturedAt: new Date().toISOString(),
+    };
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, baseBytes);
+    editBlockText(peerDoc, 0, "Peer edit");
+    // No recordBlockAudit call — simulates an edit made before this feature shipped.
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [deferredUpdateFromDoc(peerDoc, vectorDoc, 42)],
+      blockId: "b1",
+      blockIndex: 0,
+    });
+
+    expect(contributors).toHaveLength(1);
+    expect(contributors[0].displayName).toBe("Others");
+    expect(peerContributorSummary(contributors)).toBe("Others");
+
+    base.destroy();
+    vectorDoc.destroy();
+    peerDoc.destroy();
   });
 
   it("drops peers whose deferred updates leave the conflicted block unchanged", () => {
@@ -150,51 +251,73 @@ describe("peer-edit-contributions", () => {
       capturedAt: new Date().toISOString(),
     };
 
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
     const peerB = new Y.Doc();
     Y.applyUpdate(peerB, baseBytes);
-    const peerBParagraph = peerB.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerBParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "User B edit");
+    editBlockText(peerB, 0, "User B edit");
+    recordBlockAudit(peerB, ["b1"], "user-b", "User B");
 
     const peerC = new Y.Doc();
     Y.applyUpdate(peerC, baseBytes);
     seedParagraph(peerC, "b2", "C only");
+    recordBlockAudit(peerC, ["b2"], "user-c", "User C");
 
-    const vectorDoc = new Y.Doc();
-    Y.applyUpdate(vectorDoc, baseBytes);
-
-    const awareness = new Awareness(new Y.Doc());
     const contributors = peerEditContributorsForBlock({
       baseSnapshot,
       deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-b", displayName: "User B" },
-        },
-        {
-          clientId: 99,
-          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-c", displayName: "User C" },
-        },
+        deferredUpdateFromDoc(peerB, vectorDoc, 42),
+        deferredUpdateFromDoc(peerC, vectorDoc, 99),
       ],
-      awareness,
       blockId: "b1",
       blockIndex: 0,
     });
 
-    expect(contributors.map((entry) => entry.displayName)).toEqual(["User B"]);
+    expect(contributors.map((c) => c.displayName)).toEqual(["User B"]);
     expect(peerContributorSummary(contributors)).toBe("User B");
 
     base.destroy();
+    vectorDoc.destroy();
     peerB.destroy();
     peerC.destroy();
-    vectorDoc.destroy();
-    awareness.destroy();
   });
 
-  it("uses Others for orphan updates instead of listing idle awareness peers", () => {
+  it("excludes the local reviewer's own userId from contributors", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseSnapshot = {
+      state: uint8ToBase64(baseBytes),
+      capturedAt: new Date().toISOString(),
+    };
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, baseBytes);
+    editBlockText(peerDoc, 0, "Peer edit");
+    recordBlockAudit(peerDoc, ["b1"], "local-user", "You");
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [deferredUpdateFromDoc(peerDoc, vectorDoc, 42)],
+      blockId: "b1",
+      blockIndex: 0,
+      localUserId: "local-user",
+    });
+
+    // The only audit entry belongs to the local reviewer — excluded, so this
+    // is treated as unattributable rather than self-attributed.
+    expect(contributors.map((c) => c.displayName)).toEqual(["Others"]);
+
+    base.destroy();
+    vectorDoc.destroy();
+    peerDoc.destroy();
+  });
+
+  it("returns no contributors and no conflict when there are no deferred updates at all", () => {
     const base = new Y.Doc();
     seedParagraph(base, "b1", "Original");
     const baseSnapshot = {
@@ -202,58 +325,15 @@ describe("peer-edit-contributions", () => {
       capturedAt: new Date().toISOString(),
     };
 
-    const peerDoc = new Y.Doc();
-    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(base));
-    const peerParagraph = peerDoc.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "Peer edit");
-
-    const localDoc = new Y.Doc();
-    const awareness = new Awareness(localDoc);
-    awareness.setLocalStateField("user", {
-      id: "local-user",
-      name: "You",
-    });
-
-    const remoteDoc = new Y.Doc();
-    const remoteAwareness = new Awareness(remoteDoc);
-    remoteAwareness.setLocalStateField("user", {
-      id: "user-c",
-      name: "User C",
-    });
-    applyAwarenessUpdate(
-      awareness,
-      encodeAwarenessUpdate(remoteAwareness, [remoteDoc.clientID]),
-      "test",
-    );
-
     const contributors = peerEditContributorsForBlock({
       baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: null,
-          update: Y.encodeStateAsUpdate(peerDoc, Y.encodeStateVector(base)),
-        },
-      ],
-      awareness,
+      deferredUpdates: [],
       blockId: "b1",
       blockIndex: 0,
     });
 
-    expect(contributors).toHaveLength(1);
-    expect(contributors[0].displayName).toBe("Others");
-    expect(contributors.map((entry) => entry.displayName)).not.toContain(
-      "User C",
-    );
-    expect(peerContributorSummary(contributors)).toBe("Others");
-
+    expect(contributors).toEqual([]);
     base.destroy();
-    peerDoc.destroy();
-    localDoc.destroy();
-    remoteDoc.destroy();
-    remoteAwareness.destroy();
-    awareness.destroy();
   });
 
   it("treats missing peer block as a delete touch only with a block-count drop", () => {
@@ -285,263 +365,6 @@ describe("peer-edit-contributions", () => {
         peerText: "Original",
       }),
     ).toBe(false);
-  });
-
-  it("uses lastLocalEditAt to pick the real author when a bystander relays identical content", () => {
-    // Every online peer answers the returner's reconnect handshake, so B's
-    // real edit and C's redundant relay of it look identical on the wire —
-    // only B's own lastLocalEditAt falls inside the offline conflict window.
-    const capturedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
-    const base = new Y.Doc();
-    seedParagraph(base, "b1", "Original");
-    const baseBytes = Y.encodeStateAsUpdate(base);
-    const baseSnapshot = { state: uint8ToBase64(baseBytes), capturedAt };
-
-    const peerB = new Y.Doc();
-    Y.applyUpdate(peerB, baseBytes);
-    const peerBParagraph = peerB.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerBParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "User B edit");
-
-    const peerC = new Y.Doc();
-    Y.applyUpdate(peerC, baseBytes);
-    const peerCParagraph = peerC.getXmlFragment("default").get(0) as Y.XmlElement;
-    const textC = peerCParagraph.get(0) as Y.XmlText;
-    textC.delete(0, textC.length);
-    textC.insert(0, "User B edit");
-
-    const vectorDoc = new Y.Doc();
-    Y.applyUpdate(vectorDoc, baseBytes);
-
-    const awareness = new Awareness(new Y.Doc());
-    const contributors = peerEditContributorsForBlock({
-      baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          identity: {
-            userId: "user-b",
-            displayName: "User B",
-            lastLocalEditAt: Date.parse(capturedAt) + 60_000,
-          },
-        },
-        {
-          // Idle C relays the exact same resulting content via the sync
-          // handshake — no lastLocalEditAt inside the window, must be excluded.
-          clientId: 99,
-          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-c", displayName: "User C" },
-        },
-      ],
-      awareness,
-      blockId: "b1",
-      blockIndex: 0,
-    });
-
-    expect(contributors.map((entry) => entry.displayName)).toEqual(["User B"]);
-
-    base.destroy();
-    peerB.destroy();
-    peerC.destroy();
-    vectorDoc.destroy();
-    awareness.destroy();
-  });
-
-  it("falls back to Others when duplicate content can't be disambiguated", () => {
-    // Same as above, but neither identity carries a lastLocalEditAt inside
-    // the offline window — safer to show a generic label than guess wrong.
-    const base = new Y.Doc();
-    seedParagraph(base, "b1", "Original");
-    const baseBytes = Y.encodeStateAsUpdate(base);
-    const baseSnapshot = {
-      state: uint8ToBase64(baseBytes),
-      capturedAt: new Date().toISOString(),
-    };
-
-    const peerB = new Y.Doc();
-    Y.applyUpdate(peerB, baseBytes);
-    const peerBParagraph = peerB.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerBParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "User B edit");
-
-    const peerC = new Y.Doc();
-    Y.applyUpdate(peerC, baseBytes);
-    const peerCParagraph = peerC.getXmlFragment("default").get(0) as Y.XmlElement;
-    const textC = peerCParagraph.get(0) as Y.XmlText;
-    textC.delete(0, textC.length);
-    textC.insert(0, "User B edit");
-
-    const vectorDoc = new Y.Doc();
-    Y.applyUpdate(vectorDoc, baseBytes);
-
-    const awareness = new Awareness(new Y.Doc());
-    const contributors = peerEditContributorsForBlock({
-      baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-b", displayName: "User B" },
-        },
-        {
-          clientId: 99,
-          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-c", displayName: "User C" },
-        },
-      ],
-      awareness,
-      blockId: "b1",
-      blockIndex: 0,
-    });
-
-    expect(contributors.map((entry) => entry.displayName)).toEqual(["Others"]);
-
-    base.destroy();
-    peerB.destroy();
-    peerC.destroy();
-    vectorDoc.destroy();
-    awareness.destroy();
-  });
-
-  it("attributes a pure block deletion (S4) to the real author via lastLocalEditAt", () => {
-    // Yjs deletes carry no author metadata at all — this is the only
-    // reliable signal that distinguishes B (who deleted) from C (who is
-    // just in sync with B and relays the same deletion on reconnect).
-    const capturedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
-    const base = new Y.Doc();
-    seedParagraph(base, "b1", "Original");
-    const baseBytes = Y.encodeStateAsUpdate(base);
-    const baseSnapshot = { state: uint8ToBase64(baseBytes), capturedAt };
-
-    const peerB = new Y.Doc();
-    Y.applyUpdate(peerB, baseBytes);
-    deleteBlock(peerB, 0);
-
-    const peerC = new Y.Doc();
-    Y.applyUpdate(peerC, baseBytes);
-    deleteBlock(peerC, 0);
-
-    const vectorDoc = new Y.Doc();
-    Y.applyUpdate(vectorDoc, baseBytes);
-
-    const awareness = new Awareness(new Y.Doc());
-    const contributors = peerEditContributorsForBlock({
-      baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          identity: {
-            userId: "user-b",
-            displayName: "User B",
-            lastLocalEditAt: Date.parse(capturedAt) + 60_000,
-          },
-        },
-        {
-          clientId: 99,
-          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-c", displayName: "User C" },
-        },
-      ],
-      awareness,
-      blockId: "b1",
-      blockIndex: 0,
-    });
-
-    expect(contributors.map((entry) => entry.displayName)).toEqual(["User B"]);
-
-    base.destroy();
-    peerB.destroy();
-    peerC.destroy();
-    vectorDoc.destroy();
-    awareness.destroy();
-  });
-
-  it("merges a fresher lastLocalEditAt from live awareness even when entry identity already has a valid displayName", () => {
-    // Regression: the deferred update's attached identity can be captured
-    // before the sender's own handleDocUpdate() sets lastLocalEditAt on
-    // their awareness state (the update and the awareness broadcast race).
-    // If resolveIdentity() short-circuits on the entry identity's valid
-    // displayName alone, the real author's lastLocalEditAt is lost and
-    // disambiguateContributors() can't tell them apart from an idle
-    // bystander relaying identical content — collapsing a real, single
-    // conflicting party into "Others".
-    const capturedAt = new Date("2024-01-01T00:00:00.000Z").toISOString();
-    const base = new Y.Doc();
-    seedParagraph(base, "b1", "Original");
-    const baseBytes = Y.encodeStateAsUpdate(base);
-    const baseSnapshot = { state: uint8ToBase64(baseBytes), capturedAt };
-
-    const peerB = new Y.Doc();
-    Y.applyUpdate(peerB, baseBytes);
-    const peerBParagraph = peerB.getXmlFragment("default").get(0) as Y.XmlElement;
-    const text = peerBParagraph.get(0) as Y.XmlText;
-    text.delete(0, text.length);
-    text.insert(0, "User B edit");
-
-    const peerC = new Y.Doc();
-    Y.applyUpdate(peerC, baseBytes);
-    const peerCParagraph = peerC.getXmlFragment("default").get(0) as Y.XmlElement;
-    const textC = peerCParagraph.get(0) as Y.XmlText;
-    textC.delete(0, textC.length);
-    textC.insert(0, "User B edit");
-
-    const vectorDoc = new Y.Doc();
-    Y.applyUpdate(vectorDoc, baseBytes);
-
-    // B's live awareness state has the fresh lastLocalEditAt, but the
-    // deferred update's attached `identity` (captured earlier) does not.
-    const localDoc = new Y.Doc();
-    const awareness = new Awareness(localDoc);
-    const bAwarenessDoc = new Y.Doc();
-    Object.defineProperty(bAwarenessDoc, "clientID", { value: 42 });
-    const bAwareness = new Awareness(bAwarenessDoc);
-    bAwareness.setLocalStateField("user", { id: "user-b", name: "User B" });
-    bAwareness.setLocalStateField(
-      "lastLocalEditAt",
-      Date.parse(capturedAt) + 60_000,
-    );
-    applyAwarenessUpdate(
-      awareness,
-      encodeAwarenessUpdate(bAwareness, [42]),
-      "test",
-    );
-
-    const contributors = peerEditContributorsForBlock({
-      baseSnapshot,
-      deferredUpdates: [
-        {
-          clientId: 42,
-          update: Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
-          // Stale: valid displayName, but no lastLocalEditAt yet.
-          identity: { userId: "user-b", displayName: "User B" },
-        },
-        {
-          clientId: 99,
-          update: Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
-          identity: { userId: "user-c", displayName: "User C" },
-        },
-      ],
-      awareness,
-      blockId: "b1",
-      blockIndex: 0,
-    });
-
-    expect(contributors.map((entry) => entry.displayName)).toEqual([
-      "User B",
-    ]);
-
-    base.destroy();
-    peerB.destroy();
-    peerC.destroy();
-    vectorDoc.destroy();
-    localDoc.destroy();
-    bAwarenessDoc.destroy();
-    bAwareness.destroy();
-    awareness.destroy();
   });
 
   it("dedupes contributors by user id for summaries", () => {

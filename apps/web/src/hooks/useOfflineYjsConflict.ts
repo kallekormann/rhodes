@@ -49,6 +49,11 @@ import {
   patchYDocBodyToSnapshot,
   ydocBodyMatchesSnapshot,
 } from "@/lib/offline/yjs-offline-restore";
+import { pruneBlockAudit } from "@/lib/collaboration/block-audit";
+
+/** Audit entries older than this are dropped on every commit — comfortably
+ * covers any realistic offline window while keeping the map small. */
+const BLOCK_AUDIT_RETENTION_MS = 24 * 60 * 60 * 1000;
 import {
   base64ToUint8,
   uint8ToBase64,
@@ -116,7 +121,25 @@ export function useOfflineYjsConflict(params: {
   } | null>(null);
   const detectionTimerRef = useRef<number | null>(null);
   const lastCheckedMergedRef = useRef<string | null>(null);
+  /** Paired with lastCheckedMergedRef — see the dedupe-guard note in runDetection. */
+  const lastCheckedCatchupCompleteRef = useRef(false);
   const prevOnlineRef = useRef(online);
+  // `runDetection`/`expandActiveReviewWithNewConflicts` can end up executing
+  // from a callback (setTimeout, provider event listener) that was captured
+  // several renders ago — e.g. a peer update arrives and synchronously fires
+  // a listener registered before React re-rendered with the fresh
+  // `catchupComplete`/`online`/`synced` props. Reading those booleans directly
+  // out of the closure risks acting on a stale snapshot (most dangerously:
+  // treating catch-up as incomplete/complete based on how the world looked
+  // when the callback was *created* rather than when it *runs*). Mirror them
+  // into refs, updated every render, and read the refs instead so every
+  // invocation — however delayed — sees the true current state.
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
+  const syncedRef = useRef(synced);
+  syncedRef.current = synced;
+  const catchupCompleteRef = useRef(catchupComplete);
+  catchupCompleteRef.current = catchupComplete;
   const offlineSessionActiveRef = useRef(false);
   const mineSnapshotLockedRef = useRef(false);
   const conflictReviewArmedRef = useRef(false);
@@ -126,6 +149,7 @@ export function useOfflineYjsConflict(params: {
   remoteUpdateOriginRef.current = remoteUpdateOrigin;
   const providerRef = useRef(provider);
   providerRef.current = provider;
+  const recomputeAttributionRef = useRef<(() => void) | null>(null);
 
   const hasOfflineSession = useCallback(() => {
     return (
@@ -265,6 +289,7 @@ export function useOfflineYjsConflict(params: {
         );
       });
       flushPersist();
+      pruneBlockAudit(ydoc, BLOCK_AUDIT_RETENTION_MS);
       await endConflictReviewSession("committed");
     } finally {
       baseDoc.destroy();
@@ -275,11 +300,11 @@ export function useOfflineYjsConflict(params: {
   }, [documentId, endConflictReviewSession, flushPersist, ydoc]);
 
   /**
-   * A peer's disambiguating `lastLocalEditAt` awareness field can arrive up to
-   * one heartbeat cycle (2s) after their edit content lands via sync — well
-   * after the 50ms detection debounce below. Keep this pure/reusable so both
-   * the initial detection pass and the reactive re-attribution effect below
-   * stay in sync.
+   * Attribution reads the collaborative block-audit trail (a Y.Map replicated
+   * inside the document itself), which can arrive slightly after the block's
+   * content lands via sync — well after the 50ms detection debounce below.
+   * Keep this pure/reusable so both the initial detection pass and the
+   * reactive re-attribution effect below stay in sync.
    */
   const computeContributorsForConflicts = useCallback(
     (
@@ -295,21 +320,18 @@ export function useOfflineYjsConflict(params: {
       const awareness = providerRef.current?.awareness;
       if (!awareness) return { peerContributorsByBlock, authorByBlock };
 
+      const localUserId = (
+        awareness.getLocalState()?.user as { id?: string } | undefined
+      )?.id;
       const deferredUpdates =
         providerRef.current?.getDeferredPeerUpdates() ?? [];
       for (const conflict of conflictsList) {
         const contributors = peerEditContributorsForBlock({
           baseSnapshot,
           deferredUpdates,
-          awareness,
-          localClientId: ydoc?.clientID,
           blockId: conflict.blockId,
           blockIndex: conflict.blockIndex,
-          getPeerIdentity: (clientId) =>
-            providerRef.current?.getPeerIdentity(clientId) ?? {
-              userId: `peer-${clientId}`,
-              displayName: "Other editor",
-            },
+          localUserId,
         });
         peerContributorsByBlock.set(conflict.blockId, contributors);
         authorByBlock.set(
@@ -319,20 +341,117 @@ export function useOfflineYjsConflict(params: {
       }
       return { peerContributorsByBlock, authorByBlock };
     },
-    [ydoc],
+    [],
   );
 
+  /**
+   * A review is already showing (block 1's conflict armed the shield), but
+   * more deferred peer updates keep arriving — e.g. a second peer's edit to a
+   * different block lands moments after the first. Re-scan for conflicts
+   * without touching the frozen base/mine snapshots, the shield, or review
+   * ownership, and merge in only genuinely new blocks (never ones already
+   * shown or already decided) so in-progress decisions and the active
+   * "Next" position are never disturbed.
+   */
+  const expandActiveReviewWithNewConflicts = useCallback(async () => {
+    if (!documentId || !ydoc) return;
+    const baseSnapshot = reviewBaseSnapshotRef.current;
+    const mineBytes = pendingMineSnapshotRef.current;
+    if (!baseSnapshot || !mineBytes) return;
+
+    const mineSnapshot = toSnapshot(mineBytes);
+    const mergedState = (() => {
+      const currentProvider = providerRef.current;
+      if (currentProvider?.isDeferringPeerUpdates) {
+        return currentProvider.getDeferredMergedState();
+      }
+      return snapshotYDoc(ydoc);
+    })();
+
+    const baseDoc = offlineSnapshotToDoc(baseSnapshot);
+    const mineDoc = offlineSnapshotToDoc(mineSnapshot);
+    const mergedDoc = offlineSnapshotToDoc({
+      state: uint8ToBase64(mergedState),
+      capturedAt: new Date().toISOString(),
+    });
+    const peerDoc =
+      providerRef.current?.buildPeerDocFromDeferred(baseSnapshot) ??
+      offlineSnapshotToDoc(baseSnapshot);
+
+    const found = detectOfflineBlockConflicts(
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      mergedDoc,
+      { catchupComplete: catchupCompleteRef.current },
+    );
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    mergedDoc.destroy();
+    peerDoc.destroy();
+
+    if (found.length === 0) return;
+
+    const existingKeys = new Set(
+      conflicts.map((c) => `${c.blockId}:${c.blockIndex}`),
+    );
+    const additions = found.filter((c) => {
+      const key = `${c.blockId}:${c.blockIndex}`;
+      if (existingKeys.has(key)) return false;
+      if (decisionsRef.current.has(decisionKey(c.blockId, c.blockIndex))) {
+        return false;
+      }
+      return true;
+    });
+    if (additions.length === 0) return;
+
+    const merged = [...conflicts, ...additions].sort(
+      (a, b) => a.blockIndex - b.blockIndex,
+    );
+
+    const { peerContributorsByBlock, authorByBlock } =
+      computeContributorsForConflicts(merged, baseSnapshot);
+    const nextClusters = clustersFromBlockConflicts(merged, authorByBlock);
+    const nextReviews = buildBlockReviewModels(
+      merged,
+      nextClusters,
+      peerContributorsByBlock,
+    );
+
+    for (const c of additions) {
+      workingBlockTextRef.current.set(
+        `${c.blockId}:${c.blockIndex}`,
+        c.mineText,
+      );
+    }
+    setConflicts(merged);
+    setClusters(nextClusters);
+    setReviews(nextReviews);
+  }, [computeContributorsForConflicts, conflicts, documentId, ydoc]);
+
   const runDetection = useCallback(async () => {
-    if (!documentId || !ydoc || !online || !synced) return;
+    if (
+      !documentId ||
+      !ydoc ||
+      !onlineRef.current ||
+      !syncedRef.current
+    ) {
+      return;
+    }
     if (!offlineSessionActiveRef.current) return;
     if (committingRef.current) return;
     if (
-      !catchupComplete &&
+      !catchupCompleteRef.current &&
       !providerRef.current?.isDeferringPeerUpdates
     ) {
       return;
     }
-    if (conflictReviewArmedRef.current || reviewPending || conflicts.length > 0) {
+    if (conflictReviewArmedRef.current || reviewPending) {
+      await expandActiveReviewWithNewConflicts();
+      return;
+    }
+    if (conflicts.length > 0) {
       return;
     }
 
@@ -370,8 +489,18 @@ export function useOfflineYjsConflict(params: {
     })();
 
     const mergedKey = uint8ToBase64(mergedState);
-    if (mergedKey === lastCheckedMergedRef.current) return;
+    // Bytes alone aren't enough to dedupe: the *first* pass right after coming
+    // online typically has identical bytes to a later pass (no peer data has
+    // changed the doc), but catchupComplete flips false -> true in between —
+    // and that transition is exactly what makes the settled/onlyLocal verdict
+    // below trustworthy. Never skip a re-check that newly has catchupComplete.
+    const catchupJustCompleted =
+      catchupCompleteRef.current && !lastCheckedCatchupCompleteRef.current;
+    if (mergedKey === lastCheckedMergedRef.current && !catchupJustCompleted) {
+      return;
+    }
     lastCheckedMergedRef.current = mergedKey;
+    lastCheckedCatchupCompleteRef.current = catchupCompleteRef.current;
 
     await resetOfflineConflictClaim(documentId);
     await claimOfflineConflictReview(documentId, TAB_ID);
@@ -391,7 +520,7 @@ export function useOfflineYjsConflict(params: {
       mineDoc,
       peerDoc,
       mergedDoc,
-      { catchupComplete },
+      { catchupComplete: catchupCompleteRef.current },
     );
 
     const settled = isOfflineMergeSettled(
@@ -443,7 +572,24 @@ export function useOfflineYjsConflict(params: {
     peerDoc.destroy();
 
     // Auto-merge: no Case C, and settled or only-local (S1/S2/S6/S13).
-    if (!conflictReviewArmedRef.current && (settled || onlyLocal)) {
+    //
+    // `settled` / `onlyLocal` are computed from whatever peer data has
+    // arrived so far. On the very first detection pass right after coming
+    // back online, no deferred peer update has necessarily arrived yet, so
+    // peerDoc is indistinguishable from baseDoc — every helper here reads
+    // that as "peer never touched this block" and both flags come back
+    // true, even though a peer's delete/edit may be mid-flight over the
+    // socket. Finalizing here would release deferred updates and end the
+    // offline session *before* that peer data lands, so the later update
+    // gets applied straight to the live doc with no review at all. Require
+    // catchupComplete (peer step2 actually received, or the solo-sync
+    // fallback confirmed nobody else is online) before trusting a "nothing
+    // to review" verdict enough to finalize.
+    if (
+      !conflictReviewArmedRef.current &&
+      catchupCompleteRef.current &&
+      (settled || onlyLocal)
+    ) {
       providerRef.current?.setOfflineReviewActive(false);
       providerRef.current?.setOfflineSessionPending(false);
       providerRef.current?.releaseDeferredPeerUpdates();
@@ -461,18 +607,17 @@ export function useOfflineYjsConflict(params: {
       providerRef.current?.broadcastPendingLocalUpdates();
       providerRef.current?.nudgeLocalAwareness();
       flushPersist();
+      pruneBlockAudit(ydoc, BLOCK_AUDIT_RETENTION_MS);
     }
   }, [
     armOfflineReviewShield,
-    catchupComplete,
     clearOfflineConflictSession,
     computeContributorsForConflicts,
     conflicts.length,
     documentId,
+    expandActiveReviewWithNewConflicts,
     flushPersist,
-    online,
     reviewPending,
-    synced,
     ydoc,
   ]);
 
@@ -487,11 +632,8 @@ export function useOfflineYjsConflict(params: {
     }, 50);
   }, [documentId, hasOfflineSession, runDetection]);
 
-  // Re-attribute conflicting parties as peer awareness catches up. The initial
-  // detection pass runs ~50ms after reconnect, but a peer's disambiguating
-  // lastLocalEditAt only reaches us via their next heartbeat (up to 2s later)
-  // — without this, attribution permanently freezes on its first (often
-  // ambiguous) result and the real name never appears.
+  // Re-attribute conflicting parties as peer awareness catches up and as more
+  // deferred Yjs updates arrive (sync step2 from every online peer).
   useEffect(() => {
     if (!reviewPending || conflicts.length === 0) return;
     const baseSnapshot = reviewBaseSnapshotRef.current;
@@ -518,7 +660,7 @@ export function useOfflineYjsConflict(params: {
       setReviews(nextReviews);
     };
 
-    const onAwarenessUpdate = () => {
+    const scheduleRecompute = () => {
       if (debounceTimer != null) window.clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(() => {
         debounceTimer = null;
@@ -526,13 +668,13 @@ export function useOfflineYjsConflict(params: {
       }, 150);
     };
 
-    awareness.on("update", onAwarenessUpdate);
-    // Covers disambiguating data that already arrived between initial
-    // detection and this effect mounting.
-    onAwarenessUpdate();
+    recomputeAttributionRef.current = scheduleRecompute;
+    awareness.on("update", scheduleRecompute);
+    scheduleRecompute();
 
     return () => {
-      awareness.off("update", onAwarenessUpdate);
+      recomputeAttributionRef.current = null;
+      awareness.off("update", scheduleRecompute);
       if (debounceTimer != null) window.clearTimeout(debounceTimer);
     };
   }, [computeContributorsForConflicts, conflicts, reviewPending]);
@@ -712,6 +854,7 @@ export function useOfflineYjsConflict(params: {
       if (!hasOfflineSession()) return;
       lastCheckedMergedRef.current = null;
       scheduleDetection();
+      recomputeAttributionRef.current?.();
     });
     return () => provider.setOnPeerUpdatesDeferred(null);
   }, [hasOfflineSession, provider, scheduleDetection]);

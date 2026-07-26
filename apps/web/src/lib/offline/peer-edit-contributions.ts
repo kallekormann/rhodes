@@ -1,4 +1,3 @@
-import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import {
   extractBlockTexts,
@@ -6,10 +5,8 @@ import {
   type ProseMirrorJsonNode,
 } from "@/lib/offline/yjs-offline-divergence";
 import { offlineSnapshotToDoc } from "@/lib/offline/yjs-offline-snapshot";
-import type {
-  DeferredPeerUpdate,
-  PeerIdentity,
-} from "@/lib/collaboration/supabase-yjs-provider";
+import { getBlockContributors } from "@/lib/collaboration/block-audit";
+import type { DeferredPeerUpdate } from "@/lib/collaboration/supabase-yjs-provider";
 
 export type PeerEditContributor = {
   clientId: number;
@@ -57,84 +54,6 @@ export function peerTouchedBlockVsBase(params: {
   return false;
 }
 
-function awarenessUserForClient(
-  awareness: Awareness,
-  clientId: number,
-): PeerIdentity {
-  const state = awareness.getStates().get(clientId);
-  const user = state?.user as { id?: string; name?: string } | undefined;
-  const lastLocalEditAt = state?.lastLocalEditAt as number | undefined;
-  return {
-    userId: user?.id ?? `peer-${clientId}`,
-    displayName: user?.name?.trim() || "Other editor",
-    lastLocalEditAt,
-  };
-}
-
-function resolveIdentity(
-  clientId: number,
-  entryIdentity: PeerIdentity | undefined,
-  awareness: Awareness,
-  getPeerIdentity?: (clientId: number) => PeerIdentity,
-): PeerIdentity {
-  // Pick the best displayName/userId source (first valid one wins), but
-  // never let that short-circuit drop lastLocalEditAt: whichever source was
-  // captured *before* the peer's genuine edit fired handleDocUpdate() won't
-  // have it set yet, while a fresher source (usually live awareness) will.
-  // Losing it here collapses a real, attributable author into "Others" in
-  // disambiguateContributors().
-  const fromProvider = getPeerIdentity?.(clientId);
-  const fromAwareness = awarenessUserForClient(awareness, clientId);
-
-  const base =
-    entryIdentity?.displayName && entryIdentity.displayName !== "Other editor"
-      ? entryIdentity
-      : fromProvider && fromProvider.displayName !== "Other editor"
-        ? fromProvider
-        : fromAwareness.displayName !== "Other editor"
-          ? fromAwareness
-          : entryIdentity ?? fromAwareness;
-
-  if (typeof base.lastLocalEditAt === "number") return base;
-
-  const freshestLastLocalEditAt = [
-    entryIdentity?.lastLocalEditAt,
-    fromProvider?.lastLocalEditAt,
-    fromAwareness.lastLocalEditAt,
-  ].find((value): value is number => typeof value === "number");
-
-  return freshestLastLocalEditAt == null
-    ? base
-    : { ...base, lastLocalEditAt: freshestLastLocalEditAt };
-}
-
-function mergedPeerBlockText(
-  baseSnapshot: { state: string; capturedAt: string },
-  deferredUpdates: DeferredPeerUpdate[],
-  blockId: string,
-): { text: string; exists: boolean; blockCount: number; baseBlockCount: number } {
-  const baseDoc = offlineSnapshotToDoc(baseSnapshot);
-  const baseBlockCount = extractOrderedBlocks(baseDoc).length;
-  baseDoc.destroy();
-
-  const doc = offlineSnapshotToDoc(baseSnapshot);
-  for (const entry of deferredUpdates) {
-    if (entry.update.length > 0) {
-      Y.applyUpdate(doc, entry.update, "offline-peer-contribution");
-    }
-  }
-  const blocks = extractBlockTexts(doc);
-  const block = blocks.get(blockId);
-  const blockCount = extractOrderedBlocks(doc).length;
-  doc.destroy();
-  return {
-    text: block?.text ?? "",
-    exists: Boolean(block),
-    blockCount,
-    baseBlockCount,
-  };
-}
-
 /** Unknown authorship — do not list idle awareness peers as conflicting parties. */
 function syntheticOthersContributor(params: {
   blockText: string;
@@ -151,97 +70,48 @@ function syntheticOthersContributor(params: {
   ];
 }
 
-type RawContributorCandidate = PeerEditContributor & {
-  lastLocalEditAt?: number;
-  signature: string;
-};
-
-function contentSignature(exists: boolean, text: string): string {
-  return exists ? `1:${text}` : "0";
-}
-
 function windowStartMsFromSnapshot(baseSnapshot: { capturedAt: string }): number {
   const parsed = Date.parse(baseSnapshot.capturedAt);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/**
- * Every online peer independently answers a reconnecting client's sync
- * handshake, so the same real change can arrive relayed through several
- * distinct clientIds (e.g. an idle bystander who is merely in sync with the
- * real author). Candidates that resolve to the exact same resulting block
- * content are almost certainly echoes of one real edit, not independent
- * edits — keep only the one(s) whose own lastLocalEditAt falls inside the
- * offline conflict window; collapse to "Others" if that can't be decided.
- */
-function disambiguateContributors(
-  candidates: RawContributorCandidate[],
-  windowStartMs: number,
-): PeerEditContributor[] {
-  const groups = new Map<string, RawContributorCandidate[]>();
-  for (const candidate of candidates) {
-    const group = groups.get(candidate.signature) ?? [];
-    group.push(candidate);
-    groups.set(candidate.signature, group);
-  }
-
-  const resolved: PeerEditContributor[] = [];
-  for (const group of groups.values()) {
-    const distinctUserIds = new Set(group.map((entry) => entry.userId));
-    if (distinctUserIds.size <= 1) {
-      resolved.push(...group);
-      continue;
-    }
-
-    const withinWindow = uniquePeerContributors(
-      group.filter(
-        (entry) =>
-          typeof entry.lastLocalEditAt === "number" &&
-          entry.lastLocalEditAt >= windowStartMs,
-      ),
-    );
-
-    if (withinWindow.length === 1) {
-      resolved.push(withinWindow[0]);
-    } else {
-      resolved.push(
-        ...syntheticOthersContributor({
-          blockText: group[0].blockText,
-          blockIndex: group[0].blockIndex,
-        }),
-      );
+/** Peer document for attribution: offline base ⊕ every queued deferred update. Caller owns destroy(). */
+function buildMergedPeerDoc(
+  baseSnapshot: { state: string; capturedAt: string },
+  deferredUpdates: DeferredPeerUpdate[],
+): Y.Doc {
+  const doc = offlineSnapshotToDoc(baseSnapshot);
+  for (const entry of deferredUpdates) {
+    if (entry.update.length > 0) {
+      Y.applyUpdate(doc, entry.update, "offline-peer-contribution");
     }
   }
-  return resolved;
+  return doc;
 }
 
 /**
- * Per-peer block text from deferred Yjs update/sync messages. Every online
- * peer replies to a reconnecting client's sync handshake — sync step2 is
- * often the *only* way a genuine edit reaches the returner, so it can't be
- * blanket-excluded. disambiguateContributors() resolves the resulting
- * duplicates instead of a blunt source-based filter.
+ * Who touched this block while the offline returner was away.
+ *
+ * Authorship is read directly from the collaborative block-audit trail (a
+ * Y.Map replicated inside the document itself — see
+ * `@/lib/collaboration/block-audit`), not inferred from content diffing or
+ * awareness timestamps. Every online peer's catch-up reply necessarily
+ * contains the *entire* merged document, so a bystander who never touched a
+ * block is otherwise indistinguishable from its real author once everyone is
+ * back in sync — the audit trail sidesteps that by having each editor record
+ * their own change explicitly, at edit time, on their own machine.
  */
 export function peerEditContributorsForBlock(params: {
   baseSnapshot: { state: string; capturedAt: string };
   deferredUpdates: DeferredPeerUpdate[];
-  awareness: Awareness;
   blockId: string;
   blockIndex: number;
-  localClientId?: number;
   localUserId?: string;
-  getPeerIdentity?: (clientId: number) => PeerIdentity;
 }): PeerEditContributor[] {
-  const {
-    baseSnapshot,
-    deferredUpdates,
-    awareness,
-    blockId,
-    blockIndex,
-    localClientId,
-    localUserId,
-    getPeerIdentity,
-  } = params;
+  const { baseSnapshot, deferredUpdates, blockId, blockIndex, localUserId } =
+    params;
+
+  if (deferredUpdates.length === 0) return [];
 
   const baseDoc = offlineSnapshotToDoc(baseSnapshot);
   const baseBlocks = extractBlockTexts(baseDoc);
@@ -251,156 +121,51 @@ export function peerEditContributorsForBlock(params: {
   const baseText = baseBlock?.text ?? "";
   baseDoc.destroy();
 
-  const byClient = new Map<
-    number,
-    { updates: Uint8Array[]; identity?: PeerIdentity }
-  >();
-  const orphanUpdates: Uint8Array[] = [];
+  const mergedDoc = buildMergedPeerDoc(baseSnapshot, deferredUpdates);
+  const mergedBlocks = extractBlockTexts(mergedDoc);
+  const mergedBlock = mergedBlocks.get(blockId);
+  const peerText = mergedBlock?.text ?? "";
+  const peerBlockExists = Boolean(mergedBlock);
+  const peerBlockCount = extractOrderedBlocks(mergedDoc).length;
 
-  for (const entry of deferredUpdates) {
-    if (entry.clientId == null || entry.clientId < 0) {
-      orphanUpdates.push(entry.update);
-      continue;
-    }
-    if (localClientId != null && entry.clientId === localClientId) {
-      continue;
-    }
-    const bucket = byClient.get(entry.clientId) ?? {
-      updates: [],
-      identity: entry.identity,
-    };
-    bucket.updates.push(entry.update);
-    if (
-      entry.identity?.displayName &&
-      entry.identity.displayName !== "Other editor"
-    ) {
-      bucket.identity = entry.identity;
-    }
-    byClient.set(entry.clientId, bucket);
-  }
-
-  const candidates: RawContributorCandidate[] = [];
-
-  for (const [clientId, bucket] of byClient) {
-    const doc = offlineSnapshotToDoc(baseSnapshot);
-    for (const update of bucket.updates) {
-      if (update.length > 0) {
-        Y.applyUpdate(doc, update, "offline-peer-contribution");
-      }
-    }
-
-    const blocks = extractBlockTexts(doc);
-    const block = blocks.get(blockId);
-    const peerText = block?.text ?? "";
-    const peerBlockExists = Boolean(block);
-    const peerBlockCount = extractOrderedBlocks(doc).length;
-
-    if (
-      !peerTouchedBlockVsBase({
-        baseExisted,
-        baseText,
-        peerBlockExists,
-        peerText,
-        baseBlockCount,
-        peerBlockCount,
-      })
-    ) {
-      doc.destroy();
-      continue;
-    }
-
-    const identity = resolveIdentity(
-      clientId,
-      bucket.identity,
-      awareness,
-      getPeerIdentity,
-    );
-
-    if (localUserId && identity.userId === localUserId) {
-      doc.destroy();
-      continue;
-    }
-
-    candidates.push({
-      clientId,
-      userId: identity.userId,
-      displayName: identity.displayName,
-      blockText: peerText,
-      blockIndex: block?.blockIndex ?? blockIndex,
-      lastLocalEditAt: identity.lastLocalEditAt,
-      signature: contentSignature(peerBlockExists, peerText),
-    });
-
-    doc.destroy();
-  }
-
-  const contributors = disambiguateContributors(
-    candidates,
-    windowStartMsFromSnapshot(baseSnapshot),
-  );
-
-  if (contributors.length > 0) {
-    return uniquePeerContributors(contributors).sort((a, b) =>
-      a.displayName.localeCompare(b.displayName),
-    );
-  }
-
-  if (orphanUpdates.length > 0) {
-    const doc = offlineSnapshotToDoc(baseSnapshot);
-    for (const update of orphanUpdates) {
-      if (update.length > 0) {
-        Y.applyUpdate(doc, update, "offline-peer-contribution");
-      }
-    }
-    const blocks = extractBlockTexts(doc);
-    const block = blocks.get(blockId);
-    const peerText = block?.text ?? "";
-    const peerBlockExists = Boolean(block);
-    const peerBlockCount = extractOrderedBlocks(doc).length;
-    doc.destroy();
-
-    if (
-      peerTouchedBlockVsBase({
-        baseExisted,
-        baseText,
-        peerBlockExists,
-        peerText,
-        baseBlockCount,
-        peerBlockCount,
-      })
-    ) {
-      return syntheticOthersContributor({
-        blockText: peerText,
-        blockIndex,
-      });
-    }
-    return [];
-  }
-
-  // No attributable y-updates — if the merged peer doc still touched the block
-  // (via sync-only catch-up), show a single synthetic party, never idle awareness.
-  if (deferredUpdates.length === 0) {
-    return [];
-  }
-
-  const merged = mergedPeerBlockText(baseSnapshot, deferredUpdates, blockId);
   if (
     !peerTouchedBlockVsBase({
       baseExisted,
       baseText,
-      peerBlockExists: merged.exists,
-      peerText: merged.text,
-      baseBlockCount: merged.baseBlockCount,
-      peerBlockCount: merged.blockCount,
+      peerBlockExists,
+      peerText,
+      baseBlockCount,
+      peerBlockCount,
     })
   ) {
+    mergedDoc.destroy();
     return [];
   }
 
-  return syntheticOthersContributor({
-    blockText: merged.text,
-    blockIndex,
-  });
+  const windowStartMs = windowStartMsFromSnapshot(baseSnapshot);
+  const auditEntries = getBlockContributors(
+    mergedDoc,
+    blockId,
+    windowStartMs,
+    localUserId,
+  );
+  mergedDoc.destroy();
+
+  if (auditEntries.length > 0) {
+    const contributors: PeerEditContributor[] = auditEntries.map((entry) => ({
+      clientId: -1,
+      userId: entry.userId,
+      displayName: entry.displayName,
+      blockText: peerText,
+      blockIndex,
+    }));
+    return uniquePeerContributors(contributors);
+  }
+
+  // No audit entry (e.g. a document that hasn't been touched since this
+  // feature shipped) — fall back to the pre-existing, no-worse-than-before
+  // "Others" placeholder rather than guessing.
+  return syntheticOthersContributor({ blockText: peerText, blockIndex });
 }
 
 export function uniquePeerContributors(

@@ -12,10 +12,12 @@ import Typography from "@tiptap/extension-typography";
 import Suggestion, { type SuggestionProps } from "@tiptap/suggestion";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { ySyncPluginKey } from "y-prosemirror";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
 import type { SupabaseYjsProvider } from "@/lib/collaboration/supabase-yjs-provider";
 import type { CollaborationUser } from "@/hooks/useYjsCollaboration";
+import { recordBlockAudit } from "@/lib/collaboration/block-audit";
 import {
   SlashMenu,
   type SlashMenuItem,
@@ -35,6 +37,7 @@ import {
 import type { RemoteCollaboratorCursor } from "@/components/editor/extensions/remote-cursor-decorations";
 import {
   BLOCK_ID_TRANSACTION_META,
+  computeTouchedBlockIds,
   ensureEditorBlockIds,
   readBlockId,
   resolveCommentBlock,
@@ -291,6 +294,10 @@ export function TipTapEditor({
   }, [content, plainFromDoc]);
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const ydocRef = useRef(ydoc);
+  ydocRef.current = ydoc;
+  const collaborationUserRef = useRef(collaborationUser);
+  collaborationUserRef.current = collaborationUser;
   const onResolveOfflineClusterRef = useRef(onResolveOfflineCluster);
   onResolveOfflineClusterRef.current = onResolveOfflineCluster;
   const onActivateOfflineConflictClusterRef = useRef(onActivateOfflineConflictCluster);
@@ -675,12 +682,48 @@ export function TipTapEditor({
         collabSaveReadyRef.current = true;
         seededCollabRef.current = true;
       },
+      // Schema-level document corruption (e.g. a malformed CRDT merge producing
+      // a node the schema can't parse) fails silently otherwise — TipTap
+      // disables collaboration and keeps rendering whatever it managed to
+      // parse. Surface it loudly so a broken merge is never mistaken for "no
+      // conflict happened".
+      onContentError: ({ error }) => {
+        console.error("[tiptap] schema content error:", error);
+      },
       onUpdate: ({ editor: instance, transaction }) => {
         if (transaction.getMeta(BLOCK_ID_TRANSACTION_META)) {
           return;
         }
         if (collabMode && !collabSaveReadyRef.current) {
           return;
+        }
+        // Stamp the collaborative block-audit trail for genuinely local edits
+        // only — never for changes y-prosemirror just applied from a remote
+        // Yjs update, or we'd misattribute other people's edits to ourselves.
+        const currentYdoc = ydocRef.current;
+        const currentUser = collaborationUserRef.current;
+        if (currentYdoc && currentUser && transaction.docChanged) {
+          const isRemoteChange = Boolean(
+            (
+              transaction.getMeta(ySyncPluginKey) as
+                | { isChangeOrigin?: boolean }
+                | undefined
+            )?.isChangeOrigin,
+          );
+          if (!isRemoteChange) {
+            const touchedBlockIds = computeTouchedBlockIds(
+              transaction.before,
+              instance.state.doc,
+            );
+            if (touchedBlockIds.length > 0) {
+              recordBlockAudit(
+                currentYdoc,
+                touchedBlockIds,
+                currentUser.userId,
+                currentUser.name,
+              );
+            }
+          }
         }
         const nextJson = instance.getJSON() as Record<string, unknown>;
         const nextPlain = instance.getText().trim();
