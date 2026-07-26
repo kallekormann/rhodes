@@ -45,7 +45,7 @@ After Phase 08, preferred order is **08.5 Hardening → 09 Offline → 12 Email 
 |----|----------|---------|-------|
 | O-005 | Embedding model upgrade to mxbai/bge-m3? | Stay nomic / Evaluate | If multilingual retrieval weak |
 | O-006 | Cross-space Bridge Mode (V2)? | Yes / No / Later | Privacy implications |
-| O-007 | Real-time collaboration (Yjs)? | V2 / Never | Major scope |
+| O-007 | Real-time collaboration (Yjs)? | **Accepted (this milestone)** | TipTap + Yjs over Supabase Realtime; see [12-offline-sync.md](12-offline-sync.md) |
 | O-008 | OCR for scanned PDFs? | Tesseract sidecar / V2 | |
 | O-009 | Resend vs AWS SES for MVP? | Resend (DX) / SES (EU) | Both valid |
 | O-010 | PWA / Service Worker install? | V1.5 / No | Offline enhancement |

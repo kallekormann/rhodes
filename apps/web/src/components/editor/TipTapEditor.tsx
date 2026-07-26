@@ -1,6 +1,8 @@
 "use client";
 
 import { Extension } from "@tiptap/core";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Placeholder from "@tiptap/extension-placeholder";
 import Table from "@tiptap/extension-table";
 import TableCell from "@tiptap/extension-table-cell";
@@ -10,7 +12,12 @@ import Typography from "@tiptap/extension-typography";
 import Suggestion, { type SuggestionProps } from "@tiptap/suggestion";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ySyncPluginKey } from "y-prosemirror";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type * as Y from "yjs";
+import type { SupabaseYjsProvider } from "@/lib/collaboration/supabase-yjs-provider";
+import type { CollaborationUser } from "@/hooks/useYjsCollaboration";
+import { recordBlockAudit } from "@/lib/collaboration/block-audit";
 import {
   SlashMenu,
   type SlashMenuItem,
@@ -30,6 +37,7 @@ import {
 import type { RemoteCollaboratorCursor } from "@/components/editor/extensions/remote-cursor-decorations";
 import {
   BLOCK_ID_TRANSACTION_META,
+  computeTouchedBlockIds,
   ensureEditorBlockIds,
   readBlockId,
   resolveCommentBlock,
@@ -40,6 +48,14 @@ import { DocumentImage } from "@/components/editor/extensions/DocumentImage";
 import { DocumentLink } from "@/components/editor/extensions/DocumentLink";
 import { SpellcheckExtension } from "@/components/editor/extensions/SpellcheckExtension";
 import type { SpellSuggestionPayload } from "@/components/editor/extensions/SpellcheckExtension";
+import {
+  ConflictInlineExtension,
+  type ConflictInlineState,
+} from "@/components/editor/extensions/ConflictInlineExtension";
+import type { SpanConflictCluster, SpanConflictVariantSide } from "@/lib/offline/span-conflict-clusters";
+import type { BlockReviewModel } from "@/lib/offline/base-aligned-review";
+import type { ConflictReviewColors } from "@/lib/offline/conflict-review-colors";
+import "@/components/editor/extensions/ConflictInline.css";
 import { EditorBlockDragLayer } from "@/components/editor/EditorBlockDragLayer";
 import { EditorBubbleMenu } from "@/components/editor/EditorBubbleMenu";
 import { EditorLinkTooltip } from "@/components/editor/EditorLinkTooltip";
@@ -69,6 +85,18 @@ type TipTapEditorProps = {
   content: Record<string, unknown>;
   contentSyncToken?: number;
   editable?: boolean;
+  /** When set, TipTap uses Yjs CRDT collaboration instead of LWW content replace. */
+  ydoc?: Y.Doc | null;
+  collabProvider?: SupabaseYjsProvider | null;
+  collaborationUser?: CollaborationUser | null;
+  /** True once the local Y.Doc is ready (IDB loaded) — binds Collaboration extension. */
+  collabDocReady?: boolean;
+  /** True once the Realtime provider has synced with peers (or solo fallback). */
+  collabSynced?: boolean;
+  /** True only when this Y.Doc has never been seeded (no local/server CRDT history yet). */
+  collabNeedsInitialSeed?: boolean;
+  /** Called after the one-time JSON→Y.Doc seed completes (for immediate server persist). */
+  onCollabBootstrapped?: () => void;
   lockedBlockId?: string | null;
   lockedBlockIndex?: number | null;
   lockedSelectionFrom?: number | null;
@@ -100,6 +128,15 @@ type TipTapEditorProps = {
   onRegisterEditor?: (editor: Editor | null) => void;
   onActiveBlockChange?: (blockId: string | null, blockIndex: number | null) => void;
   onSelectionChange?: (from: number, to: number) => void;
+  offlineConflictClusters?: SpanConflictCluster[];
+  offlineConflictReviews?: BlockReviewModel[];
+  conflictReviewColors?: ConflictReviewColors | null;
+  activeOfflineConflictClusterId?: string | null;
+  onActivateOfflineConflictCluster?: (clusterId: string) => void;
+  onResolveOfflineCluster?: (
+    clusterId: string,
+    side: SpanConflictVariantSide,
+  ) => void;
 };
 
 type SlashState = {
@@ -183,6 +220,13 @@ export function TipTapEditor({
   content,
   contentSyncToken = 0,
   editable = true,
+  ydoc = null,
+  collabProvider = null,
+  collaborationUser = null,
+  collabDocReady = false,
+  collabSynced = false,
+  collabNeedsInitialSeed = true,
+  onCollabBootstrapped,
   lockedBlockId = null,
   lockedBlockIndex = null,
   lockedSelectionFrom = null,
@@ -205,9 +249,59 @@ export function TipTapEditor({
   onRegisterEditor,
   onActiveBlockChange,
   onSelectionChange,
+  offlineConflictClusters = [],
+  offlineConflictReviews = [],
+  conflictReviewColors = null,
+  activeOfflineConflictClusterId = null,
+  onActivateOfflineConflictCluster,
+  onResolveOfflineCluster,
 }: TipTapEditorProps) {
+  // Bind Collaboration to Y.Doc as soon as the CRDT is mounted.
+  const collabMode = Boolean(ydoc);
+  const collabCursorMode = Boolean(collabProvider && collaborationUser);
+  const seededCollabRef = useRef(false);
+  const collabSaveReadyRef = useRef(!collabMode);
+  const onCollabBootstrappedRef = useRef(onCollabBootstrapped);
+  onCollabBootstrappedRef.current = onCollabBootstrapped;
+  const contentSnapshotRef = useRef(content);
+  const collabNeedsInitialSeedRef = useRef(collabNeedsInitialSeed);
+  collabNeedsInitialSeedRef.current = collabNeedsInitialSeed;
+
+  const plainFromDoc = useCallback((doc: Record<string, unknown> | null | undefined) => {
+    try {
+      const nodes = (doc as { content?: unknown[] } | null)?.content;
+      if (!Array.isArray(nodes)) return "";
+      const walk = (n: unknown): string => {
+        if (!n || typeof n !== "object") return "";
+        const node = n as { text?: string; content?: unknown[] };
+        if (typeof node.text === "string") return node.text;
+        if (!Array.isArray(node.content)) return "";
+        return node.content.map(walk).join("");
+      };
+      return nodes.map(walk).join("").trim();
+    } catch {
+      return "";
+    }
+  }, []);
+
+  // Prefer the richer of prop vs live snapshot — never clobber typed text with a stale empty prop.
+  useEffect(() => {
+    const propPlain = plainFromDoc(content);
+    const snapPlain = plainFromDoc(contentSnapshotRef.current);
+    if (propPlain.length >= snapPlain.length) {
+      contentSnapshotRef.current = content;
+    }
+  }, [content, plainFromDoc]);
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
+  const ydocRef = useRef(ydoc);
+  ydocRef.current = ydoc;
+  const collaborationUserRef = useRef(collaborationUser);
+  collaborationUserRef.current = collaborationUser;
+  const onResolveOfflineClusterRef = useRef(onResolveOfflineCluster);
+  onResolveOfflineClusterRef.current = onResolveOfflineCluster;
+  const onActivateOfflineConflictClusterRef = useRef(onActivateOfflineConflictCluster);
+  onActivateOfflineConflictClusterRef.current = onActivateOfflineConflictCluster;
   const onActiveBlockChangeRef = useRef(onActiveBlockChange);
   onActiveBlockChangeRef.current = onActiveBlockChange;
   const onSelectionChangeRef = useRef(onSelectionChange);
@@ -380,11 +474,12 @@ export function TipTapEditor({
     [],
   );
 
-  const editor = useEditor({
-    extensions: [
+  const extensions = useMemo(() => {
+    const list = [
       StarterKit.configure({
         heading: { levels: [2, 3] },
         horizontalRule: {},
+        history: collabMode ? false : undefined,
       }),
       Placeholder.configure({ placeholder: "Start writing…" }),
       Typography,
@@ -397,9 +492,14 @@ export function TipTapEditor({
       CitationBlock,
       RhodesSuggestion,
       BlockId,
-      RemoteBlockLock,
+      ...(collabMode ? [] : [RemoteBlockLock]),
       CommentHighlight,
       SpellcheckExtension.configure({ enabled: true, locale: "en" }),
+      ConflictInlineExtension.configure({
+        onActivate: (clusterId) => {
+          onActivateOfflineConflictClusterRef.current?.(clusterId);
+        },
+      }),
       Extension.create({
         name: "slashCommand",
         addProseMirrorPlugins() {
@@ -488,39 +588,164 @@ export function TipTapEditor({
           ];
         },
       }),
-    ],
-    content,
-    editable,
-    immediatelyRender: false,
-    editorProps: {
-      attributes: {
-        class: "editor-body tiptap-editor-body",
-        spellcheck: "true",
-      },
-      handleDrop: (_view, event) => {
-        const file = event.dataTransfer?.files?.[0];
-        if (!file?.type.startsWith("image/")) return false;
-        event.preventDefault();
-        void uploadImage(file);
-        return true;
-      },
-      handleClick: (_view, _pos, event) => {
-        const commentId = findCommentIdAtClickTarget(event.target);
-        if (!commentId) return false;
-        onCommentHighlightClickRef.current?.(commentId);
-        return true;
-      },
-    },
-    onUpdate: ({ editor: instance, transaction }) => {
-      if (transaction.getMeta(BLOCK_ID_TRANSACTION_META)) {
-        return;
+    ];
+
+    if (ydoc) {
+      list.push(
+        Collaboration.configure({
+          document: ydoc,
+        }),
+      );
+      if (collabCursorMode && collabProvider) {
+        list.push(
+          CollaborationCursor.configure({
+            provider: collabProvider,
+            user: {
+              name: collaborationUser.name,
+              color: collaborationUser.color,
+            },
+          }),
+        );
       }
-      onUpdateRef.current(instance.getJSON(), instance.getText());
+    }
+
+    return list;
+  }, [
+    clearSlashExitTimer,
+    closeSlashMenu,
+    collabCursorMode,
+    collabDocReady,
+    collabMode,
+    collabProvider,
+    collaborationUser,
+    requestImagePicker,
+    requestTableModal,
+    scheduleSlashExit,
+    setSlashActiveIndex,
+    ydoc,
+  ]);
+
+  const editor = useEditor(
+    {
+      extensions,
+      // Keep server JSON until Yjs is synced; then Collaboration takes over.
+      content: collabMode ? undefined : content,
+      editable,
+      immediatelyRender: false,
+      editorProps: {
+        attributes: {
+          class: "editor-body tiptap-editor-body",
+          spellcheck: "true",
+        },
+        handleDrop: (_view, event) => {
+          const file = event.dataTransfer?.files?.[0];
+          if (!file?.type.startsWith("image/")) return false;
+          event.preventDefault();
+          void uploadImage(file);
+          return true;
+        },
+        handleClick: (_view, _pos, event) => {
+          const commentId = findCommentIdAtClickTarget(event.target);
+          if (!commentId) return false;
+          onCommentHighlightClickRef.current?.(commentId);
+          return true;
+        },
+      },
+      onCreate: ({ editor: instance }) => {
+        if (!collabMode) {
+          collabSaveReadyRef.current = true;
+          return;
+        }
+        // Seed from Postgres/React JSON at most once ever per document — the
+        // Y.Doc itself (via collabNeedsInitialSeed) is the source of truth for
+        // whether this has already happened, so we never re-inject content
+        // into an existing CRDT (that duplicates text across peers).
+        if (collabNeedsInitialSeedRef.current && !seededCollabRef.current) {
+          const snapshot = contentSnapshotRef.current;
+          const plainFromContent = plainFromDoc(snapshot);
+          const ydocHasBody =
+            ydoc != null && ydoc.getXmlFragment("default").length > 0;
+          if (!ydocHasBody && plainFromContent.length > 0) {
+            instance.commands.setContent(snapshot);
+            ensureEditorBlockIds(instance);
+            contentSnapshotRef.current = instance.getJSON() as Record<
+              string,
+              unknown
+            >;
+            onUpdateRef.current(instance.getJSON(), instance.getText());
+          }
+          if (ydoc && !ydocHasBody) {
+            ydoc.getMap("rhodes").set("seeded", true);
+            onCollabBootstrappedRef.current?.();
+          }
+        }
+        collabSaveReadyRef.current = true;
+        seededCollabRef.current = true;
+      },
+      // Schema-level document corruption (e.g. a malformed CRDT merge producing
+      // a node the schema can't parse) fails silently otherwise — TipTap
+      // disables collaboration and keeps rendering whatever it managed to
+      // parse. Surface it loudly so a broken merge is never mistaken for "no
+      // conflict happened".
+      onContentError: ({ error }) => {
+        console.error("[tiptap] schema content error:", error);
+      },
+      onUpdate: ({ editor: instance, transaction }) => {
+        if (transaction.getMeta(BLOCK_ID_TRANSACTION_META)) {
+          return;
+        }
+        if (collabMode && !collabSaveReadyRef.current) {
+          return;
+        }
+        // Stamp the collaborative block-audit trail for genuinely local edits
+        // only — never for changes y-prosemirror just applied from a remote
+        // Yjs update, or we'd misattribute other people's edits to ourselves.
+        const currentYdoc = ydocRef.current;
+        const currentUser = collaborationUserRef.current;
+        if (currentYdoc && currentUser && transaction.docChanged) {
+          const isRemoteChange = Boolean(
+            (
+              transaction.getMeta(ySyncPluginKey) as
+                | { isChangeOrigin?: boolean }
+                | undefined
+            )?.isChangeOrigin,
+          );
+          if (!isRemoteChange) {
+            const touchedBlockIds = computeTouchedBlockIds(
+              transaction.before,
+              instance.state.doc,
+            );
+            if (touchedBlockIds.length > 0) {
+              recordBlockAudit(
+                currentYdoc,
+                touchedBlockIds,
+                currentUser.userId,
+                currentUser.name,
+              );
+            }
+          }
+        }
+        const nextJson = instance.getJSON() as Record<string, unknown>;
+        const nextPlain = instance.getText().trim();
+        const prevPlain = plainFromDoc(contentSnapshotRef.current);
+        // Spurious empty Collaboration/init update during bootstrap only.
+        if (
+          !collabSaveReadyRef.current &&
+          nextPlain.length === 0 &&
+          prevPlain.length > 0
+        ) {
+          instance.commands.setContent(contentSnapshotRef.current);
+          return;
+        }
+        contentSnapshotRef.current = nextJson;
+        onUpdateRef.current(nextJson, instance.getText());
+      },
+      onBlur: ({ editor: instance }) => {
+        onBlurRef.current?.(instance);
+      },
     },
-    onBlur: ({ editor: instance }) => {
-      onBlurRef.current?.(instance);
-    },
-  });
+    [collabMode, documentId, extensions, plainFromDoc],
+  );
 
   editorRef.current = editor;
 
@@ -535,7 +760,7 @@ export function TipTapEditor({
   }, [editor, editable]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || collabMode) return;
 
     const collaboration: RemoteCollaborationMeta = {
       lockedBlockId,
@@ -548,9 +773,11 @@ export function TipTapEditor({
     editor.view.dispatch(
       editor.state.tr.setMeta(remoteCollaborationKey, collaboration),
     );
-  }, [editor, lockedBlockId, lockedBlockIndex, lockedSelectionFrom, lockedByName]);
+  }, [collabMode, editor, lockedBlockId, lockedBlockIndex, lockedSelectionFrom, lockedByName]);
 
   useEffect(() => {
+    // Yjs owns the document — never LWW setContent over live peers.
+    if (collabMode) return;
     if (!editor || contentSyncToken === 0) return;
     const incoming = JSON.stringify(content);
     const current = JSON.stringify(editor.getJSON());
@@ -566,7 +793,7 @@ export function TipTapEditor({
       const safeTo = Math.min(Math.max(to, safeFrom), docSize);
       editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
     }
-  }, [content, contentSyncToken, editor]);
+  }, [collabMode, content, contentSyncToken, editor]);
 
   useEffect(() => {
     if (!editor) return;
@@ -644,11 +871,11 @@ export function TipTapEditor({
 
     applyCommentHighlightsToEditor(editor, comments);
     commentsAppliedRef.current = signature;
-  }, [comments, editor]);
+  }, [comments, contentSyncToken, editor]);
 
   useEffect(() => {
     commentsAppliedRef.current = null;
-  }, [documentId]);
+  }, [documentId, contentSyncToken]);
 
   useEffect(() => {
     if (!editor) return;
@@ -730,6 +957,32 @@ export function TipTapEditor({
     };
   }, [editor]);
 
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage.rhodesConflictInline as {
+      refresh: (next: ConflictInlineState) => void;
+    };
+    const next: ConflictInlineState = {
+      clusters: offlineConflictClusters,
+      reviews: offlineConflictReviews,
+      colors:
+        offlineConflictClusters.length > 0 && offlineConflictReviews.length > 0
+          ? conflictReviewColors
+          : null,
+      activeClusterId:
+        activeOfflineConflictClusterId ??
+        offlineConflictClusters[0]?.id ??
+        null,
+    };
+    storage.refresh(next);
+  }, [
+    activeOfflineConflictClusterId,
+    conflictReviewColors,
+    editor,
+    offlineConflictClusters,
+    offlineConflictReviews,
+  ]);
+
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>
       {editor && (
@@ -756,7 +1009,11 @@ export function TipTapEditor({
       <div className="tiptap-editor__surface" ref={editorSurfaceRef}>
         <EditorContent editor={editor} />
 
-        {editor && (remoteCursors.length > 0 || lockedSelectionFrom != null || lockedBlockIndex != null) && (
+        {editor &&
+          !collabCursorMode &&
+          (remoteCursors.length > 0 ||
+            lockedSelectionFrom != null ||
+            lockedBlockIndex != null) && (
           <DocumentCollaborationOverlay
             editor={editor}
             surfaceRef={editorSurfaceRef}

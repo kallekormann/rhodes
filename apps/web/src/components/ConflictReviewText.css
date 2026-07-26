@@ -1,0 +1,44 @@
+.conflict-review {
+  margin: 0;
+  font-family: var(--font-editor);
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: break-word;
+  color: var(--color-text);
+}
+
+.conflict-review__context {
+  color: var(--color-text-tertiary);
+}
+
+.conflict-review__mine-add,
+.conflict-review__peer-add {
+  background: var(--conflict-mine-muted);
+  color: var(--color-text);
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.conflict-review--peer .conflict-review__peer-add {
+  background: var(--conflict-peer-muted);
+}
+
+.conflict-review__mine-del,
+.conflict-review__peer-del {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--conflict-mine);
+  background: var(--conflict-mine-muted);
+  border-radius: 2px;
+}
+
+.conflict-review--peer .conflict-review__peer-del {
+  text-decoration-color: var(--conflict-peer);
+  background: var(--conflict-peer-muted);
+}
+
+.conflict-review__segment--active.conflict-review__mine-add,
+.conflict-review__segment--active.conflict-review__mine-del {
+  box-shadow: 0 0 0 1px var(--conflict-mine-strong);
+}

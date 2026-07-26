@@ -9,11 +9,20 @@ type RealtimeAuthClient = {
   };
 };
 
+export type EnsureRealtimeAuthOptions = {
+  /** Re-apply JWT even when the access token string is unchanged (e.g. after offline). */
+  force?: boolean;
+};
+
 let lastRealtimeToken: string | null = null;
 let authInFlight: Promise<void> | null = null;
 
 /** Set the Realtime JWT once per token to avoid reconnect storms from duplicate setAuth calls. */
-export async function ensureRealtimeAuth(supabase: RealtimeAuthClient): Promise<void> {
+export async function ensureRealtimeAuth(
+  supabase: RealtimeAuthClient,
+  options?: EnsureRealtimeAuthOptions,
+): Promise<void> {
+  const force = options?.force ?? false;
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -21,13 +30,13 @@ export async function ensureRealtimeAuth(supabase: RealtimeAuthClient): Promise<
   const token = session?.access_token ?? null;
   if (!token) return;
 
-  if (token === lastRealtimeToken) {
+  if (!force && token === lastRealtimeToken) {
     return;
   }
 
   if (authInFlight) {
     await authInFlight;
-    if (token === lastRealtimeToken) {
+    if (!force && token === lastRealtimeToken) {
       return;
     }
   }
@@ -47,4 +56,12 @@ export async function ensureRealtimeAuth(supabase: RealtimeAuthClient): Promise<
 export function resetRealtimeAuthCache(): void {
   lastRealtimeToken = null;
   authInFlight = null;
+}
+
+/** Call on `window online` so broadcast channels get a fresh Realtime JWT. */
+export async function refreshRealtimeAuthOnOnline(
+  supabase: RealtimeAuthClient,
+): Promise<void> {
+  resetRealtimeAuthCache();
+  await ensureRealtimeAuth(supabase, { force: true });
 }

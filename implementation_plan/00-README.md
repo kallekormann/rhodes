@@ -1,8 +1,9 @@
 # Rhodes Implementation Plan — Index
 
 **Status:** accepted  
-**Last updated:** July 21, 2026  
-**Current focus:** Phase 09 — Offline Sync  
+**Last updated:** July 24, 2026  
+**Current focus:** Phase 09 — Offline Sync (Milestone **M1**)  
+**Roadmap:** [**docs/28-product-roadmap-to-production.md**](../docs/28-product-roadmap-to-production.md) — canonical M1–M13 sequence to production  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
 
@@ -12,7 +13,7 @@
 
 This folder contains the **executable implementation plan** for building Rhodes: a Docker-first, self-hosted team second brain. Each phase is one markdown file with objectives, tasks, file checklists, env vars, testing criteria, and exit gates.
 
-**Canonical product specs** remain in [`../docs/`](../docs/). **UI reference** is [`../ui-mock/`](../ui-mock/) + [`../docs/26-ui-mock-reference.md`](../docs/26-ui-mock-reference.md).
+**Canonical product specs** remain in [`../docs/`](../docs/). **Production roadmap:** [`../docs/28-product-roadmap-to-production.md`](../docs/28-product-roadmap-to-production.md). **UI reference** is [`../ui-mock/`](../ui-mock/) + [`../docs/26-ui-mock-reference.md`](../docs/26-ui-mock-reference.md).
 
 ---
 

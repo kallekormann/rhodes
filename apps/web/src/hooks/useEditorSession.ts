@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { getScopeMetaLabel } from "@/data/scopes";
@@ -26,6 +26,7 @@ import {
 import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { isDocumentId } from "@/lib/documents/ids";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
+import { pushOutbox } from "@/lib/offline/sync-engine";
 import {
   buildTemplateMetadata,
   parseTemplateMetadata,
@@ -35,8 +36,11 @@ import { isTemplateId } from "@/lib/templates/ids";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
 import { useDocumentRealtime, useDocumentAwayNotice } from "@/hooks/useDocumentRealtime";
 import { useDocumentPresence } from "@/hooks/useDocumentPresence";
-import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
+import { useYjsCollaboration } from "@/hooks/useYjsCollaboration";
+import { useOfflineYjsConflict } from "@/hooks/useOfflineYjsConflict";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { Editor } from "@tiptap/react";
+import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import {
   createTemplate,
   fetchTemplate,
@@ -44,23 +48,86 @@ import {
   type TemplateDetail,
 } from "@/hooks/useTemplates";
 
+type DebouncedCallback<T extends (...args: never[]) => void> = ((
+  ...args: Parameters<T>
+) => void) & {
+  flush: () => void;
+  cancel: () => void;
+};
+
 function useDebouncedCallback<T extends (...args: never[]) => void>(
   callback: T,
   delayMs: number,
-) {
+): DebouncedCallback<T> {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastArgs = useRef<Parameters<T> | null>(null);
   const callbackRef = useRef(callback);
   callbackRef.current = callback;
 
-  return useCallback(
+  const flush = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (!lastArgs.current) return;
+    const args = lastArgs.current;
+    lastArgs.current = null;
+    callbackRef.current(...args);
+  }, []);
+
+  const cancel = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    lastArgs.current = null;
+  }, []);
+
+  const debounced = useCallback(
     (...args: Parameters<T>) => {
+      lastArgs.current = args;
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => {
+        timer.current = null;
+        lastArgs.current = null;
         callbackRef.current(...args);
       }, delayMs);
     },
     [delayMs],
-  );
+  ) as DebouncedCallback<T>;
+
+  debounced.flush = flush;
+  debounced.cancel = cancel;
+  return debounced;
+}
+
+/**
+ * Best-effort projection of the current body into Postgres (documents.content /
+ * content_plain) for search, RAG and the activity feed. The Yjs CRDT (via
+ * document_yjs_state) is the durable source of truth for the body — this
+ * write is force-applied (no OCC) and simply skipped while offline, since
+ * y-indexeddb already retains offline edits and the next online edit (or
+ * reconnect flush) will catch the projection back up.
+ */
+async function persistContentProjection(
+  documentId: string,
+  content: Record<string, unknown>,
+  contentPlain: string,
+): Promise<void> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  try {
+    await fetch(`/app/api/documents/${documentId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: normalizeDocumentImageContent(content),
+        content_plain: contentPlain,
+        force: true,
+      }),
+    });
+  } catch {
+    /* best-effort — next edit or reconnect retries */
+  }
 }
 
 export function useEditorSession() {
@@ -94,6 +161,9 @@ export function useEditorSession() {
   const { document, loading, error, save, refresh, applyLocal } = useDocument(
     isEditingTemplate ? null : resolvedId,
   );
+  const { online } = useOnlineStatus(
+    isEditingTemplate ? null : (document?.workspace_id ?? resolvedWorkspaceId),
+  );
   const [templateRecord, setTemplateRecord] = useState<TemplateDetail | null>(
     null,
   );
@@ -108,7 +178,18 @@ export function useEditorSession() {
     null,
   );
   const hydratedDocumentIdRef = useRef<string | null>(null);
+  const titleHydratedForIdRef = useRef<string | null>(null);
   const latestContentRef = useRef<Record<string, unknown>>(EMPTY_DOCUMENT_CONTENT);
+  const debouncedSaveContentRef = useRef<DebouncedCallback<
+    (content: Record<string, unknown>, content_plain: string) => void
+  > | null>(null);
+  const debouncedSaveTitleRef = useRef<DebouncedCallback<
+    (title: string) => void
+  > | null>(null);
+  const debouncedSaveCommentsRef = useRef<DebouncedCallback<
+    (nextComments: StoredDocumentComment[]) => void
+  > | null>(null);
+  const contentPlainRef = useRef("");
   const [publishingTemplate, setPublishingTemplate] = useState(false);
   const [comments, setComments] = useState<StoredDocumentComment[]>([]);
   const [shareContext, setShareContext] = useState<DocumentShareContext>(emptyShareContext());
@@ -229,6 +310,7 @@ export function useEditorSession() {
       latestContentRef.current = resolved;
       setContentPlain(docContentPlain?.trim() ?? "");
       setContentHydratedForId(docId);
+      setContentSyncToken((token) => token + 1);
       setComments(parseDocumentComments(docMetadata));
     }
 
@@ -239,50 +321,109 @@ export function useEditorSession() {
     };
   }, [document?.id, document?.content, document?.metadata, isEditingTemplate]);
 
+  const collabActiveRef = useRef(false);
+  const editorForConflictRef = useRef<Editor | null>(null);
+  const ydocForSnapshotRef = useRef<import("yjs").Doc | null>(null);
+
+  const {
+    ydoc,
+    provider: collabProvider,
+    synced: collabSynced,
+    catchupComplete: collabCatchupComplete,
+    docReady: collabDocReady,
+    collabActive,
+    collaborationUser,
+    needsInitialSeed: collabNeedsInitialSeed,
+    flushPersist: flushCollabPersist,
+  } = useYjsCollaboration({
+    documentId: isEditingTemplate ? null : (document?.id ?? null),
+    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    userId: session.userId,
+    displayName: session.displayName || session.userEmail,
+  });
+  ydocForSnapshotRef.current = ydoc;
+  collabActiveRef.current = collabActive;
+
+  const collabCursorMode = Boolean(collabProvider && collaborationUser);
+
+  const handleCollabBootstrapped = useCallback(() => {
+    flushCollabPersist();
+  }, [flushCollabPersist]);
+
+  const {
+    offlineConflictBlocks,
+    offlineConflictClusters,
+    offlineConflictReviews,
+    offlineConflictReviewPending,
+    keepOfflineMine,
+    takeOfflineTheirs,
+    keepAllOfflineMine,
+    takeAllOfflineTheirs,
+    resolveOfflineCluster,
+  } = useOfflineYjsConflict({
+    documentId: isEditingTemplate ? null : (document?.id ?? null),
+    ydoc,
+    synced: collabSynced,
+    catchupComplete: collabCatchupComplete,
+    online,
+    remoteUpdateOrigin: collabProvider,
+    provider: collabProvider,
+    getEditor: () => editorForConflictRef.current,
+    flushPersist: flushCollabPersist,
+  });
+
+  const registerEditorForConflict = useCallback((editor: Editor | null) => {
+    editorForConflictRef.current = editor;
+  }, []);
+
+  const applyRemoteDocument = useCallback(
+    async (remote: DocumentRecord) => {
+      setDocumentTitle(remote.title);
+      setDocumentId(remote.id);
+      setComments(parseDocumentComments(remote.metadata));
+
+      // Yjs owns the body once live — never let a stale Postgres projection
+      // (which can lag behind the CRDT) clobber the live editor content.
+      if (collabActiveRef.current) return;
+
+      const raw =
+        (remote.content as Record<string, unknown> | null) ??
+        EMPTY_DOCUMENT_CONTENT;
+      const normalized = normalizeDocumentImageContent(raw);
+      let resolved = normalized;
+      try {
+        resolved = await resolveDocumentImageUrls(normalized);
+      } catch {
+        resolved = normalized;
+      }
+
+      setEditorContent(resolved);
+      latestContentRef.current = resolved;
+      setContentPlain(remote.content_plain?.trim() ?? "");
+      setContentHydratedForId(remote.id);
+      hydratedDocumentIdRef.current = remote.id;
+      setContentSyncToken((token) => token + 1);
+    },
+    [setDocumentId, setDocumentTitle],
+  );
+
   useEffect(() => {
-    if (isEditingTemplate || !document?.id) return;
-
-    // Realtime + 15s fallback polling handled by useDocumentRealtime.
-  }, [document?.id, isEditingTemplate]);
-
-  const applyRemoteDocument = useCallback(async (remote: DocumentRecord) => {
-    const raw =
-      (remote.content as Record<string, unknown> | null) ?? EMPTY_DOCUMENT_CONTENT;
-    const normalized = normalizeDocumentImageContent(raw);
-    let resolved = normalized;
+    if (!document?.id || !collabActive) return;
     try {
-      resolved = await resolveDocumentImageUrls(normalized);
+      sessionStorage.setItem(`rhodes:collab-session:${document.id}`, "1");
     } catch {
-      resolved = normalized;
+      /* private mode */
     }
-
-    setEditorContent(resolved);
-    latestContentRef.current = resolved;
-    setContentPlain(remote.content_plain?.trim() ?? "");
-    setContentHydratedForId(remote.id);
-    setComments(parseDocumentComments(remote.metadata));
-    setDocumentTitle(remote.title);
-    setDocumentId(remote.id);
-    setIsDirty(false);
-    hydratedDocumentIdRef.current = remote.id;
-    setContentSyncToken((token) => token + 1);
-  }, [setDocumentId, setDocumentTitle]);
+  }, [collabActive, document?.id]);
 
   const {
     live: documentLive,
-    remoteConflict,
-    dismissConflict,
-    reloadRemote,
-    keepLocal,
     markSynced,
     setBaselineUpdatedAt,
   } = useDocumentRealtime({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     enabled: !isEditingTemplate && crossScopeAccess === "allowed",
     isDirty,
-    isTyping,
-    currentUserId: session.userId,
-    getLocalContentPlain: () => contentPlain,
     onRemoteUpdate: applyRemoteDocument,
   });
 
@@ -316,7 +457,12 @@ export function useEditorSession() {
     selectionFrom: cursorSelection?.from ?? null,
     selectionTo: cursorSelection?.to ?? null,
     selectionRef: cursorSelectionRef,
-    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    // Legacy presence overlay until Yjs CollaborationCursor is live.
+    enabled:
+      !isEditingTemplate &&
+      crossScopeAccess === "allowed" &&
+      online &&
+      !collabCursorMode,
   });
 
   const onEditorSelectionChange = useCallback((from: number, to: number) => {
@@ -464,16 +610,19 @@ export function useEditorSession() {
 
   useEffect(() => {
     if (!document || isEditingTemplate) return;
-    if (document.metadata?.template_draft === true) {
-      setDocumentId(document.id);
-      setDocumentTitle(document.title);
-      return;
-    }
+    if (titleHydratedForIdRef.current === document.id) return;
 
+    titleHydratedForIdRef.current = document.id;
     setDocumentId(document.id);
     setDocumentTitle(document.title);
-    writeLastDocumentId(document.workspace_id, document.id);
-  }, [document, isEditingTemplate, setDocumentId, setDocumentTitle]);
+    if (document.metadata?.template_draft !== true) {
+      writeLastDocumentId(document.workspace_id, document.id);
+    }
+  }, [document?.id, document?.title, isEditingTemplate, setDocumentId, setDocumentTitle]);
+
+  useEffect(() => {
+    titleHydratedForIdRef.current = null;
+  }, [resolvedId]);
 
   const persistDocument = useCallback(
     async (patch: Parameters<typeof save>[0]) => {
@@ -482,21 +631,23 @@ export function useEditorSession() {
         showToast("Couldn't save document", "error");
         return null;
       }
-      markSynced(result.updated_at);
-      setIsDirty(false);
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        markSynced(result.updated_at);
+        setIsDirty(false);
+      }
       return result;
     },
     [markSynced, save, showToast],
   );
 
+  contentPlainRef.current = contentPlain;
+
   const debouncedSaveContent = useDebouncedCallback(
     (content: Record<string, unknown>, content_plain: string) => {
-      void persistDocument({
-        content: normalizeDocumentImageContent(content),
-        content_plain,
-      });
+      if (!document?.id) return;
+      void persistContentProjection(document.id, content, content_plain);
     },
-    500,
+    800,
   );
 
   const debouncedSaveTemplateContent = useDebouncedCallback(
@@ -511,9 +662,9 @@ export function useEditorSession() {
   );
 
   const handleContentUpdate = useCallback(
-    (content: Record<string, unknown>, content_plain: string) => {
-      latestContentRef.current = content;
-      setEditorContent(content);
+    (nextContent: Record<string, unknown>, content_plain: string) => {
+      latestContentRef.current = nextContent;
+      setEditorContent(nextContent);
       setContentPlain(content_plain);
       if (!isEditingTemplate) {
         setIsDirty(true);
@@ -526,18 +677,55 @@ export function useEditorSession() {
         }, 3_500);
       }
       if (isEditingTemplate && templateRecord) {
-        debouncedSaveTemplateContent(content);
-      } else {
-        debouncedSaveContent(content, content_plain);
+        debouncedSaveTemplateContent(nextContent);
+      } else if (!isEditingTemplate) {
+        // Durable persistence is Yjs's job (document_yjs_state); this just
+        // keeps the Postgres projection (search/RAG/activity) reasonably fresh.
+        debouncedSaveContent(nextContent, content_plain);
       }
     },
-    [
-      debouncedSaveContent,
-      debouncedSaveTemplateContent,
-      isEditingTemplate,
-      templateRecord,
-    ],
+    [debouncedSaveContent, debouncedSaveTemplateContent, isEditingTemplate, templateRecord],
   );
+
+  debouncedSaveContentRef.current = debouncedSaveContent;
+
+  // Flush the projection once back online so search/RAG doesn't lag too far
+  // behind an offline editing session, even without a further keystroke.
+  useEffect(() => {
+    if (!online || isEditingTemplate || !document?.id) return;
+    const plain = contentPlainRef.current;
+    if (plain.trim().length === 0) return;
+    void persistContentProjection(document.id, latestContentRef.current, plain);
+  }, [online, isEditingTemplate, document?.id]);
+
+  // Flush pending debounced saves before background sync runs on reconnect.
+  useLayoutEffect(() => {
+    const flushPendingSave = () => {
+      debouncedSaveContentRef.current?.flush();
+      debouncedSaveTitleRef.current?.flush();
+      debouncedSaveCommentsRef.current?.flush();
+    };
+    const cancelPendingSave = () => {
+      debouncedSaveCommentsRef.current?.flush();
+      debouncedSaveContentRef.current?.cancel();
+      debouncedSaveTitleRef.current?.cancel();
+    };
+    window.addEventListener("online", flushPendingSave, { capture: true });
+    window.addEventListener("offline", cancelPendingSave, { capture: true });
+    return () => {
+      window.removeEventListener("online", flushPendingSave, { capture: true });
+      window.removeEventListener("offline", cancelPendingSave, { capture: true });
+      debouncedSaveContentRef.current?.flush();
+      debouncedSaveTitleRef.current?.flush();
+      debouncedSaveCommentsRef.current?.flush();
+    };
+  }, []);
+
+  // Retry queued title/metadata patches once back online.
+  useEffect(() => {
+    if (!online) return;
+    void pushOutbox();
+  }, [online]);
 
   const isTemplateDraft = document?.metadata?.template_draft === true;
   const isTemplateMode = isTemplateDraft || isEditingTemplate;
@@ -622,6 +810,8 @@ export function useEditorSession() {
     void persistDocument({ title });
   }, 400);
 
+  debouncedSaveTitleRef.current = debouncedSaveTitle;
+
   const debouncedSaveTemplateTitle = useDebouncedCallback((title: string) => {
     if (!templateRecord) return;
     void updateTemplate({ id: templateRecord.id, name: title });
@@ -686,6 +876,7 @@ export function useEditorSession() {
     },
     400,
   );
+  debouncedSaveCommentsRef.current = debouncedSaveComments;
 
   const addComment = useCallback(
     (input: {
@@ -805,6 +996,16 @@ export function useEditorSession() {
     : null;
   const documentScopeLabel = documentScope ? getScopeMetaLabel(documentScope) : null;
 
+  const reloadRemoteDocument = useCallback(async () => {
+    if (!document?.id) return null;
+    const response = await fetch(`/app/api/documents/${document.id}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return null;
+    const latest = data.document as DocumentRecord;
+    await applyRemoteDocument(latest);
+    return latest;
+  }, [applyRemoteDocument, document?.id]);
+
   return {
     document: document as DocumentRecord | null,
     documentId: isEditingTemplate ? null : (document?.id ?? null),
@@ -824,7 +1025,11 @@ export function useEditorSession() {
         !resolvedWorkspaceId ||
         crossScopeAccess === "pending" ||
         (!document && loading) ||
-        (document != null && contentHydratedForId !== document.id),
+        (document != null && contentHydratedForId !== document.id) ||
+        (!isEditingTemplate &&
+          crossScopeAccess === "allowed" &&
+          document != null &&
+          !collabDocReady),
     error: isEditingTemplate ? templateError : error,
     content,
     contentPlain,
@@ -837,9 +1042,11 @@ export function useEditorSession() {
       ? templateRecord
         ? formatUpdatedAt(templateRecord.created_at)
         : null
-      : document
-        ? formatUpdatedAt(document.updated_at)
-        : null,
+      : collabActive && (isDirty || isTyping)
+        ? "Editing live"
+        : document
+          ? formatUpdatedAt(document.updated_at)
+          : null,
     isFavorite: document?.metadata?.favorite === true,
     isTemplateDraft,
     isEditingTemplate,
@@ -873,6 +1080,7 @@ export function useEditorSession() {
     onTitleChange: (title: string) => {
       setDocumentTitle(title);
       if (!isEditingTemplate) {
+        applyLocal({ title });
         setIsDirty(true);
       }
       if (isEditingTemplate) {
@@ -882,12 +1090,9 @@ export function useEditorSession() {
       }
     },
     documentLive,
-    remoteConflict,
-    dismissConflict,
-    keepLocal,
     awayNotice,
     dismissAwayNotice,
-    reloadRemoteDocument: reloadRemote,
+    reloadRemoteDocument,
     contentSyncToken,
     activeBlockId,
     onActiveBlockChange: handleActiveBlockChange,
@@ -897,5 +1102,23 @@ export function useEditorSession() {
     lockedByName,
     remoteCursors,
     onEditorSelectionChange,
+    ydoc,
+    collabProvider,
+    collabDocReady,
+    collabSynced,
+    collabNeedsInitialSeed,
+    onCollabBootstrapped: handleCollabBootstrapped,
+    collabActive,
+    collaborationUser,
+    offlineConflictBlocks,
+    offlineConflictClusters,
+    offlineConflictReviews,
+    offlineConflictReviewPending,
+    keepOfflineMine,
+    takeOfflineTheirs,
+    keepAllOfflineMine,
+    takeAllOfflineTheirs,
+    resolveOfflineCluster,
+    registerEditorForConflict,
   };
 }
