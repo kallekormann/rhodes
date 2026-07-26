@@ -111,6 +111,20 @@ export function peerEditContributorsForBlock(params: {
   const { baseSnapshot, deferredUpdates, blockId, blockIndex, localUserId } =
     params;
 
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug(
+      "[peer-edit-contributions] start",
+      JSON.stringify({
+        blockId,
+        blockIndex,
+        localUserId,
+        deferredUpdateCount: deferredUpdates.length,
+        deferredSources: deferredUpdates.map((u) => u.source ?? "update"),
+      }),
+    );
+  }
+
   if (deferredUpdates.length === 0) return [];
 
   const baseDoc = offlineSnapshotToDoc(baseSnapshot);

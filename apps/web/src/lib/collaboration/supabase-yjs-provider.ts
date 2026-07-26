@@ -121,6 +121,8 @@ export class SupabaseYjsProvider {
   /** Doc state peers are believed to have — diff is broadcast after each sync. */
   private unsentBaselineVector: Uint8Array | null;
   private reconnectTimer: number | null = null;
+  /** Dev-only diagnostic counter for connect() invocations. */
+  private connectAttemptCount = 0;
   private soloSyncLongTimer: number | null = null;
   private reconnecting = false;
   private intentionalDisconnect = false;
@@ -816,6 +818,23 @@ export class SupabaseYjsProvider {
   private async connect() {
     if (this.destroyed) return;
 
+    if (process.env.NODE_ENV !== "production") {
+      this.connectAttemptCount += 1;
+      // eslint-disable-next-line no-console
+      console.debug(
+        "[supabase-yjs-provider] connect attempt",
+        JSON.stringify({
+          attempt: this.connectAttemptCount,
+          documentId: this.documentId,
+          isReconnect: this.reconnecting,
+          offlineReviewActive: this.offlineReviewActive,
+          offlineSessionPending: this.offlineSessionPending,
+          deferPeerUpdates: this.deferPeerUpdates,
+          deferredPeerUpdatesCount: this.deferredPeerUpdates.length,
+        }),
+      );
+    }
+
     this.receivedPeerDataSinceConnect = false;
     this.soloSyncedWithoutPeer = false;
     this.catchupRequiresPeer =
@@ -871,6 +890,13 @@ export class SupabaseYjsProvider {
         }
         this.setSynced(false);
         this.onDisconnected?.();
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.debug(
+            "[supabase-yjs-provider] channel closed, scheduling reconnect",
+            JSON.stringify({ status, documentId: this.documentId }),
+          );
+        }
         this.scheduleReconnect();
       }
     });

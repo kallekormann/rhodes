@@ -6,6 +6,7 @@ import * as Y from "yjs";
 import {
   type BlockConflict,
   detectOfflineBlockConflicts,
+  extractBlockTexts,
   isOfflineMergeSettled,
   offlineSessionHasOnlyLocalEdits,
 } from "@/lib/offline/yjs-offline-divergence";
@@ -54,6 +55,15 @@ import { pruneBlockAudit } from "@/lib/collaboration/block-audit";
 /** Audit entries older than this are dropped on every commit — comfortably
  * covers any realistic offline window while keeping the map small. */
 const BLOCK_AUDIT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** Dev-only diagnostic: blockId -> text snapshot, for spotting post-commit divergence. */
+function debugBlockChecksum(ydoc: Y.Doc): Record<string, string> {
+  const out: Record<string, string> = {};
+  extractBlockTexts(ydoc).forEach((value, key) => {
+    out[key] = value.text;
+  });
+  return out;
+}
 import {
   base64ToUint8,
   uint8ToBase64,
@@ -223,9 +233,30 @@ export function useOfflineYjsConflict(params: {
   );
 
   const commitResolvedConflicts = useCallback(async () => {
-    if (committingRef.current) return;
-    if (!documentId || !ydoc) return;
+    if (committingRef.current) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] commitResolvedConflicts bailed: already committing",
+        );
+      }
+      return;
+    }
+    if (!documentId || !ydoc) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] commitResolvedConflicts bailed: missing documentId/ydoc",
+          JSON.stringify({ hasDocumentId: Boolean(documentId), hasYdoc: Boolean(ydoc) }),
+        );
+      }
+      return;
+    }
     if (!(await ownsOfflineConflictReview(documentId, TAB_ID))) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug("[offline-patch] commitResolvedConflicts bailed: non-owner");
+      }
       await endConflictReviewSession("non-owner");
       return;
     }
@@ -245,6 +276,16 @@ export function useOfflineYjsConflict(params: {
     workingBlockTextRef.current = new Map();
 
     if (!baseSnapshot || !mineBytes) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] commitResolvedConflicts bailed: missing state",
+          JSON.stringify({
+            hasBaseSnapshot: Boolean(baseSnapshot),
+            hasMineBytes: Boolean(mineBytes),
+          }),
+        );
+      }
       await endConflictReviewSession("commit-missing-state");
       return;
     }
@@ -290,6 +331,27 @@ export function useOfflineYjsConflict(params: {
       });
       flushPersist();
       pruneBlockAudit(ydoc, BLOCK_AUDIT_RETENTION_MS);
+
+      if (process.env.NODE_ENV !== "production") {
+        const immediateChecksum = debugBlockChecksum(ydoc);
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] post-commit checksum (t+0ms)",
+          JSON.stringify(immediateChecksum),
+        );
+        setTimeout(() => {
+          const delayedChecksum = debugBlockChecksum(ydoc);
+          const drifted =
+            JSON.stringify(delayedChecksum) !==
+            JSON.stringify(immediateChecksum);
+          // eslint-disable-next-line no-console
+          console.debug(
+            `[offline-patch] post-commit checksum (t+3000ms) drifted=${drifted}`,
+            JSON.stringify(delayedChecksum),
+          );
+        }, 3000);
+      }
+
       await endConflictReviewSession("committed");
     } finally {
       baseDoc.destroy();
@@ -318,7 +380,19 @@ export function useOfflineYjsConflict(params: {
       const authorByBlock = new Map<string, string>();
 
       const awareness = providerRef.current?.awareness;
-      if (!awareness) return { peerContributorsByBlock, authorByBlock };
+      if (!awareness) {
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.debug(
+            "[offline-patch] computeContributorsForConflicts bailed: no awareness",
+            JSON.stringify({
+              hasProvider: Boolean(providerRef.current),
+              conflictBlockIds: conflictsList.map((c) => c.blockId),
+            }),
+          );
+        }
+        return { peerContributorsByBlock, authorByBlock };
+      }
 
       const localUserId = (
         awareness.getLocalState()?.user as { id?: string } | undefined
@@ -545,6 +619,17 @@ export function useOfflineYjsConflict(params: {
       const { peerContributorsByBlock, authorByBlock } =
         computeContributorsForConflicts(found, baseSnapshot);
 
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] conflicts found, attribution result",
+          JSON.stringify({
+            blockIds: found.map((c) => c.blockId),
+            authorByBlock: Array.from(authorByBlock.entries()),
+          }),
+        );
+      }
+
       const nextClusters = clustersFromBlockConflicts(found, authorByBlock);
       const nextReviews = buildBlockReviewModels(
         found,
@@ -590,6 +675,13 @@ export function useOfflineYjsConflict(params: {
       catchupCompleteRef.current &&
       (settled || onlyLocal)
     ) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[offline-patch] auto-merge (no conflict review), releasing deferred updates",
+          JSON.stringify({ settled, onlyLocal }),
+        );
+      }
       providerRef.current?.setOfflineReviewActive(false);
       providerRef.current?.setOfflineSessionPending(false);
       providerRef.current?.releaseDeferredPeerUpdates();

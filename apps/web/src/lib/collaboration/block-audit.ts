@@ -54,6 +54,13 @@ export function recordBlockAudit(
       map.set(auditKey(blockId, userId), { userId, displayName, editedAt });
     }
   }, BLOCK_AUDIT_ORIGIN);
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug(
+      "[block-audit] recorded",
+      JSON.stringify({ blockIds, userId, displayName, editedAt }),
+    );
+  }
 }
 
 /**
@@ -76,6 +83,20 @@ export function getBlockContributors(
     if (excludeUserId && value.userId === excludeUserId) return;
     out.push(value);
   });
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug(
+      "[block-audit] read",
+      JSON.stringify({
+        blockId,
+        sinceMs,
+        excludeUserId,
+        mapSize: map.size,
+        mapKeys: [...map.keys()].filter((k) => k.startsWith(prefix)),
+        found: out,
+      }),
+    );
+  }
   return out;
 }
 
