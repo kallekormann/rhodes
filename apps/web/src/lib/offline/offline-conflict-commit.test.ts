@@ -288,24 +288,101 @@ describe("offline-conflict-commit", () => {
       baseDoc,
       mineDoc,
       peerDoc,
-      decisions: new Map([[decisionKey("a", 0), { side: "theirs" as const }]]),
+      decisions: new Map([
+        [
+          decisionKey("a", 0),
+          { side: "theirs" as const, text: "Peer A" },
+        ],
+      ]),
     });
 
     patchYDocBodyToResolvedBlocks(live, plan);
+    for (const entry of plan) entry.retainDoc?.destroy();
 
     const fragment = live.getXmlFragment("default");
     const ids: string[] = [];
+    const texts: string[] = [];
     for (let i = 0; i < fragment.length; i += 1) {
       const item = fragment.get(i);
       expect(item instanceof Y.XmlElement).toBe(true);
-      if (item instanceof Y.XmlElement) ids.push(item.getAttribute("blockId") ?? "");
+      if (item instanceof Y.XmlElement) {
+        ids.push(item.getAttribute("blockId") ?? "");
+        const child = item.get(0);
+        texts.push(child instanceof Y.XmlText ? child.toString() : "");
+      }
     }
     expect(ids).toEqual(["a", "b", "c"]);
+    expect(texts[0]).toBe("Peer A");
     expect(fragment.length).toBe(3);
 
     baseDoc.destroy();
     mineDoc.destroy();
     peerDoc.destroy();
     live.destroy();
+  });
+
+  it("take theirs with decision.text wins when peer reminted the blockId", () => {
+    const baseDoc = docFromNodes([paragraph("mine-id", "Hello world")]);
+    const mineDoc = docFromNodes([paragraph("mine-id", "Hello offline")]);
+    // Peer TipTap reminted the paragraph id while editing the same slot.
+    const peerDoc = docFromNodes([paragraph("peer-remint", "Hello online")]);
+    const live = docFromNodes([paragraph("mine-id", "Hello offline")]);
+
+    const plan = buildResolvedBlockPlan({
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      decisions: new Map([
+        [
+          decisionKey("mine-id", 0),
+          { side: "theirs" as const, text: "Hello online" },
+        ],
+      ]),
+    });
+
+    expect(plan.map((entry) => entry.blockId)).toEqual(["mine-id"]);
+    expect(plan.map((entry) => entry.side)).toEqual(["peer"]);
+
+    patchYDocBodyToResolvedBlocks(live, plan);
+    for (const entry of plan) entry.retainDoc?.destroy();
+
+    const fragment = live.getXmlFragment("default");
+    expect(fragment.length).toBe(1);
+    const block = fragment.get(0);
+    expect(block).toBeInstanceOf(Y.XmlElement);
+    if (block instanceof Y.XmlElement) {
+      expect(block.getAttribute("blockId")).toBe("mine-id");
+      const child = block.get(0);
+      expect(child).toBeInstanceOf(Y.XmlText);
+      if (child instanceof Y.XmlText) {
+        expect(child.toString()).toBe("Hello online");
+      }
+    }
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    peerDoc.destroy();
+    live.destroy();
+  });
+
+  it("take theirs without peer entry but with empty text accepts peer delete", () => {
+    const baseDoc = docFromNodes([paragraph("b1", "Original")]);
+    const mineDoc = docFromNodes([paragraph("b1", "Offline edit")]);
+    const peerDoc = docFromNodes([]);
+
+    const plan = buildResolvedBlockPlan({
+      baseDoc,
+      mineDoc,
+      peerDoc,
+      decisions: new Map([
+        [decisionKey("b1", 0), { side: "theirs" as const, text: "" }],
+      ]),
+    });
+
+    expect(plan).toHaveLength(0);
+
+    baseDoc.destroy();
+    mineDoc.destroy();
+    peerDoc.destroy();
   });
 });

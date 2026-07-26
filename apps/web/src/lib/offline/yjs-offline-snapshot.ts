@@ -48,10 +48,11 @@ async function deleteMeta(key: string): Promise<void> {
 export async function storeOfflineBase(
   documentId: string,
   state: Uint8Array,
+  capturedAt: string = new Date().toISOString(),
 ): Promise<void> {
   const snapshot: OfflineYjsSnapshot = {
     state: uint8ToBase64(state),
-    capturedAt: new Date().toISOString(),
+    capturedAt,
   };
   await putMeta(offlineBaseKey(documentId), snapshot);
 }

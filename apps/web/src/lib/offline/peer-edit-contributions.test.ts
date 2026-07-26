@@ -365,6 +365,48 @@ describe("peer-edit-contributions", () => {
     live.destroy();
   });
 
+  it("uses go-offline capturedAt so peer audit is not filtered as too old", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const goOfflineAt = "2026-07-26T14:55:00.000Z";
+    const peerEditedAt = Date.parse("2026-07-26T14:55:30.000Z");
+    const reconnectAt = "2026-07-26T14:56:00.000Z";
+
+    const live = new Y.Doc();
+    Y.applyUpdate(live, Y.encodeStateAsUpdate(base));
+    editBlockText(live, 0, "Peer edit");
+    recordBlockAudit(live, ["b1"], "user-c", "User C", peerEditedAt);
+
+    const withGoOfflineTime = peerEditContributorsForBlock({
+      baseSnapshot: {
+        state: uint8ToBase64(Y.encodeStateAsUpdate(base)),
+        capturedAt: goOfflineAt,
+      },
+      deferredUpdates: [],
+      blockId: "b1",
+      blockIndex: 0,
+      liveDoc: live,
+    });
+    expect(withGoOfflineTime.map((c) => c.displayName)).toEqual(["User C"]);
+
+    // Re-stamping capturedAt at reconnect (the old bug) makes peer edits look stale.
+    const withReconnectTime = peerEditContributorsForBlock({
+      baseSnapshot: {
+        state: uint8ToBase64(Y.encodeStateAsUpdate(base)),
+        capturedAt: reconnectAt,
+      },
+      deferredUpdates: [],
+      blockId: "b1",
+      blockIndex: 0,
+      liveDoc: live,
+    });
+    expect(withReconnectTime).toEqual([]);
+    expect(peerContributorSummary(withReconnectTime)).toBe("Others");
+
+    base.destroy();
+    live.destroy();
+  });
+
   it("treats missing peer block as a delete touch only with a block-count drop", () => {
     expect(
       peerTouchedBlockVsBase({

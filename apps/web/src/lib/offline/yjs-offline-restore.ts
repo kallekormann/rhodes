@@ -336,6 +336,39 @@ export function findXmlBlockById(
   return null;
 }
 
+/**
+ * Clone a block's element shell (node name + attrs) and replace its children
+ * with a single plain-text node. Used when committing a decided conflict side
+ * whose canonical text must win over whatever CRDT-merged XML the peer doc
+ * currently holds.
+ *
+ * The returned element stays integrated in `retainDoc` so later
+ * `cloneXmlItem` reads during patch are valid. Caller must keep `retainDoc`
+ * alive until the clone has been inserted into the live document.
+ */
+export function cloneXmlBlockWithPlainText(
+  source: Y.XmlElement,
+  plain: string,
+  blockId?: string,
+): { xml: Y.XmlElement; retainDoc: Y.Doc } {
+  const retainDoc = new Y.Doc();
+  const fragment = retainDoc.getXmlFragment("default");
+  fragment.insert(0, [cloneXmlItem(source)]);
+  const live = fragment.get(0) as Y.XmlElement;
+  if (blockId) {
+    live.setAttribute("blockId", blockId);
+  }
+  while (live.length > 0) {
+    live.delete(0, 1);
+  }
+  const text = new Y.XmlText();
+  if (plain.length > 0) {
+    text.insert(0, plain);
+  }
+  live.insert(0, [text]);
+  return { xml: live, retainDoc };
+}
+
 /** Semantic body check — Yjs byte encoding can differ while block text matches. */
 export function ydocBodyMatchesSnapshot(
   liveDoc: Y.Doc,

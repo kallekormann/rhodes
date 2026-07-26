@@ -87,10 +87,10 @@ const TAB_ID =
     ? crypto.randomUUID()
     : `tab-${Date.now()}`;
 
-function toSnapshot(bytes: Uint8Array) {
+function toSnapshot(bytes: Uint8Array, capturedAt?: string) {
   return {
     state: uint8ToBase64(bytes),
-    capturedAt: new Date().toISOString(),
+    capturedAt: capturedAt ?? new Date().toISOString(),
   };
 }
 
@@ -124,6 +124,8 @@ export function useOfflineYjsConflict(params: {
   const workingBlockTextRef = useRef<Map<string, string>>(new Map());
   const decisionsRef = useRef<Map<string, ConflictDecision>>(new Map());
   const pendingBaseSnapshotRef = useRef<Uint8Array | null>(null);
+  /** Go-offline wall clock — must survive until attribution, not be re-stamped at reconnect. */
+  const pendingBaseCapturedAtRef = useRef<string | null>(null);
   const pendingMineSnapshotRef = useRef<Uint8Array | null>(null);
   const reviewBaseSnapshotRef = useRef<{
     state: string;
@@ -178,6 +180,7 @@ export function useOfflineYjsConflict(params: {
       decisionsRef.current = new Map();
       reviewBaseSnapshotRef.current = null;
       pendingBaseSnapshotRef.current = null;
+      pendingBaseCapturedAtRef.current = null;
       pendingMineSnapshotRef.current = null;
       lastCheckedMergedRef.current = null;
       setReviewPending(false);
@@ -329,6 +332,9 @@ export function useOfflineYjsConflict(params: {
           OFFLINE_CONFLICT_COMMIT_ORIGIN,
         );
       });
+      for (const entry of blockPlan) {
+        entry.retainDoc?.destroy();
+      }
       flushPersist();
       pruneBlockAudit(ydoc, BLOCK_AUDIT_RETENTION_MS);
 
@@ -532,9 +538,15 @@ export function useOfflineYjsConflict(params: {
 
     const baseSnapshot =
       pendingBaseSnapshotRef.current != null
-        ? toSnapshot(pendingBaseSnapshotRef.current)
+        ? toSnapshot(
+            pendingBaseSnapshotRef.current,
+            pendingBaseCapturedAtRef.current ?? undefined,
+          )
         : await getOfflineBase(documentId);
     if (!baseSnapshot) return;
+    if (!pendingBaseCapturedAtRef.current) {
+      pendingBaseCapturedAtRef.current = baseSnapshot.capturedAt;
+    }
 
     const mineSnapshot =
       pendingMineSnapshotRef.current != null
@@ -688,6 +700,7 @@ export function useOfflineYjsConflict(params: {
       providerRef.current?.releaseDeferredPeerUpdates();
       await clearOfflineSnapshots(documentId);
       pendingBaseSnapshotRef.current = null;
+      pendingBaseCapturedAtRef.current = null;
       pendingMineSnapshotRef.current = null;
       lastCheckedMergedRef.current = null;
       offlineSessionActiveRef.current = false;
@@ -795,6 +808,7 @@ export function useOfflineYjsConflict(params: {
         const baseSnap = await getOfflineBase(documentId);
         if (!baseSnap) return;
         pendingBaseSnapshotRef.current = base64ToUint8(baseSnap.state);
+        pendingBaseCapturedAtRef.current = baseSnap.capturedAt;
         offlineSessionActiveRef.current = true;
       }
 
@@ -822,13 +836,15 @@ export function useOfflineYjsConflict(params: {
     if (typeof navigator !== "undefined" && navigator.onLine) return;
 
     const base = snapshotYDoc(ydoc);
+    const capturedAt = new Date().toISOString();
     pendingBaseSnapshotRef.current = base;
+    pendingBaseCapturedAtRef.current = capturedAt;
     pendingMineSnapshotRef.current = base;
     lastCheckedMergedRef.current = null;
     offlineSessionActiveRef.current = true;
     mineSnapshotLockedRef.current = false;
     void resetOfflineConflictClaim(documentId);
-    void storeOfflineBase(documentId, base);
+    void storeOfflineBase(documentId, base, capturedAt);
     void storeOfflineMine(documentId, base);
     markOfflineSessionPending(documentId);
     providerRef.current?.setOfflineSessionPending(true);
@@ -862,6 +878,7 @@ export function useOfflineYjsConflict(params: {
       }
 
       pendingBaseSnapshotRef.current = base64ToUint8(baseSnap.state);
+      pendingBaseCapturedAtRef.current = baseSnap.capturedAt;
       pendingMineSnapshotRef.current = base64ToUint8(mineSnap.state);
       offlineSessionActiveRef.current = true;
       providerRef.current?.setOfflineSessionPending(true);
@@ -1010,6 +1027,7 @@ export function useOfflineYjsConflict(params: {
 
   useEffect(() => {
     pendingBaseSnapshotRef.current = null;
+    pendingBaseCapturedAtRef.current = null;
     pendingMineSnapshotRef.current = null;
     decisionsRef.current = new Map();
     reviewBaseSnapshotRef.current = null;
@@ -1055,8 +1073,15 @@ export function useOfflineYjsConflict(params: {
   }, [reviewPending, ydoc]);
 
   const recordDecision = useCallback(
-    (blockId: string, blockIndex: number, side: "mine" | "theirs") => {
-      decisionsRef.current.set(decisionKey(blockId, blockIndex), { side });
+    (
+      blockId: string,
+      blockIndex: number,
+      side: "mine" | "theirs",
+      text?: string,
+    ) => {
+      const decision: ConflictDecision =
+        text !== undefined ? { side, text } : { side };
+      decisionsRef.current.set(decisionKey(blockId, blockIndex), decision);
       workingBlockTextRef.current.delete(`${blockId}:${blockIndex}`);
       setConflicts((prev) =>
         prev.filter(
@@ -1078,16 +1103,22 @@ export function useOfflineYjsConflict(params: {
       if (side !== "mine" && side !== "theirs") return;
       const cluster = clusters.find((c) => c.id === clusterId);
       if (!cluster) return;
-      recordDecision(cluster.blockId, cluster.blockIndex, side);
+      const conflict = conflicts.find(
+        (c) =>
+          c.blockId === cluster.blockId && c.blockIndex === cluster.blockIndex,
+      );
+      const text =
+        side === "mine" ? conflict?.mineText : conflict?.theirsText;
+      recordDecision(cluster.blockId, cluster.blockIndex, side, text);
     },
-    [clusters, recordDecision],
+    [clusters, conflicts, recordDecision],
   );
 
   const keepMine = useCallback(
     async (blockId: string) => {
       const conflict = conflicts.find((c) => c.blockId === blockId);
       if (!conflict) return;
-      recordDecision(blockId, conflict.blockIndex, "mine");
+      recordDecision(blockId, conflict.blockIndex, "mine", conflict.mineText);
     },
     [conflicts, recordDecision],
   );
@@ -1096,7 +1127,12 @@ export function useOfflineYjsConflict(params: {
     async (blockId: string) => {
       const conflict = conflicts.find((c) => c.blockId === blockId);
       if (!conflict) return;
-      recordDecision(blockId, conflict.blockIndex, "theirs");
+      recordDecision(
+        blockId,
+        conflict.blockIndex,
+        "theirs",
+        conflict.theirsText,
+      );
     },
     [conflicts, recordDecision],
   );
@@ -1105,7 +1141,7 @@ export function useOfflineYjsConflict(params: {
     for (const conflict of conflicts) {
       decisionsRef.current.set(
         decisionKey(conflict.blockId, conflict.blockIndex),
-        { side: "mine" },
+        { side: "mine", text: conflict.mineText },
       );
     }
     setConflicts([]);
@@ -1117,7 +1153,7 @@ export function useOfflineYjsConflict(params: {
     for (const conflict of conflicts) {
       decisionsRef.current.set(
         decisionKey(conflict.blockId, conflict.blockIndex),
-        { side: "theirs" },
+        { side: "theirs", text: conflict.theirsText },
       );
     }
     setConflicts([]);

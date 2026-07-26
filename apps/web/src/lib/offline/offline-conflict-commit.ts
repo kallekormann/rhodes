@@ -4,13 +4,23 @@ import {
   type BlockConflictKind,
   type BlockEntry,
 } from "@/lib/offline/yjs-offline-divergence";
-import { findXmlBlockById } from "@/lib/offline/yjs-offline-restore";
+import {
+  cloneXmlBlockWithPlainText,
+  findXmlBlockById,
+} from "@/lib/offline/yjs-offline-restore";
 import * as Y from "yjs";
 
 export const OFFLINE_CONFLICT_COMMIT_ORIGIN = "offline-conflict-commit";
 
 export type ConflictDecision = {
   side: "mine" | "theirs";
+  /**
+   * Canonical plain text for this side, captured when the user decided.
+   * Required for reliable "take theirs": peer docs may remint blockIds or
+   * carry CRDT-merged text, so re-deriving from peerDoc at commit time is
+   * not trustworthy. Empty string means accept a peer delete.
+   */
+  text?: string;
 };
 
 export type BuildResolvedBlocksParams = {
@@ -139,6 +149,10 @@ function resolveSideForBlock(params: {
   }
 
   if (decision?.side === "theirs") {
+    // Explicit text (including "") wins: non-empty → peer content; empty → delete.
+    if (decision.text !== undefined) {
+      return decision.text.length > 0 ? "peer" : "omit";
+    }
     if (!peerEntry && baseEntry) return "omit";
     return peerEntry ? "peer" : "omit";
   }
@@ -173,6 +187,42 @@ function resolveSideForBlock(params: {
   return mineEntry ? "mine" : peerEntry ? "peer" : "omit";
 }
 
+/** Peer block at the same positional index — covers TipTap reminted blockIds. */
+function peerEntryAtIndex(
+  peerList: BlockEntry[],
+  blockIndex: number,
+): BlockEntry | undefined {
+  return peerList.find((entry) => entry.blockIndex === blockIndex);
+}
+
+/**
+ * Indexes where the offline returner already chose "theirs" with non-empty text.
+ * Peer-only remints at those indexes must not also be inserted (duplicate body).
+ */
+function theirsResolvedIndexes(
+  decisions: Map<string, ConflictDecision>,
+  mineList: BlockEntry[],
+): Set<number> {
+  const indexes = new Set<number>();
+  for (const [key, decision] of decisions) {
+    if (decision.side !== "theirs") continue;
+    if (decision.text !== undefined && decision.text.length === 0) continue;
+    const colon = key.lastIndexOf(":");
+    if (colon >= 0) {
+      const parsed = Number(key.slice(colon + 1));
+      if (Number.isFinite(parsed)) {
+        indexes.add(parsed);
+        continue;
+      }
+    }
+    const mine = mineList.find(
+      (entry) => key === entry.blockId || key.startsWith(`${entry.blockId}:`),
+    );
+    if (mine) indexes.add(mine.blockIndex);
+  }
+  return indexes;
+}
+
 function resolveNodeForBlock(params: {
   baseEntry?: BlockEntry;
   mineEntry?: BlockEntry;
@@ -196,6 +246,7 @@ export function buildResolvedBlocks(
   const baseById = entryById(baseList);
   const mineById = entryById(mineList);
   const peerById = entryById(peerList);
+  const resolvedTheirsIndexes = theirsResolvedIndexes(decisions, mineList);
 
   const orderedIds = orderedBlockIdsForCommit(baseList, mineList, peerList);
   const resolved: ProseMirrorJsonNode[] = [];
@@ -203,10 +254,56 @@ export function buildResolvedBlocks(
   for (const blockId of orderedIds) {
     const baseEntry = baseById.get(blockId);
     const mineEntry = mineById.get(blockId);
-    const peerEntry = peerById.get(blockId);
+    let peerEntry = peerById.get(blockId);
     const blockIndex =
       mineEntry?.blockIndex ?? peerEntry?.blockIndex ?? baseEntry?.blockIndex ?? 0;
     const decision = decisionForBlock(decisions, blockId, blockIndex);
+
+    // Peer reminted this slot — still honor an explicit theirs decision on mine's id.
+    if (!peerEntry && decision?.side === "theirs") {
+      peerEntry = peerEntryAtIndex(peerList, blockIndex);
+    }
+
+    // Drop peer-only remints at indexes already resolved via theirs+text on mine's id.
+    if (
+      !mineEntry &&
+      !baseEntry &&
+      peerEntry &&
+      resolvedTheirsIndexes.has(peerEntry.blockIndex) &&
+      decision?.side !== "theirs"
+    ) {
+      continue;
+    }
+
+    const side = resolveSideForBlock({
+      baseEntry,
+      mineEntry,
+      peerEntry,
+      decision,
+    });
+    if (side === "omit") continue;
+
+    if (
+      side === "peer" &&
+      decision?.side === "theirs" &&
+      typeof decision.text === "string" &&
+      decision.text.length > 0
+    ) {
+      const template =
+        peerEntry?.node ?? mineEntry?.node ?? baseEntry?.node ?? null;
+      if (!template) continue;
+      resolved.push({
+        ...template,
+        attrs: {
+          ...(template.attrs ?? {}),
+          blockId: mineEntry?.blockId ?? blockId,
+        },
+        content: decision.text
+          ? [{ type: "text", text: decision.text }]
+          : undefined,
+      });
+      continue;
+    }
 
     const node = resolveNodeForBlock({
       baseEntry,
@@ -214,7 +311,6 @@ export function buildResolvedBlocks(
       peerEntry,
       decision,
     });
-
     if (node) {
       resolved.push(node);
     }
@@ -230,48 +326,15 @@ export function buildResolvedBlocks(
 export function buildResolvedXmlBlocks(
   params: BuildResolvedBlocksParams,
 ): Y.XmlElement[] {
-  const { baseDoc, mineDoc, peerDoc, decisions } = params;
-  const baseList = extractOrderedBlocks(baseDoc);
-  const mineList = extractOrderedBlocks(mineDoc);
-  const peerList = extractOrderedBlocks(peerDoc);
-
-  const baseById = entryById(baseList);
-  const mineById = entryById(mineList);
-  const peerById = entryById(peerList);
-
-  const orderedIds = orderedBlockIdsForCommit(baseList, mineList, peerList);
-  const blocks: Y.XmlElement[] = [];
-
-  for (const blockId of orderedIds) {
-    const baseEntry = baseById.get(blockId);
-    const mineEntry = mineById.get(blockId);
-    const peerEntry = peerById.get(blockId);
-    const blockIndex =
-      mineEntry?.blockIndex ?? peerEntry?.blockIndex ?? baseEntry?.blockIndex ?? 0;
-    const decision = decisionForBlock(decisions, blockId, blockIndex);
-    const side = resolveSideForBlock({
-      baseEntry,
-      mineEntry,
-      peerEntry,
-      decision,
-    });
-
-    if (side === "omit") continue;
-
-    const sourceDoc = side === "mine" ? mineDoc : peerDoc;
-    const xml = findXmlBlockById(sourceDoc, blockId);
-    if (xml) {
-      blocks.push(xml);
-    }
-  }
-
-  return blocks;
+  return buildResolvedBlockPlan(params).map((entry) => entry.xml);
 }
 
 export type ResolvedBlockPlanEntry = {
   blockId: string;
   side: "mine" | "peer";
   xml: Y.XmlElement;
+  /** Ephemeral doc keeping `xml` integrated until patch clones it into live. */
+  retainDoc?: Y.Doc;
 };
 
 /**
@@ -290,6 +353,7 @@ export function buildResolvedBlockPlan(
   const baseById = entryById(baseList);
   const mineById = entryById(mineList);
   const peerById = entryById(peerList);
+  const resolvedTheirsIndexes = theirsResolvedIndexes(decisions, mineList);
 
   const orderedIds = orderedBlockIdsForCommit(baseList, mineList, peerList);
   const plan: ResolvedBlockPlanEntry[] = [];
@@ -297,18 +361,73 @@ export function buildResolvedBlockPlan(
   for (const blockId of orderedIds) {
     const baseEntry = baseById.get(blockId);
     const mineEntry = mineById.get(blockId);
-    const peerEntry = peerById.get(blockId);
+    let peerEntry = peerById.get(blockId);
     const blockIndex =
       mineEntry?.blockIndex ?? peerEntry?.blockIndex ?? baseEntry?.blockIndex ?? 0;
     const decision = decisionForBlock(decisions, blockId, blockIndex);
-    const side = resolveSideForBlock({ baseEntry, mineEntry, peerEntry, decision });
+
+    if (!peerEntry && decision?.side === "theirs") {
+      peerEntry = peerEntryAtIndex(peerList, blockIndex);
+    }
+
+    if (
+      !mineEntry &&
+      !baseEntry &&
+      peerEntry &&
+      resolvedTheirsIndexes.has(peerEntry.blockIndex) &&
+      decision?.side !== "theirs"
+    ) {
+      continue;
+    }
+
+    const side = resolveSideForBlock({
+      baseEntry,
+      mineEntry,
+      peerEntry,
+      decision,
+    });
 
     if (side === "omit") continue;
 
+    const liveBlockId = mineEntry?.blockId ?? peerEntry?.blockId ?? blockId;
+
+    // Prefer the text captured at decision time so reminted peer ids / CRDT
+    // merges cannot resurrect the offline returner's dismissed characters.
+    if (
+      side === "peer" &&
+      decision?.side === "theirs" &&
+      typeof decision.text === "string" &&
+      decision.text.length > 0
+    ) {
+      const sourceXml =
+        (peerEntry
+          ? findXmlBlockById(peerDoc, peerEntry.blockId)
+          : null) ??
+        findXmlBlockById(mineDoc, blockId) ??
+        findXmlBlockById(baseDoc, blockId);
+      if (!sourceXml) continue;
+      const built = cloneXmlBlockWithPlainText(
+        sourceXml,
+        decision.text,
+        liveBlockId,
+      );
+      plan.push({
+        blockId: liveBlockId,
+        side: "peer",
+        xml: built.xml,
+        retainDoc: built.retainDoc,
+      });
+      continue;
+    }
+
     const sourceDoc = side === "mine" ? mineDoc : peerDoc;
-    const xml = findXmlBlockById(sourceDoc, blockId);
+    const sourceId =
+      side === "mine"
+        ? (mineEntry?.blockId ?? blockId)
+        : (peerEntry?.blockId ?? blockId);
+    const xml = findXmlBlockById(sourceDoc, sourceId);
     if (xml) {
-      plan.push({ blockId, side, xml });
+      plan.push({ blockId: liveBlockId, side, xml });
     }
   }
 
