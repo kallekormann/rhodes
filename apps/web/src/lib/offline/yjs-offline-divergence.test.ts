@@ -301,4 +301,80 @@ describe("offline Yjs block overlap detection", () => {
       }),
     ).toBe(true);
   });
+
+  it("same-word peer edit stays both_edited when deferred sync is base-relative", () => {
+    // A edits block1 offline + same word in block2; C edits that word online.
+    // Peer delta must be encoded vs BASE (not live) so block2 stays present.
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one original");
+    seedParagraph(base, "b2", "shared word here");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseVector = Y.encodeStateVector(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Block one offline");
+    setBlockText(mine, 1, "shared OFFLINE here");
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+    setBlockText(peer, 1, "shared ONLINE here");
+
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, baseBytes);
+    Y.applyUpdate(peerDoc, Y.encodeStateAsUpdate(peer, baseVector));
+
+    const conflicts = detectOfflineBlockConflicts(
+      base,
+      mine,
+      peerDoc,
+      undefined,
+      { catchupComplete: true },
+    );
+    const block2 = conflicts.find((c) => c.blockId === "b2");
+    expect(block2?.kind).toBe("both_edited");
+    expect(conflicts.some((c) => c.kind === "mine_edited_peer_deleted")).toBe(
+      false,
+    );
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+    peerDoc.destroy();
+  });
+
+  it("blank peer doc (outbound leak wipe) misclassifies same-word edit as peer delete", () => {
+    // When A's mine-shield restores leak and blank B/C, their catch-up looks
+    // like every block was deleted — detection must not treat that as truth
+    // once peer reconstruction is fixed, but this documents the cascade.
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one original");
+    seedParagraph(base, "b2", "shared word here");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Block one offline");
+    setBlockText(mine, 1, "shared OFFLINE here");
+
+    const blankPeer = new Y.Doc();
+    // Empty body — TipTap shows "Start writing…"
+
+    const conflicts = detectOfflineBlockConflicts(
+      base,
+      mine,
+      blankPeer,
+      undefined,
+      { catchupComplete: true },
+    );
+    expect(
+      conflicts.some(
+        (c) => c.blockId === "b2" && c.kind === "mine_edited_peer_deleted",
+      ),
+    ).toBe(true);
+
+    base.destroy();
+    mine.destroy();
+    blankPeer.destroy();
+  });
 });

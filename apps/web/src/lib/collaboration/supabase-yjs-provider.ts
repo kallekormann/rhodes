@@ -54,6 +54,22 @@ function isAuthSendError(error: unknown): boolean {
   );
 }
 
+function isRateLimitedSendError(error: unknown): boolean {
+  if (!error) return false;
+  const message =
+    typeof error === "string"
+      ? error
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : String(error);
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    lower.includes("rate limit")
+  );
+}
+
 const EVENT_SYNC = "y-sync";
 const EVENT_UPDATE = "y-update";
 const EVENT_AWARENESS = "y-awareness";
@@ -149,10 +165,27 @@ export class SupabaseYjsProvider {
   private clientNetworkOffline = false;
   /** User went offline with an active editing session (before conflict review arms). */
   private offlineSessionPending = false;
+  /**
+   * State vector + full update captured when the offline session armed.
+   * Deferred peer sync step2 must be encoded against this vector (not live),
+   * otherwise buildPeerDocFromDeferred(base ⊕ live-relative-deltas) invents
+   * false deletes.
+   */
+  private offlineBaseStateVector: Uint8Array | null = null;
+  private offlineBaseFullUpdate: Uint8Array | null = null;
   private reconnectAfterOnlineTimer: number | null = null;
+  /** Exponential backoff for channel CLOSED reconnects (ms). */
+  private reconnectBackoffMs = 1_000;
+  /** Skip awareness heartbeats briefly after a 429 to avoid storming REST fallback. */
+  private awarenessSendCooldownUntil = 0;
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
   private static readonly AWARENESS_TIMEOUT_MS = 6_000;
+  /** While reconnecting / offline session, keep remote carets longer. */
+  private static readonly AWARENESS_TIMEOUT_RECONNECT_MS = 20_000;
+  private static readonly RECONNECT_BACKOFF_MIN_MS = 1_000;
+  private static readonly RECONNECT_BACKOFF_MAX_MS = 16_000;
+  private static readonly AWARENESS_429_COOLDOWN_MS = 5_000;
   /** Idle window before writing the merged CRDT state durably to Postgres. */
   private static readonly PERSIST_DEBOUNCE_MS = 1_500;
 
@@ -211,7 +244,7 @@ export class SupabaseYjsProvider {
       this.reconnectTimer = null;
     }
 
-    if (this.offlineReviewActive) {
+    if (this.offlineReviewActive || this.offlineSessionPending) {
       this.deferPeerUpdates = true;
     }
 
@@ -234,9 +267,10 @@ export class SupabaseYjsProvider {
     // Capture before offline edits so peers can receive them after reconnect.
     this.unsentBaselineVector = Y.encodeStateVector(this.doc);
     this.clientNetworkOffline = true;
-    if (this.offlineReviewActive || this.offlineSessionPending) {
-      this.deferPeerUpdates = true;
-    }
+    // Always defer while the browser is offline — the conflict hook may arm
+    // offlineSessionPending on the same tick (race). connect() clears defer
+    // on reconnect when no session/review is pending.
+    this.deferPeerUpdates = true;
     void this.disconnectTransport();
   };
 
@@ -257,8 +291,13 @@ export class SupabaseYjsProvider {
     this.offlineSessionPending = pending;
     if (pending) {
       this.deferPeerUpdates = true;
+      // Freeze base for deferred peer reconstruction BEFORE any offline edits.
+      this.offlineBaseStateVector = Y.encodeStateVector(this.doc);
+      this.offlineBaseFullUpdate = Y.encodeStateAsUpdate(this.doc);
       return;
     }
+    this.offlineBaseStateVector = null;
+    this.offlineBaseFullUpdate = null;
     if (!this.offlineReviewActive) {
       this.deferPeerUpdates = false;
       this.deferredPeerUpdates = [];
@@ -464,6 +503,8 @@ export class SupabaseYjsProvider {
     if (this.destroyed) return;
     this.offlineReviewActive = false;
     this.offlineSessionPending = false;
+    this.offlineBaseStateVector = null;
+    this.offlineBaseFullUpdate = null;
     this.deferPeerUpdates = false;
     this.deferredPeerUpdates = [];
     this.suppressOutgoingUpdates = false;
@@ -653,6 +694,7 @@ export class SupabaseYjsProvider {
 
   private heartbeatAwareness() {
     if (this.destroyed || this.clientNetworkOffline || !this.channel) return;
+    if (Date.now() < this.awarenessSendCooldownUntil) return;
     const local = this.awareness.getLocalState();
     if (!local) return;
     // Re-set so lastUpdated stays fresh for peer prune timers.
@@ -662,6 +704,12 @@ export class SupabaseYjsProvider {
   private pruneStaleAwareness() {
     if (this.destroyed) return;
     const now = Date.now();
+    const timeoutMs =
+      this.reconnecting ||
+      this.offlineReviewActive ||
+      this.offlineSessionPending
+        ? SupabaseYjsProvider.AWARENESS_TIMEOUT_RECONNECT_MS
+        : SupabaseYjsProvider.AWARENESS_TIMEOUT_MS;
     const stale: number[] = [];
     this.awareness.getStates().forEach((_state, clientId) => {
       if (clientId === this.doc.clientID) return;
@@ -671,7 +719,7 @@ export class SupabaseYjsProvider {
         }
       ).meta.get(clientId);
       if (!meta) return;
-      if (now - meta.lastUpdated > SupabaseYjsProvider.AWARENESS_TIMEOUT_MS) {
+      if (now - meta.lastUpdated > timeoutMs) {
         stale.push(clientId);
       }
     });
@@ -809,10 +857,19 @@ export class SupabaseYjsProvider {
 
   private scheduleReconnect() {
     if (this.destroyed || this.reconnectTimer != null) return;
+    const delay = this.reconnectBackoffMs;
+    this.reconnectBackoffMs = Math.min(
+      this.reconnectBackoffMs * 2,
+      SupabaseYjsProvider.RECONNECT_BACKOFF_MAX_MS,
+    );
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       void this.reconnect();
-    }, 1_000);
+    }, delay);
+  }
+
+  private resetReconnectBackoff() {
+    this.reconnectBackoffMs = SupabaseYjsProvider.RECONNECT_BACKOFF_MIN_MS;
   }
 
   private async connect() {
@@ -821,7 +878,7 @@ export class SupabaseYjsProvider {
     if (process.env.NODE_ENV !== "production") {
       this.connectAttemptCount += 1;
       // eslint-disable-next-line no-console
-      console.debug(
+      console.info(
         "[supabase-yjs-provider] connect attempt",
         JSON.stringify({
           attempt: this.connectAttemptCount,
@@ -874,6 +931,7 @@ export class SupabaseYjsProvider {
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED" && !this.destroyed) {
+        this.resetReconnectBackoff();
         void this.sendSyncStep1();
         this.scheduleSoloSyncFallback();
         this.maybeNudgeLocalAwareness();
@@ -892,7 +950,7 @@ export class SupabaseYjsProvider {
         this.onDisconnected?.();
         if (process.env.NODE_ENV !== "production") {
           // eslint-disable-next-line no-console
-          console.debug(
+          console.info(
             "[supabase-yjs-provider] channel closed, scheduling reconnect",
             JSON.stringify({ status, documentId: this.documentId }),
           );
@@ -923,6 +981,12 @@ export class SupabaseYjsProvider {
 
   private async send(event: string, bytes: Uint8Array) {
     if (!this.channel || this.destroyed || this.clientNetworkOffline) return;
+    if (
+      event === EVENT_AWARENESS &&
+      Date.now() < this.awarenessSendCooldownUntil
+    ) {
+      return;
+    }
 
     const payload = {
       type: "broadcast" as const,
@@ -944,7 +1008,10 @@ export class SupabaseYjsProvider {
           typeof result === "object" && result !== null && "error" in result
             ? (result as { error?: unknown }).error
             : result;
-        if (isAuthSendError(error)) {
+        if (isRateLimitedSendError(error)) {
+          this.awarenessSendCooldownUntil =
+            Date.now() + SupabaseYjsProvider.AWARENESS_429_COOLDOWN_MS;
+        } else if (isAuthSendError(error)) {
           this.setAuthFailed(true);
           await this.resubscribeAfterReauth();
         }
@@ -952,7 +1019,10 @@ export class SupabaseYjsProvider {
         this.setAuthFailed(false);
       }
     } catch (error) {
-      if (isAuthSendError(error)) {
+      if (isRateLimitedSendError(error)) {
+        this.awarenessSendCooldownUntil =
+          Date.now() + SupabaseYjsProvider.AWARENESS_429_COOLDOWN_MS;
+      } else if (isAuthSendError(error)) {
         this.setAuthFailed(true);
         await this.resubscribeAfterReauth();
       }
@@ -961,7 +1031,17 @@ export class SupabaseYjsProvider {
 
   private async sendSyncStep1() {
     const encoder = encoding.createEncoder();
-    syncProtocol.writeSyncStep1(encoder, this.doc);
+    // While deferring an offline session, advertise the *base* state vector so
+    // peer step2 is base-relative and buildPeerDocFromDeferred stays honest.
+    if (
+      this.shouldDeferIncomingUpdates() &&
+      this.offlineBaseStateVector
+    ) {
+      encoding.writeVarUint(encoder, syncProtocol.messageYjsSyncStep1);
+      encoding.writeVarUint8Array(encoder, this.offlineBaseStateVector);
+    } else {
+      syncProtocol.writeSyncStep1(encoder, this.doc);
+    }
     await this.send(EVENT_SYNC, encoding.toUint8Array(encoder));
   }
 
@@ -969,9 +1049,8 @@ export class SupabaseYjsProvider {
     if (
       origin === this.origin ||
       this.destroyed ||
-      this.offlineReviewActive ||
-      this.clientNetworkOffline ||
-      this.suppressOutgoingUpdates
+      this.suppressOutgoingUpdates ||
+      this.shouldBlockOutboundBroadcast()
     ) {
       return;
     }
@@ -1040,7 +1119,15 @@ export class SupabaseYjsProvider {
       const decoder = decoding.createDecoder(bytes);
       const encoder = encoding.createEncoder();
       const shadow = new Y.Doc();
-      Y.applyUpdate(shadow, Y.encodeStateAsUpdate(this.doc));
+      // Apply sync onto the offline *base* (not live/mine) so queued deltas are
+      // base-relative and buildPeerDocFromDeferred stays structurally honest.
+      if (this.offlineBaseFullUpdate) {
+        Y.applyUpdate(shadow, this.offlineBaseFullUpdate);
+      } else {
+        Y.applyUpdate(shadow, Y.encodeStateAsUpdate(this.doc));
+      }
+      const startVector =
+        this.offlineBaseStateVector ?? Y.encodeStateVector(shadow);
 
       const syncMessageType = syncProtocol.readSyncMessage(
         decoder,
@@ -1049,16 +1136,16 @@ export class SupabaseYjsProvider {
         this.origin,
       );
 
-      // Do not push offline returner's local deltas to peers during review.
-      if (encoding.length(encoder) > 1 && !this.offlineReviewActive) {
+      // Do not push offline returner's local deltas to peers during session/review.
+      if (
+        encoding.length(encoder) > 1 &&
+        !this.shouldBlockOutboundBroadcast()
+      ) {
         void this.send(EVENT_SYNC, encoding.toUint8Array(encoder));
       }
 
       if (syncMessageType === syncProtocol.messageYjsSyncStep2) {
-        const peerDelta = Y.encodeStateAsUpdate(
-          shadow,
-          Y.encodeStateVector(this.doc),
-        );
+        const peerDelta = Y.encodeStateAsUpdate(shadow, startVector);
         this.queueDeferredPeerUpdate(peerDelta, payload.clientId, "sync");
       }
 

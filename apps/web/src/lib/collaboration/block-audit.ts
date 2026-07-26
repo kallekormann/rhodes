@@ -38,6 +38,9 @@ function getAuditMap(doc: Y.Doc): Y.Map<BlockAuditEntry> {
   return doc.getMap<BlockAuditEntry>(BLOCK_AUDIT_MAP_NAME);
 }
 
+/** Dev-only: throttle per-keystroke audit write logs (one line per block/user / 2s). */
+const lastRecordedLogAt = new Map<string, number>();
+
 /** Record that `userId` touched (added/edited/removed) each of `blockIds` just now. */
 export function recordBlockAudit(
   doc: Y.Doc,
@@ -55,11 +58,16 @@ export function recordBlockAudit(
     }
   }, BLOCK_AUDIT_ORIGIN);
   if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
-    console.debug(
-      "[block-audit] recorded",
-      JSON.stringify({ blockIds, userId, displayName, editedAt }),
-    );
+    const logKey = `${blockIds.join(",")}:${userId}`;
+    const prev = lastRecordedLogAt.get(logKey) ?? 0;
+    if (editedAt - prev >= 2_000) {
+      lastRecordedLogAt.set(logKey, editedAt);
+      // eslint-disable-next-line no-console
+      console.info(
+        "[block-audit] recorded",
+        JSON.stringify({ blockIds, userId, displayName, editedAt }),
+      );
+    }
   }
 }
 
@@ -85,7 +93,7 @@ export function getBlockContributors(
   });
   if (process.env.NODE_ENV !== "production") {
     // eslint-disable-next-line no-console
-    console.debug(
+    console.info(
       "[block-audit] read",
       JSON.stringify({
         blockId,

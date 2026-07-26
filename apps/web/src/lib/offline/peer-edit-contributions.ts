@@ -107,13 +107,25 @@ export function peerEditContributorsForBlock(params: {
   blockId: string;
   blockIndex: number;
   localUserId?: string;
+  /**
+   * Live ydoc safety net: when the deferred queue is empty (deferral raced /
+   * peer already landed on live) but conflicts still exist, read audit from
+   * the live document instead of returning [] → "Others".
+   */
+  liveDoc?: Y.Doc | null;
 }): PeerEditContributor[] {
-  const { baseSnapshot, deferredUpdates, blockId, blockIndex, localUserId } =
-    params;
+  const {
+    baseSnapshot,
+    deferredUpdates,
+    blockId,
+    blockIndex,
+    localUserId,
+    liveDoc,
+  } = params;
 
   if (process.env.NODE_ENV !== "production") {
     // eslint-disable-next-line no-console
-    console.debug(
+    console.info(
       "[peer-edit-contributions] start",
       JSON.stringify({
         blockId,
@@ -121,11 +133,34 @@ export function peerEditContributorsForBlock(params: {
         localUserId,
         deferredUpdateCount: deferredUpdates.length,
         deferredSources: deferredUpdates.map((u) => u.source ?? "update"),
+        hasLiveDocFallback: Boolean(liveDoc),
       }),
     );
   }
 
-  if (deferredUpdates.length === 0) return [];
+  const windowStartMs = windowStartMsFromSnapshot(baseSnapshot);
+
+  if (deferredUpdates.length === 0) {
+    if (!liveDoc) return [];
+    const auditEntries = getBlockContributors(
+      liveDoc,
+      blockId,
+      windowStartMs,
+      localUserId,
+    );
+    if (auditEntries.length === 0) return [];
+    const liveBlocks = extractBlockTexts(liveDoc);
+    const peerText = liveBlocks.get(blockId)?.text ?? "";
+    return uniquePeerContributors(
+      auditEntries.map((entry) => ({
+        clientId: -1,
+        userId: entry.userId,
+        displayName: entry.displayName,
+        blockText: peerText,
+        blockIndex,
+      })),
+    );
+  }
 
   const baseDoc = offlineSnapshotToDoc(baseSnapshot);
   const baseBlocks = extractBlockTexts(baseDoc);
@@ -156,13 +191,21 @@ export function peerEditContributorsForBlock(params: {
     return [];
   }
 
-  const windowStartMs = windowStartMsFromSnapshot(baseSnapshot);
-  const auditEntries = getBlockContributors(
+  let auditEntries = getBlockContributors(
     mergedDoc,
     blockId,
     windowStartMs,
     localUserId,
   );
+  // Audit can land on live slightly after content in deferred sync — fall back.
+  if (auditEntries.length === 0 && liveDoc) {
+    auditEntries = getBlockContributors(
+      liveDoc,
+      blockId,
+      windowStartMs,
+      localUserId,
+    );
+  }
   mergedDoc.destroy();
 
   if (auditEntries.length > 0) {

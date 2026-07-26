@@ -236,7 +236,7 @@ export function useOfflineYjsConflict(params: {
     if (committingRef.current) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] commitResolvedConflicts bailed: already committing",
         );
       }
@@ -245,7 +245,7 @@ export function useOfflineYjsConflict(params: {
     if (!documentId || !ydoc) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] commitResolvedConflicts bailed: missing documentId/ydoc",
           JSON.stringify({ hasDocumentId: Boolean(documentId), hasYdoc: Boolean(ydoc) }),
         );
@@ -255,7 +255,7 @@ export function useOfflineYjsConflict(params: {
     if (!(await ownsOfflineConflictReview(documentId, TAB_ID))) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug("[offline-patch] commitResolvedConflicts bailed: non-owner");
+        console.info("[offline-patch] commitResolvedConflicts bailed: non-owner");
       }
       await endConflictReviewSession("non-owner");
       return;
@@ -278,7 +278,7 @@ export function useOfflineYjsConflict(params: {
     if (!baseSnapshot || !mineBytes) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] commitResolvedConflicts bailed: missing state",
           JSON.stringify({
             hasBaseSnapshot: Boolean(baseSnapshot),
@@ -306,7 +306,7 @@ export function useOfflineYjsConflict(params: {
 
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] commit sides",
           JSON.stringify({
             decisions: Array.from(decisions.entries()),
@@ -335,7 +335,7 @@ export function useOfflineYjsConflict(params: {
       if (process.env.NODE_ENV !== "production") {
         const immediateChecksum = debugBlockChecksum(ydoc);
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] post-commit checksum (t+0ms)",
           JSON.stringify(immediateChecksum),
         );
@@ -345,7 +345,7 @@ export function useOfflineYjsConflict(params: {
             JSON.stringify(delayedChecksum) !==
             JSON.stringify(immediateChecksum);
           // eslint-disable-next-line no-console
-          console.debug(
+          console.info(
             `[offline-patch] post-commit checksum (t+3000ms) drifted=${drifted}`,
             JSON.stringify(delayedChecksum),
           );
@@ -383,7 +383,7 @@ export function useOfflineYjsConflict(params: {
       if (!awareness) {
         if (process.env.NODE_ENV !== "production") {
           // eslint-disable-next-line no-console
-          console.debug(
+          console.info(
             "[offline-patch] computeContributorsForConflicts bailed: no awareness",
             JSON.stringify({
               hasProvider: Boolean(providerRef.current),
@@ -406,6 +406,7 @@ export function useOfflineYjsConflict(params: {
           blockId: conflict.blockId,
           blockIndex: conflict.blockIndex,
           localUserId,
+          liveDoc: ydoc,
         });
         peerContributorsByBlock.set(conflict.blockId, contributors);
         authorByBlock.set(
@@ -415,7 +416,7 @@ export function useOfflineYjsConflict(params: {
       }
       return { peerContributorsByBlock, authorByBlock };
     },
-    [],
+    [ydoc],
   );
 
   /**
@@ -621,7 +622,7 @@ export function useOfflineYjsConflict(params: {
 
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] conflicts found, attribution result",
           JSON.stringify({
             blockIds: found.map((c) => c.blockId),
@@ -677,7 +678,7 @@ export function useOfflineYjsConflict(params: {
     ) {
       if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug(
+        console.info(
           "[offline-patch] auto-merge (no conflict review), releasing deferred updates",
           JSON.stringify({ settled, onlyLocal }),
         );

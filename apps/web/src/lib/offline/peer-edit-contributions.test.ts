@@ -336,6 +336,35 @@ describe("peer-edit-contributions", () => {
     base.destroy();
   });
 
+  it("falls back to live ydoc audit when deferred queue is empty", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Original");
+    const capturedAt = new Date().toISOString();
+    const baseSnapshot = {
+      state: uint8ToBase64(Y.encodeStateAsUpdate(base)),
+      capturedAt,
+    };
+
+    const live = new Y.Doc();
+    Y.applyUpdate(live, Y.encodeStateAsUpdate(base));
+    editBlockText(live, 0, "Peer edit already on live");
+    recordBlockAudit(live, ["b1"], "user-c", "User C");
+
+    const contributors = peerEditContributorsForBlock({
+      baseSnapshot,
+      deferredUpdates: [],
+      blockId: "b1",
+      blockIndex: 0,
+      liveDoc: live,
+    });
+
+    expect(contributors.map((c) => c.displayName)).toEqual(["User C"]);
+    expect(peerContributorSummary(contributors)).toBe("User C");
+
+    base.destroy();
+    live.destroy();
+  });
+
   it("treats missing peer block as a delete touch only with a block-count drop", () => {
     expect(
       peerTouchedBlockVsBase({
