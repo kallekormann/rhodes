@@ -393,18 +393,24 @@ export function buildResolvedBlockPlan(
 
     // Prefer the text captured at decision time so reminted peer ids / CRDT
     // merges cannot resurrect the offline returner's dismissed characters.
+    // Same for Keep-mine: decision.text is the reviewed string (no XmlText
+    // toString() tag pollution from concurrent formatting marks).
     if (
-      side === "peer" &&
-      decision?.side === "theirs" &&
+      decision &&
       typeof decision.text === "string" &&
-      decision.text.length > 0
+      decision.text.length > 0 &&
+      ((side === "peer" && decision.side === "theirs") ||
+        (side === "mine" && decision.side === "mine"))
     ) {
       const sourceXml =
-        (peerEntry
-          ? findXmlBlockById(peerDoc, peerEntry.blockId)
-          : null) ??
-        findXmlBlockById(mineDoc, blockId) ??
-        findXmlBlockById(baseDoc, blockId);
+        side === "peer"
+          ? ((peerEntry
+              ? findXmlBlockById(peerDoc, peerEntry.blockId)
+              : null) ??
+            findXmlBlockById(mineDoc, blockId) ??
+            findXmlBlockById(baseDoc, blockId))
+          : (findXmlBlockById(mineDoc, blockId) ??
+            findXmlBlockById(baseDoc, blockId));
       if (!sourceXml) continue;
       const built = cloneXmlBlockWithPlainText(
         sourceXml,
@@ -413,7 +419,7 @@ export function buildResolvedBlockPlan(
       );
       plan.push({
         blockId: liveBlockId,
-        side: "peer",
+        side,
         xml: built.xml,
         retainDoc: built.retainDoc,
       });

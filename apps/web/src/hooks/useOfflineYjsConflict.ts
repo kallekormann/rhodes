@@ -323,8 +323,8 @@ export function useOfflineYjsConflict(params: {
         );
       }
 
-      // Body patch already encodes peer decisions. Clearing deferred happens
-      // inside commitResolvedDoc after outbound shields drop.
+      // Decision plan encodes peer/mine sides; commitResolvedDoc suppresses
+      // outbound during the patch then broadcasts one baseline-relative update.
       providerRef.current?.commitResolvedDoc(() => {
         patchYDocBodyToResolvedBlocks(
           ydoc,
@@ -680,9 +680,29 @@ export function useOfflineYjsConflict(params: {
     // socket. Finalizing here would release deferred updates and end the
     // offline session *before* that peer data lands, so the later update
     // gets applied straight to the live doc with no review at all. Require
-    // catchupComplete (peer step2 actually received, or the solo-sync
-    // fallback confirmed nobody else is online) before trusting a "nothing
-    // to review" verdict enough to finalize.
+    // catchupComplete *and* either real peer data or no remote awareness
+    // peers (true solo). Solo-timeout with peers still present is not enough
+    // — that reintroduced silent Keep→Dismiss / no-UI merges after Realtime
+    // 502s.
+    const provider = providerRef.current;
+    const peerDataReceived = provider?.hasReceivedPeerDataSinceConnect ?? false;
+    const remotePeers = provider?.remoteAwarenessPeerCount ?? 0;
+    if (
+      !conflictReviewArmedRef.current &&
+      catchupCompleteRef.current &&
+      (settled || onlyLocal) &&
+      !peerDataReceived &&
+      remotePeers > 0
+    ) {
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.info(
+          "[offline-patch] auto-merge blocked: peers present but no peer sync yet",
+          JSON.stringify({ settled, onlyLocal, remotePeers }),
+        );
+      }
+      return;
+    }
     if (
       !conflictReviewArmedRef.current &&
       catchupCompleteRef.current &&
@@ -692,7 +712,12 @@ export function useOfflineYjsConflict(params: {
         // eslint-disable-next-line no-console
         console.info(
           "[offline-patch] auto-merge (no conflict review), releasing deferred updates",
-          JSON.stringify({ settled, onlyLocal }),
+          JSON.stringify({
+            settled,
+            onlyLocal,
+            peerDataReceived,
+            remotePeers,
+          }),
         );
       }
       providerRef.current?.setOfflineReviewActive(false);
@@ -709,7 +734,7 @@ export function useOfflineYjsConflict(params: {
       setClusters([]);
       setReviews([]);
       setReviewPending(false);
-      providerRef.current?.resetBroadcastBaseline();
+      // Push offline edits; do not reset baseline first (that drops the delta).
       providerRef.current?.broadcastPendingLocalUpdates();
       providerRef.current?.nudgeLocalAwareness();
       flushPersist();
@@ -798,10 +823,24 @@ export function useOfflineYjsConflict(params: {
       }, 0);
     };
 
-    if (pendingBaseSnapshotRef.current && pendingMineSnapshotRef.current) {
-      startMergeCheck(pendingMineSnapshotRef.current);
-      return;
-    }
+    const hydratePeerFromServer = async () => {
+      const provider = providerRef.current;
+      if (!provider?.isOfflineSessionPending && !provider?.isDeferringPeerUpdates) {
+        return;
+      }
+      try {
+        const response = await fetch(`/app/api/documents/${documentId}/yjs`);
+        if (!response.ok) return;
+        const buffer = new Uint8Array(await response.arrayBuffer());
+        if (buffer.length === 0) return;
+        const queued = provider.queueServerStateAsDeferredPeer(buffer);
+        if (queued) {
+          lastCheckedMergedRef.current = null;
+        }
+      } catch {
+        /* Realtime may still deliver peer step2 */
+      }
+    };
 
     void (async () => {
       if (!pendingBaseSnapshotRef.current) {
@@ -826,6 +865,7 @@ export function useOfflineYjsConflict(params: {
       }
 
       if (!pendingBaseSnapshotRef.current || !mineBytes) return;
+      await hydratePeerFromServer();
       startMergeCheck(mineBytes);
     })();
   }, [documentId, restoreToMineIfNeeded, runDetection, scheduleDetection, ydoc]);
@@ -1046,6 +1086,8 @@ export function useOfflineYjsConflict(params: {
   }, [documentId]);
 
   // Mine shield for the entire review session — stops the instant reviewPending clears.
+  // Update-driven only: the old 400ms interval re-patched the body continuously and
+  // caused visible flicker in the conflict UI without improving correctness.
   useEffect(() => {
     if (!reviewPending || !ydoc) return;
     const mineBytes = pendingMineSnapshotRef.current;
@@ -1065,10 +1107,8 @@ export function useOfflineYjsConflict(params: {
 
     guard();
     ydoc.on("update", guard);
-    const interval = window.setInterval(guard, 400);
     return () => {
       ydoc.off("update", guard);
-      window.clearInterval(interval);
     };
   }, [reviewPending, ydoc]);
 

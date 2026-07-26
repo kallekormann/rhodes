@@ -359,6 +359,23 @@ export class SupabaseYjsProvider {
     return this.receivedPeerDataSinceConnect || this.soloSyncedWithoutPeer;
   }
 
+  /**
+   * True when at least one peer y-sync/y-update was queued or applied since
+   * the latest connect(). Solo-timeout catchup does not set this.
+   */
+  get hasReceivedPeerDataSinceConnect(): boolean {
+    return this.receivedPeerDataSinceConnect;
+  }
+
+  /** Other clients currently visible in awareness (excludes self). */
+  get remoteAwarenessPeerCount(): number {
+    let count = 0;
+    this.awareness.getStates().forEach((_state, clientId) => {
+      if (clientId !== this.doc.clientID) count += 1;
+    });
+    return count;
+  }
+
   get isDeferringPeerUpdates(): boolean {
     return this.deferPeerUpdates;
   }
@@ -483,6 +500,33 @@ export class SupabaseYjsProvider {
   }
 
   /**
+   * Queue durable peer state from GET /yjs as a base-relative deferred update.
+   * Used on reconnect when Realtime is flaky (502 / late step2) so conflict
+   * detection still sees B/C edits that already hit Postgres.
+   * Returns true when a non-empty delta was queued.
+   */
+  queueServerStateAsDeferredPeer(serverState: Uint8Array): boolean {
+    if (this.destroyed || serverState.length === 0) return false;
+    if (!this.offlineBaseFullUpdate || !this.offlineBaseStateVector) {
+      return false;
+    }
+    const shadow = new Y.Doc();
+    try {
+      Y.applyUpdate(shadow, this.offlineBaseFullUpdate);
+      Y.applyUpdate(shadow, serverState);
+      const delta = Y.encodeStateAsUpdate(
+        shadow,
+        this.offlineBaseStateVector,
+      );
+      if (delta.length === 0) return false;
+      this.queueDeferredPeerUpdate(delta, null, "sync");
+      return true;
+    } finally {
+      shadow.destroy();
+    }
+  }
+
+  /**
    * Apply queued peer updates to the live doc with provider origin.
    * Unlike releaseDeferredPeerUpdates, runs even while offlineReviewActive
    * (commit absorbs before tearing the review down).
@@ -496,21 +540,38 @@ export class SupabaseYjsProvider {
   }
 
   /**
-   * Commit the resolved offline body: clear outbound shields before mutate so
-   * handleDocUpdate broadcasts, then flush and re-announce presence.
+   * Commit the resolved offline body as one authoritative outbound update.
+   *
+   * Under outbound suppress:
+   * 1. Absorb deferred peer updates into the live (mine-shielded) doc so peer
+   *    CRDT characters exist locally and can be deleted.
+   * 2. Run mutate (decision plan) which force-asserts mine/peer plain text,
+   *    purging concurrent peer chars on Keep-mine and writing peer text on
+   *    Take-theirs.
+   *
+   * Then broadcastPendingLocalUpdates pushes everything since
+   * unsentBaselineVector in one y-update. Do NOT resetBroadcastBaseline
+   * before that — that dropped the offline delta (B/C empty ~30s).
+   *
+   * Discarding deferred without absorb was the Keep→Dismiss regression:
+   * Keep-mine left peers' concurrent characters untouched, so online state
+   * kept winning after sync.
    */
   commitResolvedDoc(mutate: () => void): void {
     if (this.destroyed) return;
+
+    this.runWithoutOutgoingUpdates(() => {
+      this.absorbDeferredPeerUpdates();
+      mutate();
+    });
+
     this.offlineReviewActive = false;
     this.offlineSessionPending = false;
     this.offlineBaseStateVector = null;
     this.offlineBaseFullUpdate = null;
     this.deferPeerUpdates = false;
-    this.deferredPeerUpdates = [];
-    this.suppressOutgoingUpdates = false;
     this.awareness.setLocalStateField("conflictReviewPending", null);
-    mutate();
-    this.resetBroadcastBaseline();
+
     this.broadcastPendingLocalUpdates();
     this.flushPersist();
     this.nudgeLocalAwareness();
@@ -829,21 +890,46 @@ export class SupabaseYjsProvider {
   private scheduleSoloSyncFallback() {
     if (this.soloSyncTimer != null) {
       window.clearTimeout(this.soloSyncTimer);
+      this.soloSyncTimer = null;
     }
     if (this.soloSyncLongTimer != null) {
       window.clearTimeout(this.soloSyncLongTimer);
       this.soloSyncLongTimer = null;
     }
 
-    // When offline edits are pending, wait for a peer step2 instead of solo-syncing early.
-    if (this.hasPendingLocalBroadcast()) {
-    this.soloSyncLongTimer = window.setTimeout(() => {
-      this.soloSyncLongTimer = null;
-      if (!this.destroyed && !this.authFailed && !this.synced) {
+    // Offline returner: wait for a real peer step2/update. A short solo timeout
+    // while other clients are in awareness caused silent CRDT merges (no UI)
+    // whenever Realtime was slow or returned 502 on broadcast.
+    if (
+      this.hasPendingLocalBroadcast() ||
+      this.offlineSessionPending ||
+      this.offlineReviewActive
+    ) {
+      this.soloSyncLongTimer = window.setTimeout(() => {
+        this.soloSyncLongTimer = null;
+        if (this.destroyed || this.authFailed) return;
+        if (this.receivedPeerDataSinceConnect) {
+          if (!this.synced) this.setSynced(true);
+          return;
+        }
+        if (this.remoteAwarenessPeerCount > 0) {
+          if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
+            console.info(
+              "[supabase-yjs-provider] solo catchup postponed — remote peers present, waiting for peer sync",
+              JSON.stringify({
+                documentId: this.documentId,
+                remotePeers: this.remoteAwarenessPeerCount,
+              }),
+            );
+          }
+          void this.sendSyncStep1();
+          this.scheduleSoloSyncFallback();
+          return;
+        }
         this.soloSyncedWithoutPeer = true;
         this.setSynced(true);
-      }
-    }, 5_000);
+      }, 8_000);
       return;
     }
 

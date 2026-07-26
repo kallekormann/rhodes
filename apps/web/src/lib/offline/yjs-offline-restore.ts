@@ -7,6 +7,88 @@ import { uint8ToBase64 } from "@/lib/collaboration/supabase-yjs-provider";
 
 export const OFFLINE_CONFLICT_RESTORE_ORIGIN = "offline-conflict-restore";
 
+/** Plain characters only — never use XmlText.toString() (it embeds <bold> tags). */
+function xmlTextPlainContent(text: Y.XmlText): string {
+  let out = "";
+  for (const op of text.toDelta()) {
+    if (typeof op.insert === "string") out += op.insert;
+  }
+  return out;
+}
+
+function xmlElementPlainText(el: Y.XmlElement): string {
+  let out = "";
+  el.forEach((child) => {
+    if (child instanceof Y.XmlText) {
+      out += xmlTextPlainContent(child);
+    } else if (child instanceof Y.XmlElement) {
+      out += xmlElementPlainText(child);
+    }
+  });
+  return out;
+}
+
+/**
+ * In-place content replace when the live block is text-only (typical paragraph).
+ * Avoids delete+insert of the XmlElement, which remints CRDT identity and
+ * briefly empties the peer editor ("Start writing…").
+ * Copies the source XmlText delta so marks (bold/italic) from the winning
+ * side are preserved — never XmlText.toString(), which embeds <bold> tags.
+ * Returns false when structure is richer — caller should fall back to clone.
+ *
+ * When `force` is true, always rewrite even if plain text already matches —
+ * required after absorbing peer updates so Keep-mine deletes concurrent peer
+ * characters that happen to render the same, and so a no-op skip cannot leave
+ * peer CRDT ids alive.
+ */
+function tryReplacePlainTextInPlace(
+  live: Y.XmlElement,
+  source: Y.XmlElement,
+  force: boolean = false,
+): boolean {
+  let liveOnlyText = true;
+  live.forEach((child) => {
+    if (!(child instanceof Y.XmlText)) liveOnlyText = false;
+  });
+  if (!liveOnlyText) return false;
+
+  let sourceOnlyText = true;
+  source.forEach((child) => {
+    if (!(child instanceof Y.XmlText)) sourceOnlyText = false;
+  });
+  if (!sourceOnlyText) return false;
+
+  // Snapshot before mutating — plan xml may be the same live element.
+  const deltas: ReturnType<Y.XmlText["toDelta"]>[] = [];
+  source.forEach((child) => {
+    if (child instanceof Y.XmlText) deltas.push(child.toDelta());
+  });
+  const plain = deltas
+    .map((delta) =>
+      delta
+        .map((op) => (typeof op.insert === "string" ? op.insert : ""))
+        .join(""),
+    )
+    .join("");
+
+  if (!force && xmlElementPlainText(live) === plain) return true;
+
+  while (live.length > 0) {
+    live.delete(0, 1);
+  }
+  for (const delta of deltas) {
+    const text = new Y.XmlText();
+    if (delta.length > 0) {
+      text.applyDelta(delta);
+    }
+    live.insert(live.length, [text]);
+  }
+  if (live.length === 0) {
+    live.insert(0, [new Y.XmlText()]);
+  }
+  return true;
+}
+
 function cloneXmlItem(item: Y.XmlElement | Y.XmlText): Y.XmlElement | Y.XmlText {
   if (item instanceof Y.XmlElement) {
     const clone = new Y.XmlElement(item.nodeName);
@@ -114,14 +196,19 @@ export function patchYDocBodyToSnapshot(
     }
 
     // Pass 2: replace content of blocks whose text diverged from the target.
+    // Prefer in-place text updates to avoid reminting block identity (flicker).
     for (const target of targetBlocks) {
       if (target.blockId == null) continue;
+      if (!(target.item instanceof Y.XmlElement)) continue;
       for (let index = 0; index < liveFragment.length; index += 1) {
         const liveItem = liveFragment.get(index);
         if (
           liveItem instanceof Y.XmlElement &&
           liveItem.getAttribute("blockId") === target.blockId
         ) {
+          if (tryReplacePlainTextInPlace(liveItem, target.item)) {
+            break;
+          }
           const targetXml = target.item.toString();
           if (liveItem.toString() !== targetXml) {
             liveFragment.delete(index, 1);
@@ -235,17 +322,21 @@ export function patchYDocBodyToResolvedBlocks(
       }
     }
 
-    // Pass 2: replace in place any remaining block whose resolved side is
-    // "peer" (content differs from what's live) — same index, net-zero shift.
+    // Pass 2: force-assert winning-side content for every resolved block
+    // (mine AND peer). After absorb, Keep-mine blocks may contain concurrent
+    // peer characters; rewriting deletes those ids so the broadcast cascades.
+    // Prefer in-place mutation (preserves marks); fall back to clone.
     for (let index = 0; index < liveFragment.length; index += 1) {
       const item = liveFragment.get(index);
       if (!(item instanceof Y.XmlElement)) continue;
       const blockId = item.getAttribute("blockId");
       const planEntry = plan.find((entry) => entry.blockId === blockId);
-      if (planEntry && planEntry.side === "peer") {
-        liveFragment.delete(index, 1);
-        liveFragment.insert(index, [cloneXmlItem(planEntry.xml)]);
+      if (!planEntry) continue;
+      if (tryReplacePlainTextInPlace(item, planEntry.xml, true)) {
+        continue;
       }
+      liveFragment.delete(index, 1);
+      liveFragment.insert(index, [cloneXmlItem(planEntry.xml)]);
     }
 
     // Pass 3: insert any resolved block that never existed live at all
@@ -283,9 +374,6 @@ export function patchYDocBodyToResolvedBlocks(
         continue;
       }
       if (process.env.NODE_ENV !== "production") {
-        const clone = cloneXmlItem(entry.xml);
-        const preview =
-          clone instanceof Y.XmlElement ? clone.toString() : String(clone);
         // eslint-disable-next-line no-console
         console.debug(
           "[offline-patch] pass3 insert",
@@ -295,14 +383,8 @@ export function patchYDocBodyToResolvedBlocks(
             atLiveCursor: liveCursor,
             liveFragmentLenBefore: liveFragment.length,
             expectedLiveBlockIdAtCursor: liveBlockId,
-            clonedXmlPreview: preview.slice(0, 200),
-            clonedXmlLength:
-              clone instanceof Y.XmlElement ? clone.length : undefined,
           }),
         );
-        liveFragment.insert(liveCursor, [clone]);
-        liveCursor += 1;
-        continue;
       }
       liveFragment.insert(liveCursor, [cloneXmlItem(entry.xml)]);
       liveCursor += 1;

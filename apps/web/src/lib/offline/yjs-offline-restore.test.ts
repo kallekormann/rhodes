@@ -183,6 +183,115 @@ describe("yjs-offline-restore", () => {
     peer.destroy();
   });
 
+  it("keep-mine force rewrite purges absorbed peer characters and cascades to peer doc", () => {
+    const base = new Y.Doc();
+    seedParagraphDoc(base, [{ blockId: "a", text: "Hello" }]);
+    const baseUpdate = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseUpdate);
+    const mineEl = findXmlBlockById(mine, "a")!;
+    const mineText = mineEl.get(0) as Y.XmlText;
+    mineText.delete(0, mineText.length);
+    mineText.insert(0, "Mine keep");
+    const mineOnlyUpdate = Y.encodeStateAsUpdate(mine);
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseUpdate);
+    const peerEl = findXmlBlockById(peer, "a")!;
+    const peerTextNode = peerEl.get(0) as Y.XmlText;
+    peerTextNode.delete(0, peerTextNode.length);
+    peerTextNode.insert(0, "Peer online");
+
+    // Absorb peer into mine (commitResolvedDoc step 1).
+    Y.applyUpdate(mine, Y.encodeStateAsUpdate(peer));
+
+    const mineOnly = new Y.Doc();
+    Y.applyUpdate(mineOnly, mineOnlyUpdate);
+    const mineXml = findXmlBlockById(mineOnly, "a")!;
+
+    // Keep-mine force-assert (commitResolvedDoc step 2 / Pass2).
+    patchYDocBodyToResolvedBlocks(mine, [
+      { blockId: "a", side: "mine", xml: mineXml },
+    ]);
+    expect(plainFromDoc(mine)).toBe("Mine keep");
+
+    // Cascade to peer via baseline-relative update (broadcastPendingLocalUpdates).
+    const cascade = Y.encodeStateAsUpdate(mine, Y.encodeStateVector(peer));
+    Y.applyUpdate(peer, cascade);
+    expect(plainFromDoc(peer)).toBe("Mine keep");
+
+    base.destroy();
+    mine.destroy();
+    peer.destroy();
+    mineOnly.destroy();
+  });
+
+  it("force rewrite does not embed XmlText.toString() bold tags as literal text", () => {
+    const base = new Y.Doc();
+    seedParagraphDoc(base, [{ blockId: "a", text: "Base" }]);
+    const baseUpdate = Y.encodeStateAsUpdate(base);
+
+    const live = new Y.Doc();
+    Y.applyUpdate(live, baseUpdate);
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseUpdate);
+    const peerText = (findXmlBlockById(peer, "a")!.get(0) as Y.XmlText);
+    peerText.delete(0, peerText.length);
+    peerText.insert(0, "Peer");
+    Y.applyUpdate(live, Y.encodeStateAsUpdate(peer));
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseUpdate);
+    const mineText = findXmlBlockById(mine, "a")!.get(0) as Y.XmlText;
+    mineText.delete(0, mineText.length);
+    mineText.insert(0, "Mine bold", { bold: true });
+
+    // Y.XmlText.toString() would be "<bold>Mine bold</bold>" — must not land in doc.
+    expect(mineText.toString()).toContain("bold");
+
+    patchYDocBodyToResolvedBlocks(live, [
+      { blockId: "a", side: "mine", xml: findXmlBlockById(mine, "a")! },
+    ]);
+
+    expect(plainFromDoc(live)).toBe("Mine bold");
+    expect(plainFromDoc(live)).not.toContain("<bold>");
+    expect(plainFromDoc(live)).not.toContain("</bold>");
+
+    base.destroy();
+    live.destroy();
+    peer.destroy();
+    mine.destroy();
+  });
+
+  it("patchYDocBodyToResolvedBlocks keeps XmlElement identity for plain-text peer replace", () => {
+    const live = new Y.Doc();
+    seedParagraphDoc(live, [
+      { blockId: "a", text: "Mine A" },
+      { blockId: "b", text: "B" },
+    ]);
+    const peer = new Y.Doc();
+    seedParagraphDoc(peer, [
+      { blockId: "a", text: "Peer A" },
+      { blockId: "b", text: "B" },
+    ]);
+
+    const before = findXmlBlockById(live, "a");
+    expect(before).not.toBeNull();
+
+    patchYDocBodyToResolvedBlocks(live, [
+      { blockId: "a", side: "peer", xml: findXmlBlockById(peer, "a")! },
+      { blockId: "b", side: "mine", xml: findXmlBlockById(live, "b")! },
+    ]);
+
+    const after = findXmlBlockById(live, "a");
+    expect(after).toBe(before);
+    expect(plainFromDoc(live)).toBe("Peer A\nB");
+
+    live.destroy();
+    peer.destroy();
+  });
+
   it("patchYDocBodyToResolvedBlocks does not add empty blocks when 'mine' wins on block 1", () => {
     const live = new Y.Doc();
     seedParagraphDoc(live, [
