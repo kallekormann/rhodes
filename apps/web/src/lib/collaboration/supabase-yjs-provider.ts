@@ -118,6 +118,8 @@ export class SupabaseYjsProvider {
   readonly documentId: string;
 
   private channel: RealtimeChannel | null = null;
+  /** True after subscribe reports SUBSCRIBED until disconnect/reauth/destroy. */
+  private channelJoined = false;
   private supabase: RealtimeClient;
   private reauth: () => Promise<void>;
   private synced = false;
@@ -255,6 +257,7 @@ export class SupabaseYjsProvider {
         await this.supabase.removeChannel(this.channel);
         this.channel = null;
       }
+      this.channelJoined = false;
       this.intentionalDisconnect = false;
       this.setSynced(false);
       await this.connect();
@@ -335,6 +338,7 @@ export class SupabaseYjsProvider {
       /* channel may already be gone */
     }
     this.channel = null;
+    this.channelJoined = false;
     this.intentionalDisconnect = false;
     this.setSynced(false);
     this.onDisconnected?.();
@@ -350,6 +354,10 @@ export class SupabaseYjsProvider {
 
   get isSynced(): boolean {
     return this.synced;
+  }
+
+  get isChannelJoined(): boolean {
+    return this.channelJoined;
   }
 
   /** True once peer data has been merged (or no offline catch-up is pending). */
@@ -734,6 +742,7 @@ export class SupabaseYjsProvider {
       void this.supabase.removeChannel(this.channel);
     }
     this.channel = null;
+    this.channelJoined = false;
     this.awareness.destroy();
     this.listeners.clear();
     this.catchupListeners.clear();
@@ -1004,6 +1013,7 @@ export class SupabaseYjsProvider {
       },
     });
     this.channel = channel;
+    this.channelJoined = false;
 
     channel.on("broadcast", { event: EVENT_SYNC }, ({ payload }) => {
       this.applyEncodedMessage(payload as BroadcastPayload);
@@ -1017,14 +1027,20 @@ export class SupabaseYjsProvider {
 
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED" && !this.destroyed) {
+        this.channelJoined = true;
         this.resetReconnectBackoff();
         void this.sendSyncStep1();
         this.scheduleSoloSyncFallback();
         this.maybeNudgeLocalAwareness();
         return;
       }
+      if (status !== "SUBSCRIBED") {
+        this.channelJoined = false;
+      }
       if (
-        (status === "CLOSED" || status === "CHANNEL_ERROR") &&
+        (status === "CLOSED" ||
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT") &&
         !this.destroyed &&
         !this.intentionalDisconnect &&
         !this.reconnecting
@@ -1056,6 +1072,7 @@ export class SupabaseYjsProvider {
         await this.supabase.removeChannel(this.channel);
       }
       this.channel = null;
+      this.channelJoined = false;
       this.setSynced(false);
       await this.connect();
     } catch {
