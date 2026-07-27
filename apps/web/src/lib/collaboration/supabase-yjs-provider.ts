@@ -180,6 +180,8 @@ export class SupabaseYjsProvider {
   private reconnectBackoffMs = 1_000;
   /** Skip awareness heartbeats briefly after a 429 to avoid storming REST fallback. */
   private awarenessSendCooldownUntil = 0;
+  private awarenessDebounceTimer: number | null = null;
+  private pendingAwarenessClients = new Set<number>();
 
   /** Drop remote carets when a peer stops broadcasting (offline / closed tab). */
   private static readonly AWARENESS_TIMEOUT_MS = 6_000;
@@ -188,6 +190,9 @@ export class SupabaseYjsProvider {
   private static readonly RECONNECT_BACKOFF_MIN_MS = 1_000;
   private static readonly RECONNECT_BACKOFF_MAX_MS = 16_000;
   private static readonly AWARENESS_429_COOLDOWN_MS = 5_000;
+  /** Keep presence visible to peers without the old 2s no-op churn. */
+  private static readonly AWARENESS_HEARTBEAT_MS = 5_000;
+  private static readonly AWARENESS_SEND_DEBOUNCE_MS = 75;
   /** Idle window before writing the merged CRDT state durably to Postgres. */
   private static readonly PERSIST_DEBOUNCE_MS = 1_500;
 
@@ -225,7 +230,7 @@ export class SupabaseYjsProvider {
     }, 1_000);
     this.awarenessHeartbeatTimer = window.setInterval(() => {
       this.heartbeatAwareness();
-    }, 2_000);
+    }, SupabaseYjsProvider.AWARENESS_HEARTBEAT_MS);
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", this.flushPersistOnUnload);
       window.addEventListener("pagehide", this.flushPersistOnUnload);
@@ -728,6 +733,10 @@ export class SupabaseYjsProvider {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
+    if (this.awarenessDebounceTimer != null) {
+      window.clearTimeout(this.awarenessDebounceTimer);
+      this.awarenessDebounceTimer = null;
+    }
     if (typeof window !== "undefined") {
       window.removeEventListener("beforeunload", this.flushPersistOnUnload);
       window.removeEventListener("pagehide", this.flushPersistOnUnload);
@@ -769,6 +778,38 @@ export class SupabaseYjsProvider {
     if (!local) return;
     // Re-set so lastUpdated stays fresh for peer prune timers.
     this.awareness.setLocalState(local);
+  }
+
+  private flushAwarenessSend = () => {
+    this.awarenessDebounceTimer = null;
+    if (this.destroyed || this.clientNetworkOffline || !this.channel) return;
+    const changed = Array.from(this.pendingAwarenessClients);
+    this.pendingAwarenessClients.clear();
+    if (changed.length === 0) return;
+    const update = encodeAwarenessUpdate(this.awareness, changed);
+    if (update.length === 0) return;
+    void this.send(EVENT_AWARENESS, update);
+  };
+
+  private scheduleAwarenessSend(changed: number[], immediate = false) {
+    for (const clientId of changed) {
+      this.pendingAwarenessClients.add(clientId);
+    }
+    if (immediate) {
+      if (this.awarenessDebounceTimer != null) {
+        window.clearTimeout(this.awarenessDebounceTimer);
+        this.awarenessDebounceTimer = null;
+      }
+      this.flushAwarenessSend();
+      return;
+    }
+    if (this.awarenessDebounceTimer != null) {
+      window.clearTimeout(this.awarenessDebounceTimer);
+    }
+    this.awarenessDebounceTimer = window.setTimeout(
+      this.flushAwarenessSend,
+      SupabaseYjsProvider.AWARENESS_SEND_DEBOUNCE_MS,
+    );
   }
 
   private canUseWebSocketPush(): boolean {
@@ -1228,8 +1269,7 @@ export class SupabaseYjsProvider {
     if (this.clientNetworkOffline) return;
     const changed = added.concat(updated, removed);
     if (changed.length === 0) return;
-    const update = encodeAwarenessUpdate(this.awareness, changed);
-    void this.send(EVENT_AWARENESS, update);
+    this.scheduleAwarenessSend(changed, this.destroyed && origin === "local");
   };
 
   private applyEncodedMessage(payload: BroadcastPayload) {
