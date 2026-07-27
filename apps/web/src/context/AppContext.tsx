@@ -22,6 +22,7 @@ import { pathToView, viewToPath } from "@/lib/navigation";
 import { rememberLastAppPath } from "@/lib/settings-return";
 import { canWriteInScope } from "@/lib/workspaces/permissions";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
+import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
 
 export type AppView =
   | "editor"
@@ -165,6 +166,12 @@ export function AppProvider({
   useEffect(() => {
     setSessionState(session);
   }, [session.userId, session.userEmail, session.displayName, session.avatarUrl]);
+
+  useEffect(() => {
+    void unlockOfflineVaults(session.userId).catch(() => {
+      /* private mode / blocked IndexedDB */
+    });
+  }, [session.userId]);
 
   const {
     scopes,

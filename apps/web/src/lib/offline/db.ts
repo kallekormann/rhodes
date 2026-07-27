@@ -6,7 +6,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 const DB_NAME = "rhodes-db";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export type EncryptedBlob = {
   iv: string;
@@ -23,6 +23,20 @@ export type OfflineDocumentRecord = {
   content_plain: string | null;
   metadata: Record<string, unknown> | null;
   /** Last known server updated_at — used as expected_updated_at on push. */
+  server_updated_at: string;
+  updated_at: string;
+  created_at: string;
+  sync_status: OfflineSyncStatus;
+};
+
+/** Encrypted-at-rest shape stored in the documents object store (M1b.1). */
+export type OfflineDocumentStorageRecord = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  content_enc: EncryptedBlob | null;
+  content_plain_enc: EncryptedBlob | null;
+  metadata_enc: EncryptedBlob | null;
   server_updated_at: string;
   updated_at: string;
   created_at: string;
@@ -82,7 +96,7 @@ export type VaultRecord = {
 type RhodesDB = DBSchema & {
   documents: {
     key: string;
-    value: OfflineDocumentRecord;
+    value: OfflineDocumentStorageRecord;
     indexes: { "by-workspace": string };
   };
   outbox: {
@@ -163,6 +177,26 @@ export function getOfflineDB(): Promise<IDBPDatabase<RhodesDB>> {
           if (!db.objectStoreNames.contains("vault")) {
             db.createObjectStore("vault", { keyPath: "id" });
           }
+        }
+
+        if (oldVersion < 3) {
+          // M1b.1: disposable plaintext cache — drop and recreate encrypted stores.
+          if (db.objectStoreNames.contains("documents")) {
+            db.deleteObjectStore("documents");
+          }
+          const documents = db.createObjectStore("documents", {
+            keyPath: "id",
+          });
+          documents.createIndex("by-workspace", "workspace_id");
+
+          if (db.objectStoreNames.contains("outbox")) {
+            db.deleteObjectStore("outbox");
+          }
+          const outbox = db.createObjectStore("outbox", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          outbox.createIndex("by-document", "document_id");
         }
       },
     });
