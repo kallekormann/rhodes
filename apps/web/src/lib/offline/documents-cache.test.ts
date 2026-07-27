@@ -17,6 +17,10 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
         if (store === "vault") return vaultRows.get(key);
         return undefined;
       },
+      getAll: async (store: string) => {
+        if (store === "documents") return Array.from(documentRows.values());
+        return [];
+      },
       put: async (
         store: string,
         record: OfflineDocumentStorageRecord | VaultRecord,
@@ -38,6 +42,7 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
 
 import {
   getOfflineDocument,
+  listOfflineDocumentsForWorkspace,
   putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
@@ -97,5 +102,46 @@ describe("documents-cache encryption", () => {
         }),
       ),
     ).rejects.toThrow("Docs vault is locked");
+  });
+
+  it("lists documents for a workspace sorted by updated_at descending", async () => {
+    await unlockDocsVault(userId);
+
+    await putOfflineDocument(
+      toOfflineDocumentRecord({
+        id: "doc-older",
+        workspace_id: "ws-1",
+        title: "Older",
+        content: { type: "doc" },
+        content_plain: null,
+        updated_at: "2026-07-26T00:00:00.000Z",
+        created_at: "2026-07-26T00:00:00.000Z",
+      }),
+    );
+    await putOfflineDocument(
+      toOfflineDocumentRecord({
+        id: "doc-newer",
+        workspace_id: "ws-1",
+        title: "Newer",
+        content: { type: "doc" },
+        content_plain: null,
+        updated_at: "2026-07-27T00:00:00.000Z",
+        created_at: "2026-07-27T00:00:00.000Z",
+      }),
+    );
+    await putOfflineDocument(
+      toOfflineDocumentRecord({
+        id: "doc-other-ws",
+        workspace_id: "ws-2",
+        title: "Other scope",
+        content: { type: "doc" },
+        content_plain: null,
+        updated_at: "2026-07-28T00:00:00.000Z",
+        created_at: "2026-07-28T00:00:00.000Z",
+      }),
+    );
+
+    const listed = await listOfflineDocumentsForWorkspace("ws-1");
+    expect(listed.map((doc) => doc.id)).toEqual(["doc-newer", "doc-older"]);
   });
 });

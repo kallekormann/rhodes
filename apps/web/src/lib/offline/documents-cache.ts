@@ -82,6 +82,20 @@ export async function getOfflineDocument(
   return fromStorageRecord(row);
 }
 
+export async function listOfflineDocumentsForWorkspace(
+  workspaceId: string,
+): Promise<OfflineDocumentRecord[]> {
+  const db = await getOfflineDB();
+  const rows = await db.getAll("documents");
+  const records = await Promise.all(rows.map(fromStorageRecord));
+  return records
+    .filter((doc) => doc.workspace_id === workspaceId)
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    );
+}
+
 export async function putOfflineDocument(
   record: OfflineDocumentRecord,
 ): Promise<void> {

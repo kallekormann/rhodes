@@ -137,16 +137,10 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
 
 ## Wave M1b.3 — Offline shell + `OfflineUnavailable`
 
-0. **App-wide connectivity indicator (header)**
-   - **Goal:** a small, non-interactive online/offline status icon so users always know their connectivity state, independent of any other M1b.3 work.
-   - **Touches:** new `ConnectivityIndicator` component (own file, not inlined into `AppHeader.tsx`); one insertion point in [AppHeader.tsx](../apps/web/src/components/AppHeader.tsx) `app-header__zone--right`, immediately before the theme toggle `IconButton`; a small addition to [AppHeader.css](../apps/web/src/components/AppHeader.css) if a dedicated class is needed.
-   - **Behavior:** `Wifi` icon when online, `WifiOff` when offline — both from **lucide-react**, the same icon family already used for `Moon`/`Sun`/`Search` (no custom SVG). Backed by the existing [useOnlineStatus.ts](../apps/web/src/hooks/useOnlineStatus.ts) hook (no `workspaceId` needed for a header-only status read). Rendered as `role="status"` with `aria-label`/`title` toggling "Online"/"Offline" — not a clickable button. Match `IconButton` sizing (`size={20}`, `strokeWidth={1.75}`). Optional subtle token color when offline; keep it minimal.
-   - **Commit:** `feat(shell): add online/offline wifi indicator to app header`
-   - **Verify:** toggle DevTools Network → Offline; icon switches without a page reload; theme toggle still works; collapsible header behavior on narrow viewports is unchanged.
-   - **Note:** this slice has no dependency on encryption or the rest of M1b.3 — it can ship standalone, any time after this doc is written, since `useOnlineStatus` already exists.
-1. **`OfflineUnavailable` component** — shared empty-state component, consistent with the design system, own file. Commit: `feat(components): add OfflineUnavailable placeholder`.
-2. **Gate online-only surfaces** — Views, Library, Ask, Insights, Chat, Settings routes render `OfflineUnavailable` when `useOnlineStatus` reports offline. One surface per commit to keep review small (e.g. `feat(shell): gate Library behind offline check`, repeated per surface — do not gate all surfaces in one commit).
-3. **Offline document list** — sourced from the `rhodes-db` `documents` IDB index (owned docs + shared docs where the user's grant has `offline_editing_allowed`). Commit: `feat(offline): render document list from IndexedDB when offline`.
+0. **App-wide connectivity indicator (header)** — `ConnectivityIndicator` in `AppHeader`. Commit: `feat(shell): add online/offline wifi indicator to app header`. | done |
+1. **`OfflineUnavailable` component** — shared empty-state component, consistent with the design system, own file. Commit: `feat(components): add OfflineUnavailable placeholder`. | done |
+2. **Gate online-only surfaces** — Library, Templates, Settings, Sticker sheet, Ask (global + editor panel), Insights render `OfflineUnavailable` when offline. Commit: `feat(shell): gate online-only surfaces when offline`. | done |
+3. **Offline document list** — sourced from the `rhodes-db` `documents` IDB index. Commit: `feat(offline): render document list from IndexedDB when offline`. | done |
 
 ## Wave M1b.4 — Offline create/delete/rename (owned docs)
 

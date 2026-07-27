@@ -39,6 +39,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { SharePopover } from "@/components/SharePopover";
 import { StatusPill } from "@/components/StatusPill";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import "./DocumentsView.css";
 
 type DocTab = DocumentFilter;
@@ -56,6 +57,7 @@ export function DocumentsView() {
     showToast,
     canWriteActiveScope,
   } = useApp();
+  const { online } = useOnlineStatus(workspaceId);
   const [tab, setTab] = useState<DocTab>("recent");
   const [filter, setFilter] = useState("");
   const [propertyFilter, setPropertyFilter] = useState(ANY_PROPERTY);
@@ -69,6 +71,7 @@ export function DocumentsView() {
     documents,
     loading,
     error,
+    offlineSource,
     refresh,
     updateDocument,
     deleteDocument,
@@ -141,6 +144,9 @@ export function DocumentsView() {
     if (tab === "shared") {
       return "No shared documents yet. Open a document and use Share in the editor.";
     }
+    if (offlineSource) {
+      return "No offline documents in this scope. Open documents while online to cache them for offline use.";
+    }
     return canWriteActiveScope
       ? "No documents yet. Use + in the header to create one."
       : "No documents in this scope yet.";
@@ -150,6 +156,7 @@ export function DocumentsView() {
     <div className="canvas-view documents-view">
       <div className="documents-view__scroll overlay-scrollbar">
         <div className="documents-view__inner">
+          {online && (
           <section className="documents-section">
             <SectionHeader
               title="Templates"
@@ -193,8 +200,14 @@ export function DocumentsView() {
           </section>
 
           <Divider />
+          )}
 
           <section className="documents-section">
+            {offlineSource && (
+              <p className="documents-view__offline-note caption">
+                Showing documents cached for offline use in this scope.
+              </p>
+            )}
             <div className="documents-toolbar">
               <div className="documents-toolbar__filters">
                 <Input
