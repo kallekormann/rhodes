@@ -15,7 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 import { stripLeadingTitleHeading } from "@/lib/templates/content";
 
 const DOCUMENT_FIELDS =
-  "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
+  "id, workspace_id, created_by, title, content, content_plain, metadata, offline_available, updated_at, created_at";
 
 async function workspaceAcceptsPersonalUserShares(
   supabase: Awaited<ReturnType<typeof createClient>>,
