@@ -125,7 +125,9 @@ Rhodes is **online-first**. Offline = **opt-in, owner-controlled, encrypted cach
 | M1b.5 | Encrypted image asset cache + upload queue |
 | M1b.6 | Encrypted library upload queue (not browse) |
 
-**Phase doc (to write):** [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md)
+**Phase doc:** [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) — sliced into small independently-committable steps per wave; see also [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) for the key derivation and IndexedDB storage decisions it implements.
+
+**Precursor slice (M1.1, before M1b.1):** [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — Realtime `httpSend()` transport fix, independent of M1b.
 
 ---
 
@@ -267,8 +269,9 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | Doc | Milestone |
 |-----|-----------|
 | [09-m1-exit-collab-offline.md](../implementation_plan/09-m1-exit-collab-offline.md) | M1 — exists |
-| `implementation_plan/25-offline-app-shell.md` | M1b |
-| `docs/31-offline-security-and-privacy.md` | M1b |
+| [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) | M1b — exists |
+| [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) | M1.1 — exists |
+| [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) | M1b — exists |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |
 | `docs/29-use-cases-views-templates.md` | M6 |
