@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/Checkbox";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import { useApp } from "@/context/AppContext";
+import { syncOfflineDocumentAccess } from "@/lib/offline/offline-document-access-cache";
 import "./SharePopover.css";
 
 export type SharePermission = "read" | "edit";
@@ -39,7 +40,7 @@ type SharePopoverProps = {
 };
 
 export function SharePopover({ documentId, onClose, onSharesChange }: SharePopoverProps) {
-  const { workspaceId: activeScopeId } = useApp();
+  const { workspaceId: activeScopeId, session } = useApp();
   const [search, setSearch] = useState("");
   const [targets, setTargets] = useState<ShareTarget[]>([]);
   const [shares, setShares] = useState<DocumentShareRecord[]>([]);
@@ -48,6 +49,19 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingShareId, setUpdatingShareId] = useState<string | null>(null);
+
+  const syncOfflineAccess = useCallback(async () => {
+    if (!session.userId) return;
+    try {
+      await syncOfflineDocumentAccess({
+        documentId,
+        userId: session.userId,
+        activeWorkspaceId: activeScopeId,
+      });
+    } catch (error) {
+      console.error("[SharePopover] offline access sync failed", error);
+    }
+  }, [activeScopeId, documentId, session.userId]);
 
   const refreshShares = useCallback(async () => {
     const params = new URLSearchParams();
@@ -63,7 +77,8 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
     }
     setShares((data.shares as DocumentShareRecord[]) ?? []);
     setIsDocumentOwner(data.is_document_owner === true);
-  }, [activeScopeId, documentId]);
+    await syncOfflineAccess();
+  }, [activeScopeId, documentId, syncOfflineAccess]);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +249,7 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
               return (
                 <li key={share.id} className="share-popover__shared-item">
                   <span className="share-popover__shared-label">{share.label}</span>
-                  <div className="share-popover__shared-actions">
+                  <div className="share-popover__shared-controls">
                     <Dropdown
                       variant="plain"
                       value={share.permission ?? "edit"}
