@@ -94,10 +94,6 @@ async function deleteDocumentOnServer(documentId: string): Promise<Response> {
   return fetch(`/app/api/documents/${documentId}`, { method: "DELETE" });
 }
 
-async function deleteDocumentOnServer(documentId: string): Promise<Response> {
-  return fetch(`/app/api/documents/${documentId}`, { method: "DELETE" });
-}
-
 type PushMutationResult = "done" | "skipped" | "network" | "failed";
 
 async function pushCreateMutation(entry: {
