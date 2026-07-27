@@ -106,7 +106,7 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
  * content_plain) for search, RAG and the activity feed. The Yjs CRDT (via
  * document_yjs_state) is the durable source of truth for the body — this
  * write is force-applied (no OCC) and simply skipped while offline, since
- * y-indexeddb already retains offline edits and the next online edit (or
+ * RhodesYjsPersistence retains offline body edits in rhodes-db; the next online edit (or
  * reconnect flush) will catch the projection back up.
  */
 async function persistContentProjection(

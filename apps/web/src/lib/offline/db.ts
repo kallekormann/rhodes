@@ -6,7 +6,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 const DB_NAME = "rhodes-db";
-const DB_VERSION = 4;
+/** v6: ensure yjs_state exists without wiping the DB (repair via version bump). */
+const DB_VERSION = 6;
 
 export type EncryptedBlob = {
   iv: string;
@@ -104,6 +105,13 @@ export type VaultRecord = {
   created_at: string;
 };
 
+/** Encrypted live Yjs CRDT state (M1b.1 slices 6–11). */
+export type YjsStateStorageRecord = {
+  documentId: string;
+  state_enc: EncryptedBlob;
+  updated_at: string;
+};
+
 type RhodesDB = DBSchema & {
   documents: {
     key: string;
@@ -137,99 +145,154 @@ type RhodesDB = DBSchema & {
     key: string;
     value: unknown;
   };
+  yjs_state: {
+    key: string;
+    value: YjsStateStorageRecord;
+  };
 };
 
 let dbPromise: Promise<IDBPDatabase<RhodesDB>> | null = null;
 
-/** Drop cached connection after DevTools DB delete, HMR, or browser termination. */
+function upgradeRhodesDb(
+  db: IDBPDatabase<RhodesDB>,
+  oldVersion: number,
+): void {
+  if (oldVersion < 1) {
+    if (!db.objectStoreNames.contains("documents")) {
+      const documents = db.createObjectStore("documents", {
+        keyPath: "id",
+      });
+      documents.createIndex("by-workspace", "workspace_id");
+    }
+    if (!db.objectStoreNames.contains("outbox")) {
+      const outbox = db.createObjectStore("outbox", {
+        keyPath: "id",
+        autoIncrement: true,
+      });
+      outbox.createIndex("by-document", "document_id");
+    }
+    if (!db.objectStoreNames.contains("ask_threads")) {
+      const threads = db.createObjectStore("ask_threads", {
+        keyPath: "id",
+      });
+      threads.createIndex("by-user", "user_id");
+    }
+    if (!db.objectStoreNames.contains("meta")) {
+      db.createObjectStore("meta");
+    }
+  }
+
+  if (oldVersion < 2) {
+    if (!db.objectStoreNames.contains("conversations")) {
+      const conversations = db.createObjectStore("conversations", {
+        keyPath: "id",
+      });
+      conversations.createIndex("by-user", "user_id");
+      conversations.createIndex("by-workspace-kind", [
+        "user_id",
+        "workspace_id",
+        "kind",
+      ]);
+    }
+    if (!db.objectStoreNames.contains("vault")) {
+      db.createObjectStore("vault", { keyPath: "id" });
+    }
+  }
+
+  if (oldVersion < 3) {
+    // M1b.1: disposable plaintext cache — drop and recreate encrypted stores.
+    if (db.objectStoreNames.contains("documents")) {
+      db.deleteObjectStore("documents");
+    }
+    const documents = db.createObjectStore("documents", {
+      keyPath: "id",
+    });
+    documents.createIndex("by-workspace", "workspace_id");
+
+    if (db.objectStoreNames.contains("outbox")) {
+      db.deleteObjectStore("outbox");
+    }
+    const outbox = db.createObjectStore("outbox", {
+      keyPath: "id",
+      autoIncrement: true,
+    });
+    outbox.createIndex("by-document", "document_id");
+  }
+
+  if (oldVersion < 4) {
+    // M1b.1 slice 4: outbox payload encryption — clear disposable plaintext rows.
+    if (db.objectStoreNames.contains("outbox")) {
+      db.deleteObjectStore("outbox");
+    }
+    const outbox = db.createObjectStore("outbox", {
+      keyPath: "id",
+      autoIncrement: true,
+    });
+    outbox.createIndex("by-document", "document_id");
+  }
+
+  if (oldVersion < 5) {
+    if (!db.objectStoreNames.contains("yjs_state")) {
+      db.createObjectStore("yjs_state", { keyPath: "documentId" });
+    }
+  }
+
+  if (oldVersion < 6) {
+    // Soft repair: create yjs_state if a v5 DB was missing it — never wipe.
+    if (!db.objectStoreNames.contains("yjs_state")) {
+      db.createObjectStore("yjs_state", { keyPath: "documentId" });
+    }
+  }
+}
+
+/**
+ * Drop cached connection after DevTools DB delete, HMR, or browser termination.
+ * Also clear in-memory DEKs so we never encrypt with a key that no longer
+ * matches the vault store after a wipe.
+ */
 export function resetOfflineDBConnection(): void {
   dbPromise = null;
+  // Dynamic import avoids circular deps (vault modules import getOfflineDB).
+  void import("@/lib/offline/offline-vault-session")
+    .then((m) => {
+      m.lockOfflineVaults();
+    })
+    .catch(() => {
+      /* vault modules may not be ready during HMR dispose */
+    });
+}
+
+async function openRhodesDb(): Promise<IDBPDatabase<RhodesDB>> {
+  let connection: IDBPDatabase<RhodesDB> | null = null;
+  connection = await openDB<RhodesDB>(DB_NAME, DB_VERSION, {
+    upgrade(db, oldVersion) {
+      upgradeRhodesDb(db, oldVersion);
+    },
+    blocked() {
+      console.warn(
+        "[rhodes-db] open blocked — close other tabs using IndexedDB",
+      );
+    },
+    blocking() {
+      connection?.close();
+      resetOfflineDBConnection();
+    },
+    terminated() {
+      resetOfflineDBConnection();
+    },
+  });
+  return connection;
 }
 
 export function getOfflineDB(): Promise<IDBPDatabase<RhodesDB>> {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("IndexedDB is browser-only"));
+  if (typeof indexedDB === "undefined") {
+    return Promise.reject(new Error("IndexedDB is unavailable"));
   }
   if (!dbPromise) {
-    dbPromise = openDB<RhodesDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
-        if (oldVersion < 1) {
-          if (!db.objectStoreNames.contains("documents")) {
-            const documents = db.createObjectStore("documents", {
-              keyPath: "id",
-            });
-            documents.createIndex("by-workspace", "workspace_id");
-          }
-          if (!db.objectStoreNames.contains("outbox")) {
-            const outbox = db.createObjectStore("outbox", {
-              keyPath: "id",
-              autoIncrement: true,
-            });
-            outbox.createIndex("by-document", "document_id");
-          }
-          if (!db.objectStoreNames.contains("ask_threads")) {
-            const threads = db.createObjectStore("ask_threads", {
-              keyPath: "id",
-            });
-            threads.createIndex("by-user", "user_id");
-          }
-          if (!db.objectStoreNames.contains("meta")) {
-            db.createObjectStore("meta");
-          }
-        }
-
-        if (oldVersion < 2) {
-          if (!db.objectStoreNames.contains("conversations")) {
-            const conversations = db.createObjectStore("conversations", {
-              keyPath: "id",
-            });
-            conversations.createIndex("by-user", "user_id");
-            conversations.createIndex("by-workspace-kind", [
-              "user_id",
-              "workspace_id",
-              "kind",
-            ]);
-          }
-          if (!db.objectStoreNames.contains("vault")) {
-            db.createObjectStore("vault", { keyPath: "id" });
-          }
-        }
-
-        if (oldVersion < 3) {
-          // M1b.1: disposable plaintext cache — drop and recreate encrypted stores.
-          if (db.objectStoreNames.contains("documents")) {
-            db.deleteObjectStore("documents");
-          }
-          const documents = db.createObjectStore("documents", {
-            keyPath: "id",
-          });
-          documents.createIndex("by-workspace", "workspace_id");
-
-          if (db.objectStoreNames.contains("outbox")) {
-            db.deleteObjectStore("outbox");
-          }
-          const outbox = db.createObjectStore("outbox", {
-            keyPath: "id",
-            autoIncrement: true,
-          });
-          outbox.createIndex("by-document", "document_id");
-        }
-
-        if (oldVersion < 4) {
-          // M1b.1 slice 4: outbox payload encryption — clear disposable plaintext rows.
-          if (db.objectStoreNames.contains("outbox")) {
-            db.deleteObjectStore("outbox");
-          }
-          const outbox = db.createObjectStore("outbox", {
-            keyPath: "id",
-            autoIncrement: true,
-          });
-          outbox.createIndex("by-document", "document_id");
-        }
-      },
-      terminated() {
-        resetOfflineDBConnection();
-      },
+    // Assign immediately so concurrent callers share one open attempt.
+    dbPromise = openRhodesDb().catch((error) => {
+      dbPromise = null;
+      throw error;
     });
   }
   return dbPromise;
@@ -280,13 +343,32 @@ export async function setActiveConversationId(
   }
 }
 
+export async function getYjsState(
+  documentId: string,
+): Promise<YjsStateStorageRecord | null> {
+  const db = await getOfflineDB();
+  const row = await db.get("yjs_state", documentId);
+  return row ?? null;
+}
+
+export async function putYjsState(record: YjsStateStorageRecord): Promise<void> {
+  const db = await getOfflineDB();
+  await db.put("yjs_state", record);
+}
+
+export async function deleteYjsState(documentId: string): Promise<void> {
+  const db = await getOfflineDB();
+  await db.delete("yjs_state", documentId);
+}
+
 /** Clear document/outbox sync cache. Keeps Ask conversations + vault. */
 export async function clearSyncedOfflineCache(): Promise<void> {
   const db = await getOfflineDB();
-  const tx = db.transaction(["documents", "outbox"], "readwrite");
+  const tx = db.transaction(["documents", "outbox", "yjs_state"], "readwrite");
   await Promise.all([
     tx.objectStore("documents").clear(),
     tx.objectStore("outbox").clear(),
+    tx.objectStore("yjs_state").clear(),
   ]);
   await tx.done;
 }
@@ -339,12 +421,21 @@ export async function wipeAskDataForUser(userId: string): Promise<void> {
 export async function clearOfflineCache(): Promise<void> {
   const db = await getOfflineDB();
   const tx = db.transaction(
-    ["documents", "outbox", "conversations", "vault", "meta", "ask_threads"],
+    [
+      "documents",
+      "outbox",
+      "yjs_state",
+      "conversations",
+      "vault",
+      "meta",
+      "ask_threads",
+    ],
     "readwrite",
   );
   await Promise.all([
     tx.objectStore("documents").clear(),
     tx.objectStore("outbox").clear(),
+    tx.objectStore("yjs_state").clear(),
     tx.objectStore("conversations").clear(),
     tx.objectStore("vault").clear(),
     tx.objectStore("meta").clear(),

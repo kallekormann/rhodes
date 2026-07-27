@@ -65,6 +65,13 @@ export async function unlockDocsVault(userId: string): Promise<void> {
   memoryUserId = userId;
 }
 
+/** Unlock docs vault if needed — call before every encrypted write. */
+export async function ensureDocsVaultUnlocked(userId: string): Promise<void> {
+  if (!userId) throw new Error("ensureDocsVaultUnlocked requires userId");
+  if (isDocsVaultUnlocked(userId)) return;
+  await unlockDocsVault(userId);
+}
+
 export async function encryptDocsJson(value: unknown): Promise<EncryptedBlob> {
   if (!memoryDek) throw new Error("Docs vault is locked");
   return encryptJsonWithKey(memoryDek, value);

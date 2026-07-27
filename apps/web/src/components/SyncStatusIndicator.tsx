@@ -41,6 +41,16 @@ export function SyncStatusIndicator({
   if (!documentId) return null;
 
   if (!online) {
+    if (status === "pending") {
+      return (
+        <span
+          className="sync-status sync-status--pending"
+          title="Unsaved changes — will sync when online"
+        >
+          Unsaved changes
+        </span>
+      );
+    }
     return (
       <span className="sync-status sync-status--offline" title="Offline">
         Offline

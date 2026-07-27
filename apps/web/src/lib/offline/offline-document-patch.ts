@@ -8,9 +8,12 @@
 
 import {
   documentToStorageRecord,
-  type OfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
-import { getOfflineDB, type OfflineOutboxStorageRecord } from "@/lib/offline/db";
+import {
+  getOfflineDB,
+  type OfflineDocumentRecord,
+  type OfflineOutboxStorageRecord,
+} from "@/lib/offline/db";
 import {
   getOutboxForDocument,
   outboxToStorageRecord,

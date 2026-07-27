@@ -14,6 +14,10 @@ import {
   setOfflineDocumentStatus,
 } from "@/lib/offline/documents-cache";
 import {
+  documentHasPendingOutbox,
+  repairPendingStatusFromOutbox,
+} from "@/lib/offline/offline-sync-status";
+import {
   clearOutboxForDocument,
   enqueueDocumentPatch,
   getOutboxEntry,
@@ -102,7 +106,10 @@ async function drainPushOutbox(): Promise<{
   let pushed = 0;
   let stoppedOnNetwork = false;
 
-  await repairOrphanSyncedOutbox();
+  const repaired = await repairPendingStatusFromOutbox();
+  for (const documentId of repaired) {
+    notifyDocumentSyncStatus(documentId, "pending");
+  }
 
   while (navigator.onLine) {
     const queue = await listOutbox();
@@ -213,27 +220,22 @@ async function drainPushOutbox(): Promise<{
 }
 
 /**
- * documents.sync_status is synced but an outbox row was never removed — e.g.
- * cache put failed after a successful PATCH, or pullWorkspaceDocuments refreshed
- * the cache without draining.
+ * @deprecated use repairPendingStatusFromOutbox — restores pending instead of
+ * deleting the outbox when documents.sync_status was clobbered.
  */
 export async function repairOrphanSyncedOutbox(): Promise<number> {
-  let repaired = 0;
-  const queue = await listOutbox();
-  for (const entry of queue) {
-    if (entry.id == null || entry.mutation !== "patch") continue;
-    const doc = await getOfflineDocument(entry.document_id);
-    if (doc?.sync_status !== "synced") continue;
-    await removeOutboxEntry(entry.id);
-    repaired += 1;
-  }
-  return repaired;
+  const repaired = await repairPendingStatusFromOutbox();
+  return repaired.length;
 }
 
 /** Read local sync status for UI. */
 export async function getDocumentSyncStatus(
   documentId: string,
 ): Promise<OfflineSyncStatus | null> {
+  const repaired = await repairPendingStatusFromOutbox(documentId);
+  if (repaired.includes(documentId)) {
+    notifyDocumentSyncStatus(documentId, "pending");
+  }
   const row = await getOfflineDocument(documentId);
   if (!row) return null;
   if (row.sync_status === "pending") {
@@ -369,6 +371,9 @@ export async function pullWorkspaceDocuments(
       local &&
       (local.sync_status === "pending" || local.sync_status === "conflict")
     ) {
+      continue;
+    }
+    if (await documentHasPendingOutbox(remote.id)) {
       continue;
     }
 

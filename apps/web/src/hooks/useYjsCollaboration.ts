@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
-import { IndexeddbPersistence } from "y-indexeddb";
 import type { Awareness } from "y-protocols/awareness";
 import { createClient } from "@/lib/supabase/client";
 import { ensureRealtimeAuth } from "@/lib/supabase/ensure-realtime-auth";
@@ -17,6 +16,11 @@ import {
   hasOfflineSessionMarker,
 } from "@/lib/offline/yjs-offline-snapshot";
 import { clearYjsIndexedDbPersistence } from "@/lib/collaboration/yjs-idb";
+import {
+  clearRhodesYjsPersistence,
+  persistLocalYjsState,
+  RhodesYjsPersistence,
+} from "@/lib/offline/yjs-rhodes-persistence";
 import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { avatarHueForUser } from "@/lib/profile/avatar";
 
@@ -103,7 +107,18 @@ async function fetchPersistedState(
 async function persistState(
   documentId: string,
   state: Uint8Array,
+  userId?: string | null,
 ): Promise<boolean> {
+  // Always mirror to rhodes-db so offline reopen works even if PUT /yjs fails.
+  try {
+    await persistLocalYjsState(documentId, state, userId);
+  } catch (error) {
+    console.error(`[yjs] local persist failed for ${documentId}:`, error);
+  }
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return false;
+  }
   try {
     const response = await fetch(`/app/api/documents/${documentId}/yjs`, {
       method: "PUT",
@@ -241,7 +256,7 @@ export function useYjsCollaboration(params: {
     let cancelled = false;
     const doc = new Y.Doc();
     docRef.current = doc;
-    let idbPersistence: IndexeddbPersistence | null = null;
+    let idbPersistence: RhodesYjsPersistence | null = null;
     let serverPullTimer: number | null = null;
 
     const createProvider = async (attempt = 0): Promise<void> => {
@@ -297,7 +312,7 @@ export function useYjsCollaboration(params: {
           await ensureRealtimeAuth(supabase, { force: true });
         },
         persist: async (state) => {
-          await persistState(documentId, state);
+          await persistState(documentId, state, userId);
         },
         persistOnUnload: (state) => persistStateOnUnload(documentId, state),
         onDisconnected: () => {
@@ -381,15 +396,17 @@ export function useYjsCollaboration(params: {
       if (!isOffline) {
         const server = await fetchPersistedState(documentId);
         if (cancelled) return;
-        // Online reload: Postgres wins over stale y-indexeddb.
-        await clearYjsIndexedDbPersistence(documentId);
+        // Only clear local persistence after a successful server fetch so a
+        // network blip does not wipe the only offline copy.
         if (server.state && server.state.length > 0) {
+          await clearRhodesYjsPersistence(documentId);
+          await clearYjsIndexedDbPersistence(documentId);
           serverState = server.state;
           applyServerState(doc, serverState);
         }
       }
 
-      idbPersistence = new IndexeddbPersistence(documentId, doc);
+      idbPersistence = new RhodesYjsPersistence(documentId, doc, userId);
       await idbPersistence.whenSynced;
       if (cancelled) return;
 
@@ -491,7 +508,7 @@ export function useYjsCollaboration(params: {
         currentProvider.flushPersist();
         return;
       }
-      void persistState(documentId, Y.encodeStateAsUpdate(doc));
+      void persistState(documentId, Y.encodeStateAsUpdate(doc), userId);
     };
   }, [documentId]);
 

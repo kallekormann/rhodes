@@ -1,11 +1,13 @@
 import * as Y from "yjs";
 import { getOfflineDB } from "@/lib/offline/db";
 import { uint8ToBase64, base64ToUint8 } from "@/lib/collaboration/supabase-yjs-provider";
+import {
+  decryptOfflineYjsSnapshot,
+  encryptOfflineYjsSnapshot,
+  type OfflineYjsSnapshot,
+} from "@/lib/offline/yjs-offline-snapshot-encryption";
 
-export type OfflineYjsSnapshot = {
-  state: string;
-  capturedAt: string;
-};
+export type { OfflineYjsSnapshot };
 
 function offlineBaseKey(documentId: string): string {
   return `offline_base:${documentId}`;
@@ -54,13 +56,20 @@ export async function storeOfflineBase(
     state: uint8ToBase64(state),
     capturedAt,
   };
-  await putMeta(offlineBaseKey(documentId), snapshot);
+  await putMeta(
+    offlineBaseKey(documentId),
+    await encryptOfflineYjsSnapshot(snapshot),
+  );
 }
 
 export async function getOfflineBase(
   documentId: string,
 ): Promise<OfflineYjsSnapshot | null> {
-  return getMeta<OfflineYjsSnapshot>(offlineBaseKey(documentId));
+  const stored = await getMeta(offlineBaseKey(documentId));
+  if (!stored) return null;
+  return decryptOfflineYjsSnapshot(
+    stored as Parameters<typeof decryptOfflineYjsSnapshot>[0],
+  );
 }
 
 export async function storeOfflineMine(
@@ -71,13 +80,20 @@ export async function storeOfflineMine(
     state: uint8ToBase64(state),
     capturedAt: new Date().toISOString(),
   };
-  await putMeta(offlineMineKey(documentId), snapshot);
+  await putMeta(
+    offlineMineKey(documentId),
+    await encryptOfflineYjsSnapshot(snapshot),
+  );
 }
 
 export async function getOfflineMine(
   documentId: string,
 ): Promise<OfflineYjsSnapshot | null> {
-  return getMeta<OfflineYjsSnapshot>(offlineMineKey(documentId));
+  const stored = await getMeta(offlineMineKey(documentId));
+  if (!stored) return null;
+  return decryptOfflineYjsSnapshot(
+    stored as Parameters<typeof decryptOfflineYjsSnapshot>[0],
+  );
 }
 
 export async function clearOfflineSnapshots(documentId: string): Promise<void> {

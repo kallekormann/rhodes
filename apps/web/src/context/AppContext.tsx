@@ -23,6 +23,7 @@ import { rememberLastAppPath } from "@/lib/settings-return";
 import { canWriteInScope } from "@/lib/workspaces/permissions";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
+import { cleanupLegacyYjsIndexedDbDatabases } from "@/lib/offline/legacy-yjs-idb-cleanup";
 
 export type AppView =
   | "editor"
@@ -168,8 +169,11 @@ export function AppProvider({
   }, [session.userId, session.userEmail, session.displayName, session.avatarUrl]);
 
   useEffect(() => {
-    void unlockOfflineVaults(session.userId).catch(() => {
-      /* private mode / blocked IndexedDB */
+    void unlockOfflineVaults(session.userId).catch((error) => {
+      console.error("[AppContext] offline vault unlock failed", error);
+    });
+    void cleanupLegacyYjsIndexedDbDatabases().catch((error) => {
+      console.warn("[AppContext] legacy yjs IDB cleanup failed", error);
     });
   }, [session.userId]);
 

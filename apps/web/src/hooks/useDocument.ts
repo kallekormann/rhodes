@@ -10,14 +10,25 @@ import {
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
 import { commitOfflineDocumentPatch } from "@/lib/offline/offline-document-patch";
-import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
+import {
+  ensureDocsVaultUnlocked,
+} from "@/lib/offline/offline-vault-session";
 import { getOutboxForDocument } from "@/lib/offline/outbox";
+import {
+  documentHasPendingOutbox,
+  repairPendingStatusFromOutbox,
+} from "@/lib/offline/offline-sync-status";
 import {
   pushOutbox,
   reconcileStalePendingOnOpen,
   subscribeSyncEngine,
+  notifyDocumentSyncStatus,
 } from "@/lib/offline/sync-engine";
 import type { OfflineSyncStatus } from "@/lib/offline/db";
+
+function logCacheError(context: string, error: unknown): void {
+  console.error(`[useDocument] ${context}`, error);
+}
 
 export type DocumentRecord = {
   id: string;
@@ -109,6 +120,20 @@ export function useDocument(
       if (!options?.silent) setLoading(false);
     }
 
+    if (!online) {
+      if (cached) {
+        setDocument(recordFromOffline(cached));
+        serverUpdatedAtRef.current =
+          cached.server_updated_at || cached.updated_at;
+        setSyncStatus(cached.sync_status);
+      } else if (!options?.silent) {
+        setError("Document not available offline");
+        setDocument(null);
+      }
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(`/app/api/documents/${documentId}`);
       const data = await response.json().catch(() => ({}));
@@ -156,6 +181,9 @@ export function useDocument(
           serverUpdatedAtRef.current = remote.updated_at;
           setSyncStatus("synced");
           try {
+            if (session.userId) {
+              await ensureDocsVaultUnlocked(session.userId);
+            }
             await putOfflineDocument(
               toOfflineDocumentRecord({
                 ...remote,
@@ -163,8 +191,8 @@ export function useDocument(
                 sync_status: "synced",
               }),
             );
-          } catch {
-            /* IndexedDB unavailable */
+          } catch (error) {
+            logCacheError("cache wipe-pending failed", error);
           }
           setLoading(false);
           return;
@@ -191,11 +219,33 @@ export function useDocument(
         return;
       }
 
+      if (await documentHasPendingOutbox(documentId)) {
+        const repaired = await repairPendingStatusFromOutbox(documentId);
+        if (repaired.includes(documentId)) {
+          notifyDocumentSyncStatus(documentId, "pending");
+        }
+        const local =
+          (await getOfflineDocument(documentId)) ?? freshCached ?? cached;
+        if (local) {
+          setDocument(recordFromOffline(local));
+          serverUpdatedAtRef.current =
+            local.server_updated_at || local.updated_at;
+          setSyncStatus("pending");
+          setLoading(false);
+          return;
+        }
+      }
+
       setDocument(remote);
       serverUpdatedAtRef.current = remote.updated_at;
       setSyncStatus("synced");
 
       try {
+        if (session.userId) {
+          await ensureDocsVaultUnlocked(session.userId);
+        } else {
+          throw new Error("Cannot cache document: no userId for docs vault");
+        }
         await putOfflineDocument(
           toOfflineDocumentRecord({
             ...remote,
@@ -203,8 +253,8 @@ export function useDocument(
             sync_status: "synced",
           }),
         );
-      } catch {
-        // IndexedDB unavailable
+      } catch (error) {
+        logCacheError("cache on open failed", error);
       }
 
       setLoading(false);
@@ -220,7 +270,7 @@ export function useDocument(
       }
       setLoading(false);
     }
-  }, [documentId]);
+  }, [documentId, online, session.userId]);
 
   useEffect(() => {
     void refresh();
@@ -296,9 +346,10 @@ export function useDocument(
         serverUpdatedAtRef.current || prev.updated_at;
 
       try {
-        if (session.userId) {
-          await unlockOfflineVaults(session.userId);
+        if (!session.userId) {
+          throw new Error("Cannot save offline: no userId for docs vault");
         }
+        await ensureDocsVaultUnlocked(session.userId);
         await commitOfflineDocumentPatch({
           document: toOfflineDocumentRecord({
             id: nextLocal.id,
@@ -315,29 +366,16 @@ export function useDocument(
           patch,
           expectedUpdatedAt,
         });
-        setSyncStatus("pending");
-      } catch (error) {
-        if (!online) {
-          console.error("[useDocument] offline save failed", error);
-          return null;
+        const repaired = await repairPendingStatusFromOutbox(documentId);
+        if (repaired.includes(documentId)) {
+          notifyDocumentSyncStatus(documentId, "pending");
         }
-
-        const response = await fetch(`/app/api/documents/${documentId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...patch,
-            expected_updated_at: expectedUpdatedAt,
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) return null;
-        const next = data.document as DocumentRecord;
-        setDocument(next);
-        documentRef.current = next;
-        serverUpdatedAtRef.current = next.updated_at;
-        setSyncStatus("synced");
-        return next;
+        setSyncStatus("pending");
+        notifyDocumentSyncStatus(documentId, "pending");
+      } catch (error) {
+        // Never fall back to direct PATCH — that masks empty IndexedDB.
+        logCacheError("local save failed", error);
+        return null;
       }
 
       if (online) {
