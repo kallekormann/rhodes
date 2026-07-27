@@ -1,9 +1,11 @@
 "use client";
 
-import { Search, Users, X } from "lucide-react";
+import { Search, Trash2, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Checkbox } from "@/components/Checkbox";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
+import { useApp } from "@/context/AppContext";
 import "./SharePopover.css";
 
 export type SharePermission = "read" | "edit";
@@ -22,6 +24,7 @@ export type DocumentShareRecord = {
   grantee_workspace_id: string | null;
   label: string;
   permission: SharePermission;
+  offline_editing_allowed: boolean;
 };
 
 const permissionOptions = [
@@ -36,22 +39,31 @@ type SharePopoverProps = {
 };
 
 export function SharePopover({ documentId, onClose, onSharesChange }: SharePopoverProps) {
+  const { workspaceId: activeScopeId } = useApp();
   const [search, setSearch] = useState("");
   const [targets, setTargets] = useState<ShareTarget[]>([]);
   const [shares, setShares] = useState<DocumentShareRecord[]>([]);
+  const [isDocumentOwner, setIsDocumentOwner] = useState(false);
   const [newSharePermission, setNewSharePermission] = useState<SharePermission>("edit");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [updatingShareId, setUpdatingShareId] = useState<string | null>(null);
 
   const refreshShares = useCallback(async () => {
-    const response = await fetch(`/app/api/documents/${documentId}/shares`);
+    const params = new URLSearchParams();
+    if (activeScopeId) params.set("active_workspace_id", activeScopeId);
+
+    const response = await fetch(
+      `/app/api/documents/${documentId}/shares?${params.toString()}`,
+    );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setError(typeof data.error === "string" ? data.error : "Failed to load shares");
       return;
     }
     setShares((data.shares as DocumentShareRecord[]) ?? []);
-  }, [documentId]);
+    setIsDocumentOwner(data.is_document_owner === true);
+  }, [activeScopeId, documentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,14 +129,42 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
 
   const updateSharePermission = async (shareId: string, permission: SharePermission) => {
     setError(null);
+    setUpdatingShareId(shareId);
     const response = await fetch(`/app/api/documents/${documentId}/shares`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ share_id: shareId, permission }),
     });
     const data = await response.json().catch(() => ({}));
+    setUpdatingShareId(null);
     if (!response.ok) {
       setError(typeof data.error === "string" ? data.error : "Couldn't update permission");
+      return;
+    }
+    await refreshShares();
+    onSharesChange?.();
+  };
+
+  const updateShareOfflineEditing = async (
+    shareId: string,
+    offlineEditingAllowed: boolean,
+  ) => {
+    setError(null);
+    setUpdatingShareId(shareId);
+    const response = await fetch(`/app/api/documents/${documentId}/shares`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        share_id: shareId,
+        offline_editing_allowed: offlineEditingAllowed,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    setUpdatingShareId(null);
+    if (!response.ok) {
+      setError(
+        typeof data.error === "string" ? data.error : "Couldn't update offline editing",
+      );
       return;
     }
     await refreshShares();
@@ -186,28 +226,47 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
         <section className="share-popover__section">
           <header className="share-popover__section-label">Shared with</header>
           <ul className="share-popover__list">
-            {shares.map((share) => (
-              <li key={share.id} className="share-popover__shared-item">
-                <span className="share-popover__shared-label">{share.label}</span>
-                <div className="share-popover__shared-actions">
-                  <Dropdown
-                    variant="plain"
-                    value={share.permission ?? "edit"}
-                    options={permissionOptions}
-                    onChange={(value) =>
-                      void updateSharePermission(share.id, value as SharePermission)
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="share-popover__remove"
-                    onClick={() => void removeShare(share.id)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
+            {shares.map((share) => {
+              const isEditShare = (share.permission ?? "edit") === "edit";
+              const showOfflineCheckbox = isDocumentOwner && isEditShare;
+              const isUpdating = updatingShareId === share.id;
+
+              return (
+                <li key={share.id} className="share-popover__shared-item">
+                  <span className="share-popover__shared-label">{share.label}</span>
+                  <div className="share-popover__shared-actions">
+                    <Dropdown
+                      variant="plain"
+                      value={share.permission ?? "edit"}
+                      options={permissionOptions}
+                      onChange={(value) =>
+                        void updateSharePermission(share.id, value as SharePermission)
+                      }
+                    />
+                    {showOfflineCheckbox && (
+                      <Checkbox
+                        className="share-popover__offline-checkbox"
+                        label="Allow offline editing"
+                        checked={share.offline_editing_allowed !== false}
+                        disabled={isUpdating}
+                        onChange={(event) =>
+                          void updateShareOfflineEditing(share.id, event.target.checked)
+                        }
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className="share-popover__remove"
+                      aria-label={`Remove share for ${share.label}`}
+                      disabled={isUpdating}
+                      onClick={() => void removeShare(share.id)}
+                    >
+                      <Trash2 size={15} strokeWidth={1.75} />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

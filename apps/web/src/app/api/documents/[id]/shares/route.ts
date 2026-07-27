@@ -155,6 +155,7 @@ export async function GET(request: Request, context: RouteContext) {
         incomingShare?.offline_editing_allowed ?? null,
       can_write: canWrite,
       can_offline_edit: canOfflineEdit,
+      is_document_owner: doc?.created_by === user.id,
     }),
   );
 }

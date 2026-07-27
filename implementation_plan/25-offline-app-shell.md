@@ -132,7 +132,7 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
 
 1. **DB migration** — add `document_shares.offline_editing_allowed boolean not null default true` (forced `false` when `permission = 'read'`); owner-only trigger on updates; `can_offline_edit_document(doc_id)` RPC; drop `documents.offline_available`. Commit: `feat(db): per-share offline_editing_allowed with owner opt-out`.
 2. **API** — extend `POST/PATCH /api/documents/[id]/shares` for `offline_editing_allowed`; expose `can_offline_edit` + `incoming_offline_editing_allowed` on GET; remove `offline_available` from document PATCH. Commit: `feat(api): per-share offline editing control on document shares`.
-3. **UI** — checkbox per share row in `SharePopover` ("Allow offline editing"), visible to document owner only; default checked for edit shares. Commit: `feat(sharing): add per-share Allow offline editing checkbox`.
+| 3. **UI** — checkbox per share row in `SharePopover` ("Allow offline editing"), visible to document owner only; default checked for edit shares. Commit: `feat(sharing): add per-share Allow offline editing checkbox`. | done |
 4. **Wiring** — when a user gains offline access (new share, owner re-enables, or opening owned doc), eager encrypted cache via `putOfflineDocument`; when access is revoked or owner opts out, purge from that user's IDB. Commit: `feat(offline): cache and purge on offline share access changes`.
 
 ## Wave M1b.3 — Offline shell + `OfflineUnavailable`
