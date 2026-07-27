@@ -27,6 +27,7 @@ export function TemplatesView() {
     showToast,
     canWriteActiveScope,
     featureGates,
+    session,
   } = useApp();
   const canCreateTemplates =
     canWriteActiveScope && featureGates.can("templates.create");
@@ -37,7 +38,7 @@ export function TemplatesView() {
   const [deleting, setDeleting] = useState(false);
 
   const { templates, loading, error, refresh } = useTemplates(workspaceId, tab);
-  const { createDocument } = useDocuments(workspaceId, "recent");
+  const { createDocument } = useDocuments(workspaceId, "recent", session.userId);
 
   const filtered = templates.map(templateRecordToUi);
 

@@ -56,6 +56,7 @@ export function DocumentsView() {
     setView,
     showToast,
     canWriteActiveScope,
+    session,
   } = useApp();
   const { online } = useOnlineStatus(workspaceId);
   const [tab, setTab] = useState<DocTab>("recent");
@@ -76,7 +77,7 @@ export function DocumentsView() {
     updateDocument,
     deleteDocument,
     createDocument,
-  } = useDocuments(workspaceId, tab);
+  } = useDocuments(workspaceId, tab, session.userId);
 
   const { schemas } = useMetadataSchemas(workspaceId);
   const filterField = useMemo(() => pickDocumentsFilterField(schemas), [schemas]);

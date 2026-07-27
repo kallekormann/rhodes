@@ -202,7 +202,7 @@ export function AppProvider({
   const workspaceId = scopesLoading
     ? null
     : (activeScopeId ?? scopes[0]?.id ?? null);
-  const { createDocument } = useDocuments(workspaceId, "recent");
+  const { createDocument } = useDocuments(workspaceId, "recent", session.userId);
 
   useEffect(() => {
     setViewState(pathToView(pathname));

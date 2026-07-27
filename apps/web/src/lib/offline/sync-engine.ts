@@ -237,9 +237,14 @@ async function drainPushOutbox(): Promise<{
 
       const freshEntry = await getOutboxEntry(entry.id);
       if (!freshEntry || freshEntry.id == null) continue;
+      const outboxId = freshEntry.id;
 
       if (freshEntry.mutation === "create") {
-        const pushedCreate = await pushCreateMutation(freshEntry);
+        const pushedCreate = await pushCreateMutation({
+          id: outboxId,
+          document_id: freshEntry.document_id,
+          payload: freshEntry.payload,
+        });
         if (pushedCreate === "network") {
           stoppedOnNetwork = true;
           break;
@@ -252,7 +257,10 @@ async function drainPushOutbox(): Promise<{
       }
 
       if (freshEntry.mutation === "delete") {
-        const pushedDelete = await pushDeleteMutation(freshEntry);
+        const pushedDelete = await pushDeleteMutation({
+          id: outboxId,
+          document_id: freshEntry.document_id,
+        });
         if (pushedDelete === "network") {
           stoppedOnNetwork = true;
           break;

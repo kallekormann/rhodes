@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "@/context/AppContext";
 import type { DocumentFilter } from "@/lib/documents/schemas";
 import type { DocumentRecord } from "@/hooks/useDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -64,8 +63,11 @@ async function patchDocumentById(
   return data.document as DocumentRecord;
 }
 
-export function useDocuments(workspaceId: string | null, filter: DocumentFilter = "recent") {
-  const { session } = useApp();
+export function useDocuments(
+  workspaceId: string | null,
+  filter: DocumentFilter = "recent",
+  userId?: string | null,
+) {
   const { online } = useOnlineStatus(workspaceId);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(Boolean(workspaceId));
@@ -139,13 +141,13 @@ export function useDocuments(workspaceId: string | null, filter: DocumentFilter 
           setError("Templates require an internet connection");
           return null;
         }
-        if (!session.userId) {
+        if (!userId) {
           setError("Cannot create document offline");
           return null;
         }
 
         try {
-          await ensureDocsVaultUnlocked(session.userId);
+          await ensureDocsVaultUnlocked(userId);
           const id = createLocalDocumentId();
           const { document, create } = await buildOfflineCreateDocument({
             id,
@@ -185,7 +187,7 @@ export function useDocuments(workspaceId: string | null, filter: DocumentFilter 
       setDocuments((prev) => [created, ...prev]);
       return created;
     },
-    [workspaceId, online, session.userId],
+    [workspaceId, online, userId],
   );
 
   const updateDocument = useCallback(
@@ -194,13 +196,13 @@ export function useDocuments(workspaceId: string | null, filter: DocumentFilter 
       patch: { title?: string; metadata?: Record<string, unknown> },
     ) => {
       if (!online) {
-        if (!session.userId) {
+        if (!userId) {
           setError("Cannot update document offline");
           return null;
         }
 
         try {
-          await ensureDocsVaultUnlocked(session.userId);
+          await ensureDocsVaultUnlocked(userId);
           const cached = await getOfflineDocument(id);
           if (!cached) {
             setError("Document not available offline");
@@ -250,19 +252,19 @@ export function useDocuments(workspaceId: string | null, filter: DocumentFilter 
         return null;
       }
     },
-    [online, session.userId],
+    [online, userId],
   );
 
   const deleteDocument = useCallback(
     async (id: string) => {
       if (!online) {
-        if (!session.userId) {
+        if (!userId) {
           setError("Cannot delete document offline");
           return false;
         }
 
         try {
-          await ensureDocsVaultUnlocked(session.userId);
+          await ensureDocsVaultUnlocked(userId);
           const cached = await getOfflineDocument(id);
           const localOnly = cached ? isLocalOnlyDocument(cached) : false;
           await commitOfflineDocumentDelete({
@@ -287,7 +289,7 @@ export function useDocuments(workspaceId: string | null, filter: DocumentFilter 
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
       return true;
     },
-    [online, session.userId],
+    [online, userId],
   );
 
   return {
