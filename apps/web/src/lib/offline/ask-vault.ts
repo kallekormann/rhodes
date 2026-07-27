@@ -4,6 +4,13 @@
  */
 
 import {
+  decryptJson as decryptJsonWithKey,
+  encryptJson as encryptJsonWithKey,
+  exportAesGcmKey,
+  generateAesGcmKey,
+  importAesGcmKey,
+} from "@/lib/offline/crypto";
+import {
   getOfflineDB,
   wipeAskDataForUser,
   type EncryptedBlob,
@@ -14,37 +21,6 @@ export type { EncryptedBlob };
 
 let memoryDek: CryptoKey | null = null;
 let memoryUserId: string | null = null;
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-async function generateDek(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
-    "encrypt",
-    "decrypt",
-  ]);
-}
-
-async function importDek(jwk: JsonWebKey): Promise<CryptoKey> {
-  return crypto.subtle.importKey("jwk", jwk, { name: "AES-GCM" }, true, [
-    "encrypt",
-    "decrypt",
-  ]);
-}
-
-async function exportDek(key: CryptoKey): Promise<JsonWebKey> {
-  return crypto.subtle.exportKey("jwk", key);
-}
 
 export function isVaultUnlocked(userId?: string | null): boolean {
   if (!memoryDek || !memoryUserId) return false;
@@ -69,15 +45,15 @@ export async function unlockVault(userId: string): Promise<void> {
   const existing = await db.get("vault", userId);
 
   if (existing?.dek_jwk) {
-    memoryDek = await importDek(existing.dek_jwk);
+    memoryDek = await importAesGcmKey(existing.dek_jwk);
     memoryUserId = userId;
     return;
   }
 
-  const dek = await generateDek();
+  const dek = await generateAesGcmKey();
   const record: VaultRecord = {
     id: userId,
-    dek_jwk: await exportDek(dek),
+    dek_jwk: await exportAesGcmKey(dek),
     created_at: new Date().toISOString(),
   };
   await db.put("vault", record);
@@ -87,29 +63,12 @@ export async function unlockVault(userId: string): Promise<void> {
 
 export async function encryptJson(value: unknown): Promise<EncryptedBlob> {
   if (!memoryDek) throw new Error("Ask vault is locked");
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encoded = new TextEncoder().encode(JSON.stringify(value));
-  const cipherBuf = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    memoryDek,
-    encoded,
-  );
-  return {
-    iv: bytesToBase64(iv),
-    ciphertext: bytesToBase64(new Uint8Array(cipherBuf)),
-  };
+  return encryptJsonWithKey(memoryDek, value);
 }
 
 export async function decryptJson<T>(blob: EncryptedBlob): Promise<T> {
   if (!memoryDek) throw new Error("Ask vault is locked");
-  const iv = base64ToBytes(blob.iv);
-  const ciphertext = base64ToBytes(blob.ciphertext);
-  const plainBuf = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    memoryDek,
-    ciphertext,
-  );
-  return JSON.parse(new TextDecoder().decode(plainBuf)) as T;
+  return decryptJsonWithKey<T>(memoryDek, blob);
 }
 
 export async function deleteVaultForUser(userId: string): Promise<void> {
