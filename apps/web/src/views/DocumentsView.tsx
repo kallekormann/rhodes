@@ -157,6 +157,7 @@ export function DocumentsView() {
       <div className="documents-view__scroll overlay-scrollbar">
         <div className="documents-view__inner">
           {online && (
+          <>
           <section className="documents-section">
             <SectionHeader
               title="Templates"
@@ -200,6 +201,7 @@ export function DocumentsView() {
           </section>
 
           <Divider />
+          </>
           )}
 
           <section className="documents-section">
