@@ -13,6 +13,10 @@ create table if not exists public.document_yjs_state (
 alter table public.document_yjs_state enable row level security;
 alter table public.document_yjs_state force row level security;
 
+drop policy if exists "Readers can select yjs state" on public.document_yjs_state;
+drop policy if exists "Writers can insert yjs state" on public.document_yjs_state;
+drop policy if exists "Writers can update yjs state" on public.document_yjs_state;
+
 create policy "Readers can select yjs state"
   on public.document_yjs_state for select
   using (

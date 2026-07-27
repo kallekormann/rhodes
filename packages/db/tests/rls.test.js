@@ -243,6 +243,28 @@ async function main() {
       if (editAllowed.rows.length !== 1) {
         throw new Error("RLS failure: edit share could not update document");
       }
+
+      const offlineToggleBlocked = await expectRlsDenied(client, () =>
+        client.query(
+          `update documents set offline_available = true where id = $1 returning id`,
+          [documentId],
+        ),
+      );
+      if (!offlineToggleBlocked) {
+        throw new Error(
+          "RLS failure: edit share could toggle offline_available on another user's document",
+        );
+      }
+    });
+
+    await asUser(client, userA, async () => {
+      const ownerToggle = await client.query(
+        `update documents set offline_available = true where id = $1 returning offline_available`,
+        [documentId],
+      );
+      if (ownerToggle.rows[0]?.offline_available !== true) {
+        throw new Error("RLS failure: owner could not enable offline_available");
+      }
     });
 
     await asUser(client, userB, async () => {
