@@ -6,9 +6,9 @@ import { isDocumentId } from "@/lib/documents/ids";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
 import {
   getOfflineDocument,
-  putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
+import { syncOfflineDocumentAccess } from "@/lib/offline/offline-document-access-cache";
 import { commitOfflineDocumentPatch } from "@/lib/offline/offline-document-patch";
 import {
   ensureDocsVaultUnlocked,
@@ -76,7 +76,7 @@ export function useDocument(
   documentId: string | null,
   online: boolean = true,
 ) {
-  const { session } = useApp();
+  const { session, workspaceId } = useApp();
   const [document, setDocument] = useState<DocumentRecord | null>(null);
   const [loading, setLoading] = useState(Boolean(documentId));
   const [error, setError] = useState<string | null>(null);
@@ -182,15 +182,13 @@ export function useDocument(
           setSyncStatus("synced");
           try {
             if (session.userId) {
-              await ensureDocsVaultUnlocked(session.userId);
+              await syncOfflineDocumentAccess({
+                documentId,
+                userId: session.userId,
+                activeWorkspaceId: workspaceId,
+                document: remote,
+              });
             }
-            await putOfflineDocument(
-              toOfflineDocumentRecord({
-                ...remote,
-                server_updated_at: remote.updated_at,
-                sync_status: "synced",
-              }),
-            );
           } catch (error) {
             logCacheError("cache wipe-pending failed", error);
           }
@@ -242,17 +240,13 @@ export function useDocument(
 
       try {
         if (session.userId) {
-          await ensureDocsVaultUnlocked(session.userId);
-        } else {
-          throw new Error("Cannot cache document: no userId for docs vault");
+          await syncOfflineDocumentAccess({
+            documentId,
+            userId: session.userId,
+            activeWorkspaceId: workspaceId,
+            document: remote,
+          });
         }
-        await putOfflineDocument(
-          toOfflineDocumentRecord({
-            ...remote,
-            server_updated_at: remote.updated_at,
-            sync_status: "synced",
-          }),
-        );
       } catch (error) {
         logCacheError("cache on open failed", error);
       }
@@ -270,7 +264,7 @@ export function useDocument(
       }
       setLoading(false);
     }
-  }, [documentId, online, session.userId]);
+  }, [documentId, online, session.userId, workspaceId]);
 
   useEffect(() => {
     void refresh();

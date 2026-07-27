@@ -96,6 +96,11 @@ export async function putOfflineDocument(
   }
 }
 
+export async function deleteOfflineDocument(documentId: string): Promise<void> {
+  const db = await getOfflineDB();
+  await db.delete("documents", documentId);
+}
+
 export async function setOfflineDocumentStatus(
   documentId: string,
   sync_status: OfflineSyncStatus,
