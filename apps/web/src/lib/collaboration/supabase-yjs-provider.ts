@@ -771,6 +771,28 @@ export class SupabaseYjsProvider {
     this.awareness.setLocalState(local);
   }
 
+  private canUseWebSocketPush(): boolean {
+    if (!this.channel || !this.channelJoined || this.destroyed) return false;
+    const socket = this.channel.socket;
+    return (
+      this.channel.state === "joined" &&
+      typeof socket?.isConnected === "function" &&
+      socket.isConnected()
+    );
+  }
+
+  private async handleSendFailure(error: unknown) {
+    if (isRateLimitedSendError(error)) {
+      this.awarenessSendCooldownUntil =
+        Date.now() + SupabaseYjsProvider.AWARENESS_429_COOLDOWN_MS;
+      return;
+    }
+    if (isAuthSendError(error)) {
+      this.setAuthFailed(true);
+      await this.resubscribeAfterReauth();
+    }
+  }
+
   private pruneStaleAwareness() {
     if (this.destroyed) return;
     const now = Date.now();
@@ -1091,44 +1113,40 @@ export class SupabaseYjsProvider {
       return;
     }
 
-    const payload = {
-      type: "broadcast" as const,
-      event,
-      payload: {
-        data: uint8ToBase64(bytes),
-        clientId: this.doc.clientID,
-      },
+    const broadcastPayload = {
+      data: uint8ToBase64(bytes),
+      clientId: this.doc.clientID,
     };
 
     try {
-      const result = await this.channel.send(payload);
-      const status =
-        typeof result === "object" && result !== null && "status" in result
-          ? String((result as { status?: unknown }).status ?? "")
-          : "";
-      if (status === "error") {
-        const error =
-          typeof result === "object" && result !== null && "error" in result
-            ? (result as { error?: unknown }).error
-            : result;
-        if (isRateLimitedSendError(error)) {
-          this.awarenessSendCooldownUntil =
-            Date.now() + SupabaseYjsProvider.AWARENESS_429_COOLDOWN_MS;
-        } else if (isAuthSendError(error)) {
-          this.setAuthFailed(true);
-          await this.resubscribeAfterReauth();
+      if (this.canUseWebSocketPush()) {
+        const result = await this.channel.send({
+          type: "broadcast" as const,
+          event,
+          payload: broadcastPayload,
+        });
+        const status =
+          typeof result === "object" && result !== null && "status" in result
+            ? String((result as { status?: unknown }).status ?? "")
+            : String(result ?? "");
+        if (status === "error") {
+          const error =
+            typeof result === "object" && result !== null && "error" in result
+              ? (result as { error?: unknown }).error
+              : result;
+          await this.handleSendFailure(error);
+        } else if (this.authFailed) {
+          this.setAuthFailed(false);
         }
-      } else if (this.authFailed) {
+        return;
+      }
+
+      await this.channel.httpSend(event, broadcastPayload);
+      if (this.authFailed) {
         this.setAuthFailed(false);
       }
     } catch (error) {
-      if (isRateLimitedSendError(error)) {
-        this.awarenessSendCooldownUntil =
-          Date.now() + SupabaseYjsProvider.AWARENESS_429_COOLDOWN_MS;
-      } else if (isAuthSendError(error)) {
-        this.setAuthFailed(true);
-        await this.resubscribeAfterReauth();
-      }
+      await this.handleSendFailure(error);
     }
   }
 
