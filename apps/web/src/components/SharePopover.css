@@ -1,5 +1,5 @@
 .share-popover {
-  width: min(460px, calc(100vw - 32px));
+  width: min(480px, calc(100vw - 32px));
   padding: var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -97,34 +97,78 @@
   min-width: 0;
   font-size: 14px;
   line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .share-popover__shared-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  column-gap: 10px;
+  row-gap: 4px;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 8px;
   width: 100%;
   min-width: 0;
 }
 
-.share-popover__shared-controls > .dropdown {
-  flex-shrink: 0;
+.share-popover__control {
+  min-width: 0;
+}
+
+.share-popover__control--permission {
+  grid-column: span 2;
+}
+
+.share-popover__control--offline {
+  grid-column: span 4;
+}
+
+.share-popover__control--remove {
+  grid-column: span 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.share-popover__shared-controls--no-offline .share-popover__control--permission {
+  grid-column: span 6;
+}
+
+.share-popover__control--permission .field-root {
+  display: block;
+  width: 100%;
+}
+
+.share-popover__control--permission .field-control {
+  width: 100%;
+  justify-content: space-between;
+  padding-inline: 8px;
+  font-size: 13px;
+}
+
+.share-popover__control--permission .field-control__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .share-popover__offline-checkbox {
   margin: 0;
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   align-items: center;
+  gap: 6px;
+}
+
+.share-popover__offline-checkbox .checkbox__text {
+  min-width: 0;
 }
 
 .share-popover__offline-checkbox .checkbox__label {
   font-size: 12px;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal;
 }
 
 .share-popover__offline-checkbox .checkbox__box {

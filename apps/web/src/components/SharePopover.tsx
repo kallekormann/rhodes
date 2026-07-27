@@ -249,35 +249,45 @@ export function SharePopover({ documentId, onClose, onSharesChange }: SharePopov
               return (
                 <li key={share.id} className="share-popover__shared-item">
                   <span className="share-popover__shared-label">{share.label}</span>
-                  <div className="share-popover__shared-controls">
-                    <Dropdown
-                      variant="plain"
-                      value={share.permission ?? "edit"}
-                      options={permissionOptions}
-                      onChange={(value) =>
-                        void updateSharePermission(share.id, value as SharePermission)
-                      }
-                    />
-                    {showOfflineCheckbox && (
-                      <Checkbox
-                        className="share-popover__offline-checkbox"
-                        label="Allow offline editing"
-                        checked={share.offline_editing_allowed !== false}
-                        disabled={isUpdating}
-                        onChange={(event) =>
-                          void updateShareOfflineEditing(share.id, event.target.checked)
+                  <div
+                    className={`share-popover__shared-controls${
+                      showOfflineCheckbox ? "" : " share-popover__shared-controls--no-offline"
+                    }`}
+                  >
+                    <div className="share-popover__control share-popover__control--permission">
+                      <Dropdown
+                        variant="plain"
+                        value={share.permission ?? "edit"}
+                        options={permissionOptions}
+                        onChange={(value) =>
+                          void updateSharePermission(share.id, value as SharePermission)
                         }
                       />
+                    </div>
+                    {showOfflineCheckbox && (
+                      <div className="share-popover__control share-popover__control--offline">
+                        <Checkbox
+                          className="share-popover__offline-checkbox"
+                          label="Allow offline editing"
+                          checked={share.offline_editing_allowed !== false}
+                          disabled={isUpdating}
+                          onChange={(event) =>
+                            void updateShareOfflineEditing(share.id, event.target.checked)
+                          }
+                        />
+                      </div>
                     )}
-                    <button
-                      type="button"
-                      className="share-popover__remove"
-                      aria-label={`Remove share for ${share.label}`}
-                      disabled={isUpdating}
-                      onClick={() => void removeShare(share.id)}
-                    >
-                      <Trash2 size={15} strokeWidth={1.75} />
-                    </button>
+                    <div className="share-popover__control share-popover__control--remove">
+                      <button
+                        type="button"
+                        className="share-popover__remove"
+                        aria-label={`Remove share for ${share.label}`}
+                        disabled={isUpdating}
+                        onClick={() => void removeShare(share.id)}
+                      >
+                        <Trash2 size={15} strokeWidth={1.75} />
+                      </button>
+                    </div>
                   </div>
                 </li>
               );
