@@ -6,7 +6,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 const DB_NAME = "rhodes-db";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export type EncryptedBlob = {
   iv: string;
@@ -49,6 +49,17 @@ export type OfflineOutboxRecord = {
   mutation: "patch" | "create" | "delete";
   payload: Record<string, unknown>;
   /** Server updated_at this patch is based on (optimistic concurrency). */
+  expected_updated_at: string;
+  created_at: string;
+  retries: number;
+};
+
+/** Encrypted-at-rest shape stored in the outbox object store (M1b.1). */
+export type OfflineOutboxStorageRecord = {
+  id?: number;
+  document_id: string;
+  mutation: "patch" | "create" | "delete";
+  payload_enc: EncryptedBlob;
   expected_updated_at: string;
   created_at: string;
   retries: number;
@@ -101,7 +112,7 @@ type RhodesDB = DBSchema & {
   };
   outbox: {
     key: number;
-    value: OfflineOutboxRecord;
+    value: OfflineOutboxStorageRecord;
     indexes: { "by-document": string };
   };
   /** @deprecated retained for one-time migration */
@@ -189,6 +200,18 @@ export function getOfflineDB(): Promise<IDBPDatabase<RhodesDB>> {
           });
           documents.createIndex("by-workspace", "workspace_id");
 
+          if (db.objectStoreNames.contains("outbox")) {
+            db.deleteObjectStore("outbox");
+          }
+          const outbox = db.createObjectStore("outbox", {
+            keyPath: "id",
+            autoIncrement: true,
+          });
+          outbox.createIndex("by-document", "document_id");
+        }
+
+        if (oldVersion < 4) {
+          // M1b.1 slice 4: outbox payload encryption — clear disposable plaintext rows.
           if (db.objectStoreNames.contains("outbox")) {
             db.deleteObjectStore("outbox");
           }

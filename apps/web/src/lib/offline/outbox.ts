@@ -1,8 +1,14 @@
 /**
  * Document mutation outbox — coalesce one pending PATCH per document.
+ * M1b.1: payload encrypted at rest via docs-vault.
  */
 
-import { getOfflineDB, type OfflineOutboxRecord } from "@/lib/offline/db";
+import { decryptDocsJson, encryptDocsJson } from "@/lib/offline/docs-vault";
+import {
+  getOfflineDB,
+  type OfflineOutboxRecord,
+  type OfflineOutboxStorageRecord,
+} from "@/lib/offline/db";
 
 export type DocumentPatchPayload = {
   title?: string;
@@ -11,20 +17,59 @@ export type DocumentPatchPayload = {
   metadata?: Record<string, unknown>;
 };
 
+async function toStorageRecord(
+  record: OfflineOutboxRecord,
+): Promise<OfflineOutboxStorageRecord> {
+  return {
+    id: record.id,
+    document_id: record.document_id,
+    mutation: record.mutation,
+    payload_enc: await encryptDocsJson(record.payload),
+    expected_updated_at: record.expected_updated_at,
+    created_at: record.created_at,
+    retries: record.retries,
+  };
+}
+
+async function fromStorageRecord(
+  row: OfflineOutboxStorageRecord,
+): Promise<OfflineOutboxRecord> {
+  return {
+    id: row.id,
+    document_id: row.document_id,
+    mutation: row.mutation,
+    payload: await decryptDocsJson<Record<string, unknown>>(row.payload_enc),
+    expected_updated_at: row.expected_updated_at,
+    created_at: row.created_at,
+    retries: row.retries,
+  };
+}
+
 export async function listOutbox(): Promise<OfflineOutboxRecord[]> {
   const db = await getOfflineDB();
   const rows = await db.getAll("outbox");
-  return rows.sort(
+  const decrypted = await Promise.all(rows.map(fromStorageRecord));
+  return decrypted.sort(
     (a, b) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
+}
+
+export async function getOutboxEntry(
+  id: number,
+): Promise<OfflineOutboxRecord | null> {
+  const db = await getOfflineDB();
+  const row = await db.get("outbox", id);
+  if (!row) return null;
+  return fromStorageRecord(row);
 }
 
 export async function getOutboxForDocument(
   documentId: string,
 ): Promise<OfflineOutboxRecord[]> {
   const db = await getOfflineDB();
-  return db.getAllFromIndex("outbox", "by-document", documentId);
+  const rows = await db.getAllFromIndex("outbox", "by-document", documentId);
+  return Promise.all(rows.map(fromStorageRecord));
 }
 
 /**
@@ -38,7 +83,7 @@ export async function enqueueDocumentPatch(params: {
 }): Promise<void> {
   const { documentId, patch, expectedUpdatedAt } = params;
   const db = await getOfflineDB();
-  const existing = await db.getAllFromIndex("outbox", "by-document", documentId);
+  const existing = await getOutboxForDocument(documentId);
   const pendingPatches = existing.filter((row) => row.mutation === "patch");
 
   if (pendingPatches.length === 0) {
@@ -50,7 +95,7 @@ export async function enqueueDocumentPatch(params: {
       created_at: new Date().toISOString(),
       retries: 0,
     };
-    await db.add("outbox", record);
+    await db.add("outbox", await toStorageRecord(record));
     return;
   }
 
@@ -65,11 +110,14 @@ export async function enqueueDocumentPatch(params: {
     ...patch,
   };
 
-  await db.put("outbox", {
-    ...primary,
-    payload: mergedPayload,
-    expected_updated_at: primary.expected_updated_at || expectedUpdatedAt,
-  });
+  await db.put(
+    "outbox",
+    await toStorageRecord({
+      ...primary,
+      payload: mergedPayload,
+      expected_updated_at: primary.expected_updated_at || expectedUpdatedAt,
+    }),
+  );
 
   for (const row of rest) {
     if (row.id != null) await db.delete("outbox", row.id);

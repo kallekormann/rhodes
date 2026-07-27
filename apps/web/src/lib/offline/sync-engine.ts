@@ -16,6 +16,7 @@ import {
 import {
   clearOutboxForDocument,
   enqueueDocumentPatch,
+  getOutboxEntry,
   getOutboxForDocument,
   listOutbox,
   removeOutboxEntry,
@@ -113,8 +114,7 @@ async function drainPushOutbox(): Promise<{
         break;
       }
 
-      const db = await getOfflineDB();
-      const freshEntry = await db.get("outbox", entry.id);
+      const freshEntry = await getOutboxEntry(entry.id);
       if (!freshEntry || freshEntry.mutation !== "patch" || freshEntry.id == null) {
         continue;
       }
