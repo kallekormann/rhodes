@@ -9,7 +9,7 @@ import {
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
 import { syncOfflineDocumentAccess } from "@/lib/offline/offline-document-access-cache";
-import { commitOfflineDocumentPatch } from "@/lib/offline/offline-document-patch";
+import { commitOfflineDocumentUpdate } from "@/lib/offline/offline-document-mutations";
 import {
   ensureDocsVaultUnlocked,
 } from "@/lib/offline/offline-vault-session";
@@ -344,7 +344,7 @@ export function useDocument(
           throw new Error("Cannot save offline: no userId for docs vault");
         }
         await ensureDocsVaultUnlocked(session.userId);
-        await commitOfflineDocumentPatch({
+        await commitOfflineDocumentUpdate({
           document: toOfflineDocumentRecord({
             id: nextLocal.id,
             workspace_id: nextLocal.workspace_id,

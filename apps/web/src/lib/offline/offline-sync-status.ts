@@ -5,8 +5,16 @@
 import { getOfflineDocument, setOfflineDocumentStatus } from "@/lib/offline/documents-cache";
 import { getOutboxForDocument, listOutbox } from "@/lib/offline/outbox";
 
-/** True when this document has a queued title/metadata patch. */
+/** True when this document has any queued outbox mutation. */
 export async function documentHasPendingOutbox(
+  documentId: string,
+): Promise<boolean> {
+  const rows = await getOutboxForDocument(documentId);
+  return rows.length > 0;
+}
+
+/** True when this document has a queued title/metadata patch. */
+export async function documentHasPendingPatchOutbox(
   documentId: string,
 ): Promise<boolean> {
   const rows = await getOutboxForDocument(documentId);
@@ -26,17 +34,17 @@ export async function repairPendingStatusFromOutbox(
     : [
         ...new Set(
           (await listOutbox())
-            .filter((row) => row.mutation === "patch")
+            .filter((row) =>
+              row.mutation === "patch" ||
+              row.mutation === "create" ||
+              row.mutation === "delete",
+            )
             .map((row) => row.document_id),
         ),
       ];
 
   for (const id of targetIds) {
     if (!(await documentHasPendingOutbox(id))) continue;
-    const row = await getOfflineDocument(id);
-    if (!row || row.sync_status === "pending" || row.sync_status === "conflict") {
-      continue;
-    }
     await setOfflineDocumentStatus(id, "pending");
     repaired.push(id);
   }

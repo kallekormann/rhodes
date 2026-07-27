@@ -105,6 +105,7 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
 import { lockDocsVault, unlockDocsVault } from "@/lib/offline/docs-vault";
 import { toOfflineDocumentRecord } from "@/lib/offline/documents-cache";
 import { getOutboxForDocument } from "@/lib/offline/outbox";
+import { commitOfflineDocumentUpdate } from "@/lib/offline/offline-document-mutations";
 import { commitOfflineDocumentPatch } from "@/lib/offline/offline-document-patch";
 
 describe("offline-document-patch", () => {
@@ -142,5 +143,30 @@ describe("offline-document-patch", () => {
     expect(outboxRows.size).toBe(1);
     const rows = await getOutboxForDocument(docId);
     expect(rows[0]?.payload).toEqual({ title: "Offline title" });
+  });
+
+  it("renames synced documents via patch outbox", async () => {
+    await unlockDocsVault(userId);
+
+    await commitOfflineDocumentUpdate({
+      document: toOfflineDocumentRecord({
+        id: docId,
+        workspace_id: "ws-1",
+        title: "Renamed title",
+        content: { type: "doc" },
+        content_plain: "hello",
+        updated_at: "2026-07-27T01:00:00.000Z",
+        created_at: "2026-07-27T00:00:00.000Z",
+        server_updated_at: "2026-07-27T00:00:00.000Z",
+        sync_status: "pending",
+      }),
+      patch: { title: "Renamed title" },
+      expectedUpdatedAt: "2026-07-27T00:00:00.000Z",
+    });
+
+    expect(documentRows.get(docId)?.title).toBe("Renamed title");
+    const rows = await getOutboxForDocument(docId);
+    expect(rows[0]?.mutation).toBe("patch");
+    expect(rows[0]?.payload).toEqual({ title: "Renamed title" });
   });
 });

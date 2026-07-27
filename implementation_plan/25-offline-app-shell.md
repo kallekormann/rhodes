@@ -144,9 +144,9 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
 
 ## Wave M1b.4 — Offline create/delete/rename (owned docs)
 
-1. **Offline create** — local-id document + outbox `create` mutation (the `OfflineOutboxRecord.mutation` type already supports `"create"`). Commit: `feat(offline): support creating documents while offline`.
-2. **Offline delete** — outbox `delete` mutation + optimistic removal from the local list. Commit: `feat(offline): support deleting owned documents while offline`.
-3. **Offline rename/title edit** — confirm the existing `patch` outbox path already covers this; add a test if coverage is missing rather than new code. Commit: `test(offline): cover offline rename via existing patch outbox`.
+1. **Offline create** — local-id document + outbox `create` mutation. Commit: `feat(offline): support creating documents while offline`. | done |
+2. **Offline delete** — outbox `delete` mutation + optimistic removal from the local list. Commit: `feat(offline): support deleting owned documents while offline`. | done |
+3. **Offline rename/title edit** — existing `patch` outbox path + create-outbox merge for local-only docs; test coverage added. Commit: `test(offline): cover offline rename via existing patch outbox`. | done |
 
 ## Wave M1b.5-6 — Encrypted asset + library upload queues (backlog, lower priority)
 
