@@ -20,8 +20,6 @@ export const updateDocumentSchema = z.object({
   content: z.record(z.unknown()).optional(),
   content_plain: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
-  /** Owner-only: opt document into encrypted offline caching. */
-  offline_available: z.boolean().optional(),
   /** Optimistic concurrency — reject with 409 when server is newer. */
   expected_updated_at: z.string().datetime({ offset: true }).or(z.string().min(1)).optional(),
   /** Conflict resolution — overwrite server without OCC check. */

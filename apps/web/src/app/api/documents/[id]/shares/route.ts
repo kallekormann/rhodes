@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { resolveSharedByDisplayName } from "@/lib/documents/enrich-share-context";
+import { canUserOfflineEditDocument } from "@/lib/documents/offline-editing-access";
 import { recordDocumentActivity } from "@/lib/documents/activity";
+import {
+  buildSharePatch,
+  createShareSchema,
+  resolveOfflineEditingAllowedForShare,
+  type SharePermission,
+  updateShareSchema,
+} from "@/lib/documents/share-schemas";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -14,23 +21,13 @@ type ShareRow = {
   grantee_workspace_id: string | null;
   label: string;
   shared_by: string | null;
-  permission: "read" | "edit";
+  permission: SharePermission;
+  offline_editing_allowed: boolean;
   created_at: string;
 };
 
-const sharePermissionSchema = z.enum(["read", "edit"]);
-
-const createShareSchema = z.object({
-  grantee_type: z.enum(["user", "workspace"]),
-  grantee_id: z.string().min(1),
-  label: z.string().trim().min(1),
-  permission: sharePermissionSchema.optional().default("edit"),
-});
-
-const updateSharePermissionSchema = z.object({
-  share_id: z.string().uuid(),
-  permission: sharePermissionSchema,
-});
+const SHARE_FIELDS =
+  "id, grantee_type, grantee_user_id, grantee_workspace_id, label, shared_by, permission, offline_editing_allowed, created_at";
 
 function pickIncomingShare(
   shares: ShareRow[],
@@ -57,6 +54,18 @@ function pickIncomingShare(
   return null;
 }
 
+async function getDocumentOwnerId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  documentId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("documents")
+    .select("created_by")
+    .eq("id", documentId)
+    .maybeSingle();
+  return data?.created_by ?? null;
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const { searchParams } = new URL(request.url);
@@ -75,9 +84,7 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { data, error } = await supabase
     .from("document_shares")
-    .select(
-      "id, grantee_type, grantee_user_id, grantee_workspace_id, label, shared_by, permission, created_at",
-    )
+    .select(SHARE_FIELDS)
     .eq("document_id", id)
     .order("created_at", { ascending: false });
 
@@ -122,12 +129,32 @@ export async function GET(request: Request, context: RouteContext) {
     }
   }
 
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("created_by")
+    .eq("id", id)
+    .maybeSingle();
+
+  const canOfflineEdit = canUserOfflineEditDocument({
+    userId: user.id,
+    createdBy: doc?.created_by,
+    incomingShare: incomingShare
+      ? {
+          permission: incomingShare.permission,
+          offline_editing_allowed: incomingShare.offline_editing_allowed,
+        }
+      : null,
+  });
+
   return withSecurityHeaders(
     NextResponse.json({
       shares,
       shared_by_user: sharedByUser,
       incoming_permission: incomingShare?.permission ?? null,
+      incoming_offline_editing_allowed:
+        incomingShare?.offline_editing_allowed ?? null,
       can_write: canWrite,
+      can_offline_edit: canOfflineEdit,
     }),
   );
 }
@@ -145,6 +172,10 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { grantee_type: granteeType, grantee_id: granteeId, label, permission } =
     parsed.data;
+  const offlineEditingAllowed = resolveOfflineEditingAllowedForShare(
+    permission,
+    parsed.data.offline_editing_allowed,
+  );
 
   const supabase = await createClient();
   const {
@@ -163,6 +194,7 @@ export async function POST(request: Request, context: RouteContext) {
     grantee_type: granteeType,
     label,
     permission,
+    offline_editing_allowed: offlineEditingAllowed,
     grantee_user_id: granteeType === "user" ? granteeId : null,
     grantee_workspace_id: granteeType === "workspace" ? granteeId : null,
   };
@@ -170,9 +202,7 @@ export async function POST(request: Request, context: RouteContext) {
   const { data, error } = await supabase
     .from("document_shares")
     .insert(insert)
-    .select(
-      "id, grantee_type, grantee_user_id, grantee_workspace_id, label, permission, created_at",
-    )
+    .select(SHARE_FIELDS)
     .single();
 
   if (error || !data) {
@@ -211,7 +241,7 @@ export async function POST(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const body = await request.json().catch(() => null);
-  const parsed = updateSharePermissionSchema.safeParse(body);
+  const parsed = updateShareSchema.safeParse(body);
 
   if (!parsed.success) {
     return withSecurityHeaders(
@@ -219,7 +249,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const { share_id: shareId, permission } = parsed.data;
+  const patch = buildSharePatch(parsed.data);
 
   const supabase = await createClient();
   const {
@@ -232,14 +262,24 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  if (parsed.data.offline_editing_allowed !== undefined) {
+    const ownerId = await getDocumentOwnerId(supabase, id);
+    if (ownerId !== user.id) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Only the document owner can change offline editing for shares" },
+          { status: 403 },
+        ),
+      );
+    }
+  }
+
   const { data, error } = await supabase
     .from("document_shares")
-    .update({ permission })
-    .eq("id", shareId)
+    .update(patch)
+    .eq("id", parsed.data.share_id)
     .eq("document_id", id)
-    .select(
-      "id, grantee_type, grantee_user_id, grantee_workspace_id, label, permission, created_at",
-    )
+    .select(SHARE_FIELDS)
     .maybeSingle();
 
   if (error || !data) {

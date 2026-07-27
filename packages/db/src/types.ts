@@ -21,7 +21,6 @@ export interface Database {
           embedding_model_version: string | null;
           detected_language: string | null;
           metadata: Json | null;
-          offline_available: boolean;
           updated_at: string;
           created_at: string;
         };

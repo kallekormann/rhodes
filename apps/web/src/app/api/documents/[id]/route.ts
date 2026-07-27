@@ -21,7 +21,7 @@ import { createClient } from "@/lib/supabase/server";
 type RouteContext = { params: Promise<{ id: string }> };
 
 const DOCUMENT_FIELDS =
-  "id, workspace_id, created_by, title, content, content_plain, metadata, offline_available, updated_at, created_at";
+  "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
 
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
@@ -82,7 +82,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { data: existing, error: existingError } = await supabase
     .from("documents")
     .select(
-      "id, workspace_id, created_by, title, content, content_plain, metadata, offline_available, updated_at",
+      "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -128,18 +128,6 @@ export async function PATCH(request: Request, context: RouteContext) {
   const patch: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-
-  if (parsed.data.offline_available !== undefined) {
-    if (existing.created_by !== user.id) {
-      return withSecurityHeaders(
-        NextResponse.json(
-          { error: "Only the document owner can change offline availability" },
-          { status: 403 },
-        ),
-      );
-    }
-    patch.offline_available = parsed.data.offline_available;
-  }
 
   if (parsed.data.title !== undefined) patch.title = parsed.data.title;
   if (parsed.data.metadata !== undefined) patch.metadata = parsed.data.metadata;

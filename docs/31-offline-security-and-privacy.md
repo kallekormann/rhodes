@@ -7,7 +7,7 @@
 
 ## Context
 
-M1 shipped open-document offline editing with a **plaintext** IndexedDB cache — acceptable only as a temporary state, per the roadmap's locked principle: *"Encrypt everything cached — all offline IDB data AES-GCM, private and team docs."* M1b makes offline opt-in and broader (owner-controlled app shell, not just the currently-open document), which means the plaintext window gets larger unless encryption lands first. This doc records the security design decisions M1b.1 implements.
+M1 shipped open-document offline editing with a **plaintext** IndexedDB cache — acceptable only as a temporary state, per the roadmap's locked principle: *"Encrypt everything cached — all offline IDB data AES-GCM, private and team docs."* M1b extends offline to the app shell with **per-share control**: edit access implies offline editing by default, and the document owner can opt out per grantee in the share workflow.
 
 ## Threat model
 

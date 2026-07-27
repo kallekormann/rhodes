@@ -244,26 +244,52 @@ async function main() {
         throw new Error("RLS failure: edit share could not update document");
       }
 
-      const offlineToggleBlocked = await expectRlsDenied(client, () =>
-        client.query(
-          `update documents set offline_available = true where id = $1 returning id`,
-          [documentId],
-        ),
+      const offlineToggle = await client.query(
+        `update document_shares
+         set offline_editing_allowed = false
+         where document_id = $1 and grantee_user_id = $2
+         returning id`,
+        [documentId, userB],
       );
-      if (!offlineToggleBlocked) {
+      if (offlineToggle.rows.length > 0) {
         throw new Error(
-          "RLS failure: edit share could toggle offline_available on another user's document",
+          "RLS failure: edit share recipient could toggle offline_editing_allowed",
         );
       }
     });
 
     await asUser(client, userA, async () => {
       const ownerToggle = await client.query(
-        `update documents set offline_available = true where id = $1 returning offline_available`,
+        `update document_shares
+         set offline_editing_allowed = false
+         where document_id = $1 and grantee_user_id = $2
+         returning offline_editing_allowed`,
+        [documentId, userB],
+      );
+      if (ownerToggle.rows[0]?.offline_editing_allowed !== false) {
+        throw new Error(
+          "RLS failure: owner could not disable offline_editing_allowed on share",
+        );
+      }
+
+      const canOffline = await client.query(
+        `select public.can_offline_edit_document($1) as allowed`,
         [documentId],
       );
-      if (ownerToggle.rows[0]?.offline_available !== true) {
-        throw new Error("RLS failure: owner could not enable offline_available");
+      if (canOffline.rows[0]?.allowed !== true) {
+        throw new Error("RLS failure: owner lost offline edit access");
+      }
+    });
+
+    await asUser(client, userB, async () => {
+      const canOffline = await client.query(
+        `select public.can_offline_edit_document($1) as allowed`,
+        [documentId],
+      );
+      if (canOffline.rows[0]?.allowed !== false) {
+        throw new Error(
+          "RLS failure: share recipient still has offline edit after owner opt-out",
+        );
       }
     });
 

@@ -14,7 +14,8 @@ M1 delivered **editing an already-open document offline**. M1b delivers the **en
 
 ## Locked design constraints (from roadmap)
 
-- Rhodes is **online-first**; offline is **opt-in, per document, owner-controlled**.
+- Rhodes is **online-first**; offline editing for collaborators is **allowed by default when edit access is granted**, with **per-share opt-out** controlled by the document owner in the share workflow.
+- **Owned documents** are offline-eligible by default on the owner's device (no extra toggle).
 - **Encrypt everything** cached in IndexedDB — body, metadata, outbox, index, assets. See [docs/31-offline-security-and-privacy.md](../docs/31-offline-security-and-privacy.md) for the full threat model and key derivation decision.
 - Reuse the existing Yjs + conflict review system from M1 — M1b adds shell, list, and crypto, **not** a new merge model.
 - **Single storage location:** all offline document data lives in `rhodes-db` only (see the IndexedDB storage audit in [docs/31-offline-security-and-privacy.md](../docs/31-offline-security-and-privacy.md)) — no separate per-document IndexedDB databases.
@@ -125,12 +126,14 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
 
 ---
 
-## Wave M1b.2 — Owner-only "Available offline" toggle
+## Wave M1b.2 — Per-share offline editing control
 
-1. **DB migration** — add `documents.offline_available boolean not null default false`; RLS/policy update restricting the column's update to `created_by = auth.uid()`. Commit: `feat(db): add owner-only offline_available flag to documents`.
-2. **API** — extend `PATCH /api/documents/[id]` (or a small dedicated route, whichever keeps the diff smaller) to accept the toggle, with a server-enforced owner check even though RLS already blocks it (defense in depth). Commit: `feat(api): support offline_available toggle, owner-only`.
-3. **UI** — toggle in the document menu/settings, visible only when `created_by === currentUser`. Own small component, not inlined into an existing large view. Commit: `feat(editor): add owner-only Available offline toggle`.
-4. **Wiring** — toggling on triggers an eager encrypted fetch+cache (reuses the M1b.1 encrypted `putOfflineDocument`); toggling off purges that document from IDB. Commit: `feat(offline): eager cache and purge on offline_available toggle`.
+**Design (July 27, 2026):** Offline editing is **on by default** for edit shares. The document owner opts out per grantee in the share UI (`SharePopover` — checkbox on each share row, checked by default when permission is **Can edit**). Owned documents are always offline-eligible for the owner. Read shares never allow offline editing. Supersedes the earlier per-document `documents.offline_available` approach (removed in migration 00047).
+
+1. **DB migration** — add `document_shares.offline_editing_allowed boolean not null default true` (forced `false` when `permission = 'read'`); owner-only trigger on updates; `can_offline_edit_document(doc_id)` RPC; drop `documents.offline_available`. Commit: `feat(db): per-share offline_editing_allowed with owner opt-out`.
+2. **API** — extend `POST/PATCH /api/documents/[id]/shares` for `offline_editing_allowed`; expose `can_offline_edit` + `incoming_offline_editing_allowed` on GET; remove `offline_available` from document PATCH. Commit: `feat(api): per-share offline editing control on document shares`.
+3. **UI** — checkbox per share row in `SharePopover` ("Allow offline editing"), visible to document owner only; default checked for edit shares. Commit: `feat(sharing): add per-share Allow offline editing checkbox`.
+4. **Wiring** — when a user gains offline access (new share, owner re-enables, or opening owned doc), eager encrypted cache via `putOfflineDocument`; when access is revoked or owner opts out, purge from that user's IDB. Commit: `feat(offline): cache and purge on offline share access changes`.
 
 ## Wave M1b.3 — Offline shell + `OfflineUnavailable`
 
@@ -143,7 +146,7 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
    - **Note:** this slice has no dependency on encryption or the rest of M1b.3 — it can ship standalone, any time after this doc is written, since `useOnlineStatus` already exists.
 1. **`OfflineUnavailable` component** — shared empty-state component, consistent with the design system, own file. Commit: `feat(components): add OfflineUnavailable placeholder`.
 2. **Gate online-only surfaces** — Views, Library, Ask, Insights, Chat, Settings routes render `OfflineUnavailable` when `useOnlineStatus` reports offline. One surface per commit to keep review small (e.g. `feat(shell): gate Library behind offline check`, repeated per surface — do not gate all surfaces in one commit).
-3. **Offline document list** — sourced from the `rhodes-db` `documents` IDB index (owned + `offline_available` docs only). Commit: `feat(offline): render document list from IndexedDB when offline`.
+3. **Offline document list** — sourced from the `rhodes-db` `documents` IDB index (owned docs + shared docs where the user's grant has `offline_editing_allowed`). Commit: `feat(offline): render document list from IndexedDB when offline`.
 
 ## Wave M1b.4 — Offline create/delete/rename (owned docs)
 
@@ -179,7 +182,7 @@ Full slice breakdown for M1b.5-6 is deferred until M1b.1-4 ship, since both reus
 
 1. All IndexedDB document data (body, metadata, outbox, Yjs snapshots, live Yjs state) is encrypted at rest — no plaintext document content anywhere in IndexedDB.
 2. Single storage location confirmed — no per-document `y-indexeddb` databases remain, verified by the M1b.1 slice 12 grep check.
-3. Owner-only offline toggle works and is enforced both client-side and server-side (RLS + API check).
+3. Owner-only per-share offline opt-out works and is enforced both client-side and server-side (API + DB trigger); edit shares default to offline allowed.
 4. Offline shell renders a usable document list and blocks online-only surfaces cleanly.
 5. Offline create/delete/rename work for owned documents without regressing the M1 conflict/collaboration system.
 6. `pnpm test:offline` green throughout; full manual M1 UAT re-run clean after the M1b.1 persistence adapter swap.
