@@ -20,8 +20,7 @@ export type DocumentPatchPayload = {
 async function toStorageRecord(
   record: OfflineOutboxRecord,
 ): Promise<OfflineOutboxStorageRecord> {
-  return {
-    id: record.id,
+  const storage: OfflineOutboxStorageRecord = {
     document_id: record.document_id,
     mutation: record.mutation,
     payload_enc: await encryptDocsJson(record.payload),
@@ -29,6 +28,16 @@ async function toStorageRecord(
     created_at: record.created_at,
     retries: record.retries,
   };
+  // Omit id for new rows — explicit `id: undefined` breaks IDB autoIncrement keyPath.
+  if (record.id != null) storage.id = record.id;
+  return storage;
+}
+
+/** @internal used by offline-document-patch */
+export async function outboxToStorageRecord(
+  record: OfflineOutboxRecord,
+): Promise<OfflineOutboxStorageRecord> {
+  return toStorageRecord(record);
 }
 
 async function fromStorageRecord(

@@ -102,6 +102,8 @@ async function drainPushOutbox(): Promise<{
   let pushed = 0;
   let stoppedOnNetwork = false;
 
+  await repairOrphanSyncedOutbox();
+
   while (navigator.onLine) {
     const queue = await listOutbox();
     if (queue.length === 0) break;
@@ -125,24 +127,11 @@ async function drainPushOutbox(): Promise<{
       try {
         response = await patchDocument(freshEntry.document_id, {
           ...patch,
-          expected_updated_at: freshEntry.expected_updated_at,
+          force: true,
         });
       } catch {
         stoppedOnNetwork = true;
         break;
-      }
-
-      if (response.status === 409) {
-        // Rare for title/metadata — last write wins rather than a conflict UI.
-        try {
-          response = await patchDocument(freshEntry.document_id, {
-            ...patch,
-            force: true,
-          });
-        } catch {
-          stoppedOnNetwork = true;
-          break;
-        }
       }
 
       if (!response.ok) {
@@ -164,31 +153,53 @@ async function drainPushOutbox(): Promise<{
           }
         | undefined;
 
-      if (serverDoc) {
-        await putOfflineDocument({
-          id: serverDoc.id,
-          workspace_id: serverDoc.workspace_id,
-          title: serverDoc.title,
-          content: serverDoc.content,
-          content_plain: serverDoc.content_plain,
-          metadata: serverDoc.metadata,
-          server_updated_at: serverDoc.updated_at,
-          updated_at: serverDoc.updated_at,
-          created_at: serverDoc.created_at,
-          sync_status: "synced",
-        });
-      } else {
-        await setOfflineDocumentStatus(freshEntry.document_id, "synced");
-      }
-
+      // Drop the outbox row as soon as the server accepted the patch. Cache
+      // updates are best-effort — a failed put must not leave a stale outbox.
       await removeOutboxEntry(freshEntry.id);
       pushed += 1;
       progressed = true;
-      emit({
-        type: "status",
-        documentId: freshEntry.document_id,
-        status: "synced",
-      });
+
+      try {
+        if (serverDoc) {
+          await putOfflineDocument({
+            id: serverDoc.id,
+            workspace_id: serverDoc.workspace_id,
+            title: serverDoc.title,
+            content: serverDoc.content,
+            content_plain: serverDoc.content_plain,
+            metadata: serverDoc.metadata,
+            server_updated_at: serverDoc.updated_at,
+            updated_at: serverDoc.updated_at,
+            created_at: serverDoc.created_at,
+            sync_status: "synced",
+          });
+        } else {
+          await setOfflineDocumentStatus(freshEntry.document_id, "synced");
+        }
+        emit({
+          type: "status",
+          documentId: freshEntry.document_id,
+          status: "synced",
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            "[sync-engine] cache update after push failed",
+            freshEntry.document_id,
+            error,
+          );
+        }
+        try {
+          await setOfflineDocumentStatus(freshEntry.document_id, "synced");
+          emit({
+            type: "status",
+            documentId: freshEntry.document_id,
+            status: "synced",
+          });
+        } catch {
+          /* IndexedDB unavailable */
+        }
+      }
     }
 
     if (stoppedOnNetwork || !progressed) break;
@@ -201,6 +212,24 @@ async function drainPushOutbox(): Promise<{
   return { pushed, stoppedOnNetwork };
 }
 
+/**
+ * documents.sync_status is synced but an outbox row was never removed — e.g.
+ * cache put failed after a successful PATCH, or pullWorkspaceDocuments refreshed
+ * the cache without draining.
+ */
+export async function repairOrphanSyncedOutbox(): Promise<number> {
+  let repaired = 0;
+  const queue = await listOutbox();
+  for (const entry of queue) {
+    if (entry.id == null || entry.mutation !== "patch") continue;
+    const doc = await getOfflineDocument(entry.document_id);
+    if (doc?.sync_status !== "synced") continue;
+    await removeOutboxEntry(entry.id);
+    repaired += 1;
+  }
+  return repaired;
+}
+
 /** Read local sync status for UI. */
 export async function getDocumentSyncStatus(
   documentId: string,
@@ -210,6 +239,10 @@ export async function getDocumentSyncStatus(
   if (row.sync_status === "pending") {
     const outbox = await getOutboxForDocument(documentId);
     if (outbox.length === 0) return "synced";
+  }
+  if (row.sync_status === "synced") {
+    const outbox = await getOutboxForDocument(documentId);
+    if (outbox.length > 0) return "pending";
   }
   return row.sync_status;
 }

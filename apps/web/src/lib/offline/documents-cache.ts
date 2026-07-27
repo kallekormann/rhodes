@@ -37,6 +37,13 @@ async function toStorageRecord(
   };
 }
 
+/** @internal used by offline-document-patch */
+export async function documentToStorageRecord(
+  record: OfflineDocumentRecord,
+): Promise<OfflineDocumentStorageRecord> {
+  return toStorageRecord(record);
+}
+
 async function fromStorageRecord(
   row: OfflineDocumentStorageRecord,
 ): Promise<OfflineDocumentRecord> {
@@ -78,8 +85,15 @@ export async function getOfflineDocument(
 export async function putOfflineDocument(
   record: OfflineDocumentRecord,
 ): Promise<void> {
+  const storage = await toStorageRecord(record);
   const db = await getOfflineDB();
-  await db.put("documents", await toStorageRecord(record));
+  await db.put("documents", storage);
+  const verified = await db.get("documents", storage.id);
+  if (!verified) {
+    throw new Error(
+      `[documents-cache] put verify failed for document ${storage.id}`,
+    );
+  }
 }
 
 export async function setOfflineDocumentStatus(

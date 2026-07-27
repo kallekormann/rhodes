@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useApp } from "@/context/AppContext";
 import { isDocumentId } from "@/lib/documents/ids";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
 import {
@@ -8,7 +9,9 @@ import {
   putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
-import { enqueueDocumentPatch, getOutboxForDocument } from "@/lib/offline/outbox";
+import { commitOfflineDocumentPatch } from "@/lib/offline/offline-document-patch";
+import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
+import { getOutboxForDocument } from "@/lib/offline/outbox";
 import {
   pushOutbox,
   reconcileStalePendingOnOpen,
@@ -58,7 +61,11 @@ function recordFromOffline(row: {
   };
 }
 
-export function useDocument(documentId: string | null) {
+export function useDocument(
+  documentId: string | null,
+  online: boolean = true,
+) {
+  const { session } = useApp();
   const [document, setDocument] = useState<DocumentRecord | null>(null);
   const [loading, setLoading] = useState(Boolean(documentId));
   const [error, setError] = useState<string | null>(null);
@@ -129,11 +136,19 @@ export function useDocument(documentId: string | null) {
 
       const remote = data.document as DocumentRecord;
 
+      let freshCached = cached;
+      try {
+        freshCached = await getOfflineDocument(documentId);
+      } catch {
+        /* IndexedDB unavailable */
+      }
+
       if (
-        cached &&
-        (cached.sync_status === "pending" || cached.sync_status === "conflict")
+        freshCached &&
+        (freshCached.sync_status === "pending" ||
+          freshCached.sync_status === "conflict")
       ) {
-        const localPlain = (cached.content_plain ?? "").trim();
+        const localPlain = (freshCached.content_plain ?? "").trim();
         const remotePlain = (remote.content_plain ?? "").trim();
         // Never prefer an empty pending wipe over a non-empty server document.
         if (localPlain.length === 0 && remotePlain.length > 0) {
@@ -158,7 +173,7 @@ export function useDocument(documentId: string | null) {
         const reconciled = await reconcileStalePendingOnOpen({
           documentId,
           remote,
-          cached,
+          cached: freshCached,
         });
         if (reconciled) {
           setDocument(reconciled.document);
@@ -168,7 +183,10 @@ export function useDocument(documentId: string | null) {
           return;
         }
 
-        // Prefer local pending/conflict over remote until resolved.
+        setDocument(recordFromOffline(freshCached));
+        serverUpdatedAtRef.current =
+          freshCached.server_updated_at || freshCached.updated_at;
+        setSyncStatus(freshCached.sync_status);
         setLoading(false);
         return;
       }
@@ -238,8 +256,23 @@ export function useDocument(documentId: string | null) {
     async (patch: DocumentPatch) => {
       if (!documentId) return null;
 
-      const prev = documentRef.current;
+      let prev = documentRef.current;
       if (!prev) {
+        try {
+          const cached = await getOfflineDocument(documentId);
+          if (cached) {
+            prev = recordFromOffline(cached);
+            documentRef.current = prev;
+          }
+        } catch {
+          /* IndexedDB unavailable */
+        }
+      }
+
+      if (!prev) {
+        if (!online) {
+          return null;
+        }
         const response = await fetch(`/app/api/documents/${documentId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -263,8 +296,11 @@ export function useDocument(documentId: string | null) {
         serverUpdatedAtRef.current || prev.updated_at;
 
       try {
-        await putOfflineDocument(
-          toOfflineDocumentRecord({
+        if (session.userId) {
+          await unlockOfflineVaults(session.userId);
+        }
+        await commitOfflineDocumentPatch({
+          document: toOfflineDocumentRecord({
             id: nextLocal.id,
             workspace_id: nextLocal.workspace_id,
             title: nextLocal.title,
@@ -276,14 +312,16 @@ export function useDocument(documentId: string | null) {
             server_updated_at: expectedUpdatedAt,
             sync_status: "pending",
           }),
-        );
-        await enqueueDocumentPatch({
-          documentId,
           patch,
           expectedUpdatedAt,
         });
         setSyncStatus("pending");
-      } catch {
+      } catch (error) {
+        if (!online) {
+          console.error("[useDocument] offline save failed", error);
+          return null;
+        }
+
         const response = await fetch(`/app/api/documents/${documentId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -302,7 +340,7 @@ export function useDocument(documentId: string | null) {
         return next;
       }
 
-      if (typeof navigator !== "undefined" && navigator.onLine) {
+      if (online) {
         let pushResult = await pushOutbox();
         for (let attempt = 0; attempt < 6; attempt++) {
           const pending = await getOutboxForDocument(documentId);
@@ -324,7 +362,7 @@ export function useDocument(documentId: string | null) {
 
       return nextLocal;
     },
-    [documentId],
+    [documentId, online, session.userId],
   );
 
   const applyLocal = useCallback(
@@ -348,7 +386,9 @@ export function useDocument(documentId: string | null) {
       setDocument((prev) => {
         if (!prev) return prev;
         const resolved = typeof patch === "function" ? patch(prev) : patch;
-        return { ...prev, ...resolved };
+        const next = { ...prev, ...resolved };
+        documentRef.current = next;
+        return next;
       });
     },
     [],

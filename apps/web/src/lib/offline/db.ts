@@ -141,6 +141,11 @@ type RhodesDB = DBSchema & {
 
 let dbPromise: Promise<IDBPDatabase<RhodesDB>> | null = null;
 
+/** Drop cached connection after DevTools DB delete, HMR, or browser termination. */
+export function resetOfflineDBConnection(): void {
+  dbPromise = null;
+}
+
 export function getOfflineDB(): Promise<IDBPDatabase<RhodesDB>> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("IndexedDB is browser-only"));
@@ -222,9 +227,18 @@ export function getOfflineDB(): Promise<IDBPDatabase<RhodesDB>> {
           outbox.createIndex("by-document", "document_id");
         }
       },
+      terminated() {
+        resetOfflineDBConnection();
+      },
     });
   }
   return dbPromise;
+}
+
+if (typeof module !== "undefined" && (module as { hot?: { dispose: (cb: () => void) => void } }).hot) {
+  (module as { hot: { dispose: (cb: () => void) => void } }).hot.dispose(() => {
+    resetOfflineDBConnection();
+  });
 }
 
 export function activeConversationMetaKey(

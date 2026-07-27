@@ -158,11 +158,12 @@ export function useEditorSession() {
         ? requestedId
         : null,
   );
+  const { online } = useOnlineStatus(
+    isEditingTemplate ? null : (resolvedWorkspaceId ?? null),
+  );
   const { document, loading, error, save, refresh, applyLocal } = useDocument(
     isEditingTemplate ? null : resolvedId,
-  );
-  const { online } = useOnlineStatus(
-    isEditingTemplate ? null : (document?.workspace_id ?? resolvedWorkspaceId),
+    online,
   );
   const [templateRecord, setTemplateRecord] = useState<TemplateDetail | null>(
     null,
@@ -631,13 +632,13 @@ export function useEditorSession() {
         showToast("Couldn't save document", "error");
         return null;
       }
-      if (typeof navigator === "undefined" || navigator.onLine) {
+      if (online) {
         markSynced(result.updated_at);
         setIsDirty(false);
       }
       return result;
     },
-    [markSynced, save, showToast],
+    [markSynced, online, save, showToast],
   );
 
   contentPlainRef.current = contentPlain;
@@ -708,7 +709,7 @@ export function useEditorSession() {
     const cancelPendingSave = () => {
       debouncedSaveCommentsRef.current?.flush();
       debouncedSaveContentRef.current?.cancel();
-      debouncedSaveTitleRef.current?.cancel();
+      debouncedSaveTitleRef.current?.flush();
     };
     window.addEventListener("online", flushPendingSave, { capture: true });
     window.addEventListener("offline", cancelPendingSave, { capture: true });
