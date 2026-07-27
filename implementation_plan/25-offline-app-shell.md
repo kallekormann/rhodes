@@ -113,6 +113,16 @@ Verified in [useYjsCollaboration.ts](../apps/web/src/hooks/useYjsCollaboration.t
     - **Commit:** `test(offline): add encryption round-trip coverage for documents, outbox, snapshots, and yjs_state`
     - **Verify:** confirm vault lock on logout also locks the docs key; confirm account delete wipes `yjs_state` along with the rest; grep the codebase for any remaining direct `indexedDB.open`/`IndexeddbPersistence` calls outside `db.ts` and the new adapter — there should be none.
 
+### M1b.1 verification checklist (slice 12)
+
+| Check | Status |
+|-------|--------|
+| `pnpm test:offline` green (documents, outbox, snapshots, `yjs_state` round-trips) | done |
+| `lockOfflineVaults()` (logout) locks docs DEK | done — `offline-storage-invariants.test.ts` |
+| `clearOfflineCache()` wipes `yjs_state` | done — `offline-storage-invariants.test.ts` |
+| No `IndexeddbPersistence` / `y-indexeddb` in app code | done — grep July 27, 2026 |
+| TD-003 marked done in [techncial-dept.md](../techncial-dept.md) | done |
+
 ---
 
 ## Wave M1b.2 — Owner-only "Available offline" toggle

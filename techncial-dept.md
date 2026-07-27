@@ -33,7 +33,7 @@
 |----|------|----------|--------|-----------|---------|
 | [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
 | [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
-| [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | planned | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
+| [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | done | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
 
 *(Add new rows at the bottom; keep IDs stable.)*
 
@@ -102,10 +102,10 @@ Logs are still useful while M1b persistence/encryption work is active. Clean up 
 
 ## TD-003 — y-indexeddb per-document plaintext store
 
-**Status:** planned (fix in M1b.1 slices 6–11)  
+**Status:** done (shipped in M1b.1 slices 6–11, verified in slice 12)  
 **Severity:** Medium — live Yjs CRDT bytes sit in a second, unencrypted IndexedDB database outside `rhodes-db`  
 **Discovered:** M1b.1 slice 3 manual QA (July 27, 2026)  
-**Not a slice 3 regression** — slice 3 correctly encrypts `rhodes-db.documents`; this is the pre-existing third storage location from Phase 09.
+**Not a slice 3 regression** — slice 3 correctly encrypts `rhodes-db.documents`; this was the pre-existing third storage location from Phase 09.
 
 ### What you see in DevTools
 
@@ -122,9 +122,9 @@ Meanwhile `rhodes-db` → `documents` holds the **encrypted JSON snapshot** (`co
 
 On online reload the hook calls [clearYjsIndexedDbPersistence](apps/web/src/lib/collaboration/yjs-idb.ts) **then immediately** constructs a new `IndexeddbPersistence(documentId, doc)`. The UUID database is deleted and recreated for each editor session — it is expected to exist while the doc is open.
 
-### Fix (planned)
+### Fix (shipped)
 
-[M1b.1 slices 6–11](implementation_plan/25-offline-app-shell.md): replace `IndexeddbPersistence` with `RhodesYjsPersistence` writing encrypted state to `rhodes-db` → `yjs_state` only; remove `y-indexeddb` and run legacy per-doc DB cleanup (slice 10).
+[M1b.1 slices 6–11](implementation_plan/25-offline-app-shell.md): replaced `IndexeddbPersistence` with `RhodesYjsPersistence` writing encrypted state to `rhodes-db` → `yjs_state` only; removed `y-indexeddb` dependency and added legacy per-doc DB cleanup (slice 10). Grep confirms no remaining `IndexeddbPersistence` / `y-indexeddb` usage in app code (slice 12).
 
 ---
 
