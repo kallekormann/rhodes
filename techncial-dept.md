@@ -33,6 +33,7 @@
 |----|------|----------|--------|-----------|---------|
 | [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
 | [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
+| [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | planned | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
 
 *(Add new rows at the bottom; keep IDs stable.)*
 
@@ -96,6 +97,34 @@ Verbose logging added during Phase 09 conflict implementation still prints durin
 ### Why deferred
 
 Logs are still useful while M1b persistence/encryption work is active. Clean up together with TD-001 when conflict flow is re-UAT’d as a batch.
+
+---
+
+## TD-003 — y-indexeddb per-document plaintext store
+
+**Status:** planned (fix in M1b.1 slices 6–11)  
+**Severity:** Medium — live Yjs CRDT bytes sit in a second, unencrypted IndexedDB database outside `rhodes-db`  
+**Discovered:** M1b.1 slice 3 manual QA (July 27, 2026)  
+**Not a slice 3 regression** — slice 3 correctly encrypts `rhodes-db.documents`; this is the pre-existing third storage location from Phase 09.
+
+### What you see in DevTools
+
+When a document is open, IndexedDB contains a **separate database named the document UUID** (e.g. `c4d00a5c-3057-4bf6-8feb-5c43864693f2`), created by `y-indexeddb`'s `IndexeddbPersistence` in [useYjsCollaboration.ts](apps/web/src/hooks/useYjsCollaboration.ts):
+
+| Store | Contents |
+|-------|----------|
+| `updates` | Plaintext `Uint8Array` Yjs update log for the live editing session |
+| `custom` | y-indexeddb metadata (often empty) |
+
+Meanwhile `rhodes-db` → `documents` holds the **encrypted JSON snapshot** (`content_enc`, `content_plain_enc`, `metadata_enc`) — that part is working as designed.
+
+### Why it still appears while online
+
+On online reload the hook calls [clearYjsIndexedDbPersistence](apps/web/src/lib/collaboration/yjs-idb.ts) **then immediately** constructs a new `IndexeddbPersistence(documentId, doc)`. The UUID database is deleted and recreated for each editor session — it is expected to exist while the doc is open.
+
+### Fix (planned)
+
+[M1b.1 slices 6–11](implementation_plan/25-offline-app-shell.md): replace `IndexeddbPersistence` with `RhodesYjsPersistence` writing encrypted state to `rhodes-db` → `yjs_state` only; remove `y-indexeddb` and run legacy per-doc DB cleanup (slice 10).
 
 ---
 
