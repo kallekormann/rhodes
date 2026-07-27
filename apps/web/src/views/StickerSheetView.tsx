@@ -34,6 +34,7 @@ import { IconLabelButton } from "@/components/IconLabelButton";
 import { Input } from "@/components/Input";
 import { ItemList, ListRow } from "@/components/ListRow";
 import { Modal } from "@/components/Modal";
+import { OfflineGate } from "@/components/OfflineGate";
 import { NavLink } from "@/components/NavLink";
 import { NeutralPill } from "@/components/NeutralPill";
 import { Popover } from "@/components/Popover";
@@ -109,6 +110,7 @@ export function StickerSheetView() {
   const listDemo = documents.slice(0, 3);
 
   return (
+    <OfflineGate title="Design system preview unavailable offline">
     <div className="sticker-sheet">
       <header className="sticker-sheet__header">
         <h1 className="type-page-title">Rhodes Design System</h1>
@@ -750,5 +752,6 @@ export function StickerSheetView() {
         </div>
       </section>
     </div>
+    </OfflineGate>
   );
 }

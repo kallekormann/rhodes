@@ -12,6 +12,7 @@ import { Input } from "@/components/Input";
 import { ItemList, ListRow } from "@/components/ListRow";
 import { Modal } from "@/components/Modal";
 import { NavLink } from "@/components/NavLink";
+import { OfflineGate } from "@/components/OfflineGate";
 import { RadioGroup } from "@/components/Radio";
 import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
@@ -619,6 +620,10 @@ export function SettingsView() {
   }));
 
   return (
+    <OfflineGate
+      title="Settings unavailable offline"
+      message="Account and workspace settings need an internet connection."
+    >
     <div className="settings-view">
       <div className="settings-view__topbar">
         <NavLink
@@ -1011,5 +1016,6 @@ export function SettingsView() {
         onSubmit={handleCreate}
       />
     </div>
+    </OfflineGate>
   );
 }

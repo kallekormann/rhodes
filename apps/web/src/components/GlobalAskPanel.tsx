@@ -4,6 +4,8 @@ import { PanelRightClose } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { AskPanel } from "@/components/AskPanel";
 import { IconButton } from "@/components/IconButton";
+import { OfflineUnavailable } from "@/components/OfflineUnavailable";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import "@/components/RightPanel.css";
 import "./GlobalAskPanel.css";
 
@@ -20,6 +22,7 @@ export function GlobalAskPanel() {
     workspaceId,
     activeScope,
   } = useApp();
+  const { online } = useOnlineStatus(workspaceId);
 
   const visible = view !== "editor" && panelOpen && panelTab === "ask";
 
@@ -48,7 +51,14 @@ export function GlobalAskPanel() {
               />
             </div>
             <div className="right-panel__content overlay-scrollbar">
-              <AskPanel workspaceId={workspaceId} />
+              {online ? (
+                <AskPanel workspaceId={workspaceId} />
+              ) : (
+                <OfflineUnavailable
+                  title="Ask unavailable offline"
+                  message="Rhodes Ask needs an internet connection."
+                />
+              )}
             </div>
           </>
         )}

@@ -14,6 +14,7 @@ import {
   type DateRange,
 } from "@/components/DateRangePicker";
 import { DropZone } from "@/components/DropZone";
+import { OfflineGate } from "@/components/OfflineGate";
 import { Dropdown } from "@/components/Dropdown";
 import { GroupLabel } from "@/components/SectionHeader";
 import { Input } from "@/components/Input";
@@ -195,6 +196,10 @@ export function LibraryView() {
   };
 
   return (
+    <OfflineGate
+      title="Library unavailable offline"
+      message="Knowledge sources need an internet connection. Open a cached document from Documents to keep editing offline."
+    >
     <div className="canvas-view library-view">
       <div className="library-view__scroll overlay-scrollbar">
         <div className="library-view__inner">
@@ -435,5 +440,6 @@ export function LibraryView() {
         onClose={() => setRemoveTarget(null)}
       />
     </div>
+    </OfflineGate>
   );
 }

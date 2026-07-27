@@ -22,7 +22,9 @@ import { AskPanel } from "./AskPanel";
 import { Button } from "./Button";
 import { CommentsTab } from "./CommentsTab";
 import { IconButton } from "./IconButton";
+import { OfflineUnavailable } from "./OfflineUnavailable";
 import { TabBar } from "./TabBar";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import "./RightPanel.css";
 
 type MetadataSchemaWriteResult = { ok: boolean; error?: string };
@@ -155,6 +157,7 @@ export function RightPanel({
   onInsertCitation,
 }: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
+  const { online } = useOnlineStatus(workspaceId);
 
   useEffect(() => {
     if (panelTab !== "properties" && propertiesStage !== "view") {
@@ -181,24 +184,36 @@ export function RightPanel({
         className={`right-panel__content ${panelTab === "properties" ? "right-panel__content--properties" : "overlay-scrollbar"}`}
         key={panelTab}
       >
-        {panelTab === "insights" && (
-          <InsightsTab
-            workspaceId={workspaceId}
-            insights={insights}
-            loading={insightsLoading}
-            error={insightsError}
-            queryText={insightsQueryText}
-            onInsertCitation={onInsertCitation}
-            onRetry={onRetryInsights}
-          />
-        )}
-        {panelTab === "ask" && (
-          <AskPanel
-            workspaceId={workspaceId}
-            askPrefill={askPrefill}
-            onConsumeAskPrefill={onConsumeAskPrefill}
-          />
-        )}
+        {panelTab === "insights" &&
+          (!online ? (
+            <OfflineUnavailable
+              title="Insights unavailable offline"
+              message="Related insights need an internet connection."
+            />
+          ) : (
+            <InsightsTab
+              workspaceId={workspaceId}
+              insights={insights}
+              loading={insightsLoading}
+              error={insightsError}
+              queryText={insightsQueryText}
+              onInsertCitation={onInsertCitation}
+              onRetry={onRetryInsights}
+            />
+          ))}
+        {panelTab === "ask" &&
+          (!online ? (
+            <OfflineUnavailable
+              title="Ask unavailable offline"
+              message="Rhodes Ask needs an internet connection."
+            />
+          ) : (
+            <AskPanel
+              workspaceId={workspaceId}
+              askPrefill={askPrefill}
+              onConsumeAskPrefill={onConsumeAskPrefill}
+            />
+          ))}
         {panelTab === "comments" && (
           <div className="panel-tab panel-tab--comments overlay-scrollbar">
             <CommentsTab

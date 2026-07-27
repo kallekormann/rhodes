@@ -8,6 +8,7 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { deleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { templateRecordToUi } from "@/lib/templates/map";
 import { LoaderState } from "@/components/Loader";
+import { OfflineGate } from "@/components/OfflineGate";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { TemplateDetailPanel } from "@/components/TemplateDetailPanel";
 import { IconLabelButton } from "@/components/IconLabelButton";
@@ -121,6 +122,10 @@ export function TemplatesView() {
   };
 
   return (
+    <OfflineGate
+      title="Templates unavailable offline"
+      message="Templates need an internet connection. Open a cached document from Documents to keep working offline."
+    >
     <div className={`templates-view ${selected ? "templates-view--panel-open" : ""}`}>
       <div className="templates-view__scroll overlay-scrollbar">
         <div className="templates-view__inner">
@@ -203,5 +208,6 @@ export function TemplatesView() {
         onClose={() => setDeleteTarget(null)}
       />
     </div>
+    </OfflineGate>
   );
 }
