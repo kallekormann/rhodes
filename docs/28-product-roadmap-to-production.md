@@ -129,7 +129,7 @@ Rhodes is **online-first**. Offline = **opt-in, owner-controlled, encrypted cach
 
 **Precursor slice (M1.1, before M1b.1):** [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — Realtime `httpSend()` transport fix — ✅ complete (UAT July 27, 2026).
 
-**Post-M1b quality pass:** [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — multi-conflict classification fix + debug log cleanup ([docs/32-technical-debt.md](32-technical-debt.md) TD-001, TD-002). **Start only after M1b exit criteria.**
+**Post-M1b quality pass:** [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — multi-conflict classification fix + debug log cleanup ([techncial-dept.md](../techncial-dept.md) TD-001, TD-002). **Start only after M1b exit criteria.**
 
 ---
 
@@ -274,7 +274,7 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) | M1b — exists |
 | [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) | M1.1 — exists |
 | [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) | M1b — exists |
-| [docs/32-technical-debt.md](32-technical-debt.md) | Living — debt register |
+| [techncial-dept.md](../techncial-dept.md) | Living — debt register |
 | [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1b — planned |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |
