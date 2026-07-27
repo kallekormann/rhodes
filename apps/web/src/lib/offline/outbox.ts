@@ -10,6 +10,15 @@ import {
   type OfflineOutboxStorageRecord,
 } from "@/lib/offline/db";
 
+export type DocumentCreatePayload = {
+  workspace_id: string;
+  title: string;
+  template_id?: string;
+  metadata?: Record<string, unknown>;
+  content?: Record<string, unknown>;
+  content_plain?: string;
+};
+
 export type DocumentPatchPayload = {
   title?: string;
   content?: Record<string, unknown>;

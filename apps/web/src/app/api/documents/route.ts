@@ -248,7 +248,9 @@ export async function POST(request: Request) {
     );
   }
 
-  let content: Record<string, unknown> = { ...EMPTY_DOCUMENT_CONTENT };
+  let content: Record<string, unknown> = parsed.data.content
+    ? { ...parsed.data.content }
+    : { ...EMPTY_DOCUMENT_CONTENT };
   let metadata: Record<string, unknown> = parsed.data.metadata ?? {};
 
   if (parsed.data.template_id) {
@@ -282,11 +284,15 @@ export async function POST(request: Request) {
     content = stripLeadingTitleHeading(content, title);
   }
 
-  const content_plain = extractPlainText(content).trim();
+  const content_plain =
+    parsed.data.content_plain !== undefined
+      ? parsed.data.content_plain
+      : extractPlainText(content).trim();
 
   const { data, error } = await supabase
     .from("documents")
     .insert({
+      ...(parsed.data.id ? { id: parsed.data.id } : {}),
       workspace_id: parsed.data.workspace_id,
       created_by: user.id,
       title,

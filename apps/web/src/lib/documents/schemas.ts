@@ -9,10 +9,13 @@ export const documentFilterSchema = z.enum([
 ]);
 
 export const createDocumentSchema = z.object({
+  id: z.string().uuid().optional(),
   workspace_id: z.string().uuid(),
   title: z.string().min(1).max(500).optional(),
   template_id: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional(),
+  content: z.record(z.unknown()).optional(),
+  content_plain: z.string().optional(),
 });
 
 export const updateDocumentSchema = z.object({
