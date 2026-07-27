@@ -151,6 +151,20 @@ Full slice breakdown for M1b.5-6 is deferred until M1b.1-4 ship, since both reus
 
 ---
 
+## After M1b — conflict quality pass (Phase 09.2)
+
+**Do not mix into M1b slices.** UAT during [09.1](09.1-realtime-transport-hardening.md) found offline conflict issues that should be fixed **after** encrypted persistence ships, so M1b UAT can separate crypto/persistence bugs from conflict-logic bugs.
+
+| Item | Doc |
+|------|-----|
+| Technical debt register (living) | [docs/32-technical-debt.md](../docs/32-technical-debt.md) |
+| Fix phase (TD-001 multi-conflict, TD-002 log cleanup) | [09.2-offline-conflict-quality.md](09.2-offline-conflict-quality.md) |
+
+**TD-001 (high):** In a multi-conflict offline return, Block 2 same-word edit conflict is misclassified as block removal.  
+**TD-002 (low):** Phase 09 debug `console` logs still noisy during reconnect/conflict review.
+
+---
+
 ## Exit criteria
 
 1. All IndexedDB document data (body, metadata, outbox, Yjs snapshots, live Yjs state) is encrypted at rest — no plaintext document content anywhere in IndexedDB.
@@ -166,4 +180,6 @@ Full slice breakdown for M1b.5-6 is deferred until M1b.1-4 ship, since both reus
 - [09-offline-sync.md](09-offline-sync.md) — Phase 09 / M1 foundation (complete)
 - [09-m1-exit-collab-offline.md](09-m1-exit-collab-offline.md) — UAT script reused for M1b.1 regression verification
 - [09.1-realtime-transport-hardening.md](09.1-realtime-transport-hardening.md) — independent precursor slice, no shared code path
+- [09.2-offline-conflict-quality.md](09.2-offline-conflict-quality.md) — post-M1b conflict fixes (TD-001, TD-002)
+- [docs/32-technical-debt.md](../docs/32-technical-debt.md) — living debt register
 - [28-product-roadmap-to-production.md](../docs/28-product-roadmap-to-production.md) — milestone sequencing

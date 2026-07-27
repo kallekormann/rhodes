@@ -1,8 +1,8 @@
 # 28 — Product roadmap to production
 
 **Status:** accepted — **canonical living roadmap**  
-**Last updated:** July 26, 2026  
-**Current milestone:** **M1b** — Encrypted, owner-opt-in offline app shell (Phase 25, plan doc pending)  
+**Last updated:** July 27, 2026  
+**Current milestone:** **M1b** — Encrypted, owner-opt-in offline app shell (Phase 25)  
 **Branch:** `main` (M1 merged; `feature/phase-09-offline-wave-a` closed)
 
 > **This document is the single source of truth** for Rhodes’ path from today’s local Docker build to public production.  
@@ -127,7 +127,9 @@ Rhodes is **online-first**. Offline = **opt-in, owner-controlled, encrypted cach
 
 **Phase doc:** [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) — sliced into small independently-committable steps per wave; see also [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) for the key derivation and IndexedDB storage decisions it implements.
 
-**Precursor slice (M1.1, before M1b.1):** [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — Realtime `httpSend()` transport fix, independent of M1b.
+**Precursor slice (M1.1, before M1b.1):** [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — Realtime `httpSend()` transport fix — ✅ complete (UAT July 27, 2026).
+
+**Post-M1b quality pass:** [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — multi-conflict classification fix + debug log cleanup ([docs/32-technical-debt.md](32-technical-debt.md) TD-001, TD-002). **Start only after M1b exit criteria.**
 
 ---
 
@@ -272,6 +274,8 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) | M1b — exists |
 | [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) | M1.1 — exists |
 | [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) | M1b — exists |
+| [docs/32-technical-debt.md](32-technical-debt.md) | Living — debt register |
+| [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1b — planned |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |
 | `docs/29-use-cases-views-templates.md` | M6 |
