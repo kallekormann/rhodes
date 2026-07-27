@@ -1,0 +1,13 @@
+.connectivity-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.connectivity-indicator--offline {
+  color: var(--color-text-secondary);
+}

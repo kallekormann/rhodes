@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useApp, type AppView } from "@/context/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScopeSwitcher } from "./ScopeSwitcher";
+import { ConnectivityIndicator } from "./ConnectivityIndicator";
 import { IconButton } from "./IconButton";
 import "./AppHeader.css";
 
@@ -272,6 +273,7 @@ export function AppHeader() {
               size="sm"
             />
           </button>
+          <ConnectivityIndicator />
           <IconButton
             icon={theme === "light" ? Moon : Sun}
             label="Toggle theme"
