@@ -374,35 +374,36 @@ export function LibraryView() {
                       <span className="source-row__date">
                         {formatLibraryDate(source.created_at)}
                       </span>
-                      {!canUpload ? null : !isDeleting &&
-                        source.embedding_status === "pending" && (
-                          <Button
+                      {!canUpload ? null : !isDeleting && (
+                        <div className="source-row__actions-end">
+                          {source.embedding_status === "pending" && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="small"
+                              className="source-row__requeue"
+                              onClick={() =>
+                                void handleRetry(source.id, source.file_name)
+                              }
+                            >
+                              Re-queue
+                            </Button>
+                          )}
+                          <button
                             type="button"
-                            variant="secondary"
-                            size="small"
-                            className="source-row__requeue"
+                            className="source-row__remove"
+                            aria-label={`Remove ${source.file_name}`}
+                            title="Remove from library"
                             onClick={() =>
-                              void handleRetry(source.id, source.file_name)
+                              setRemoveTarget({
+                                id: source.id,
+                                fileName: source.file_name,
+                              })
                             }
                           >
-                            Re-queue
-                          </Button>
-                        )}
-                      {!canUpload ? null : !isDeleting && (
-                        <button
-                          type="button"
-                          className="source-row__remove"
-                          aria-label={`Remove ${source.file_name}`}
-                          title="Remove from library"
-                          onClick={() =>
-                            setRemoveTarget({
-                              id: source.id,
-                              fileName: source.file_name,
-                            })
-                          }
-                        >
-                          <Trash2 size={16} strokeWidth={1.75} />
-                        </button>
+                            <Trash2 size={16} strokeWidth={1.75} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </li>

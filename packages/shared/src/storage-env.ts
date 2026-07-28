@@ -4,9 +4,10 @@
  */
 export function allowLocalStorageFallback(): boolean {
   const flag = process.env.RHODES_ALLOW_LOCAL_STORAGE_FALLBACK;
-  if (flag === "0" || flag === "false") return false;
   if (flag === "1" || flag === "true") return true;
+  if (flag === "0" || flag === "false") return false;
   if (process.env.RHODES_IN_DOCKER === "1") return false;
   if (process.env.NODE_ENV === "production") return false;
-  return true;
+  // Default off — opt in only for laptop-only dev without Supabase Storage.
+  return false;
 }

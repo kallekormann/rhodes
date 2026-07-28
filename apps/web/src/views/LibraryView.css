@@ -130,6 +130,14 @@
   align-self: start;
 }
 
+.source-row__actions-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  justify-self: end;
+}
+
 .source-row__remove {
   display: inline-flex;
   align-items: center;
@@ -188,14 +196,17 @@
     grid-area: main;
   }
 
-  .source-row__remove {
+  .source-row__actions-end {
     grid-area: remove;
+  }
+
+  .source-row__remove {
+    grid-area: unset;
   }
 
   .source-row__size,
   .source-row__date,
-  .source-row .status-pill,
-  .source-row__requeue {
+  .source-row .status-pill {
     grid-column: 2 / -1;
   }
 }
