@@ -28,6 +28,8 @@ export type OfflineDocumentRecord = {
   updated_at: string;
   created_at: string;
   sync_status: OfflineSyncStatus;
+  /** ISO timestamp — used for LRU eviction (M1c). */
+  last_accessed_at?: string;
 };
 
 /** Encrypted-at-rest shape stored in the documents object store (M1b.1). */
@@ -42,6 +44,8 @@ export type OfflineDocumentStorageRecord = {
   updated_at: string;
   created_at: string;
   sync_status: OfflineSyncStatus;
+  /** ISO timestamp — used for LRU eviction (M1c). */
+  last_accessed_at?: string;
 };
 
 export type OfflineOutboxRecord = {

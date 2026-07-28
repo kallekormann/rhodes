@@ -1,7 +1,7 @@
 # Technical debt register
 
 **Status:** living document — add items as we discover them during implementation  
-**Last updated:** July 27, 2026  
+**Last updated:** July 28, 2026  
 **Owner:** fill in during active milestones; review when closing a milestone or before VPS (M13)
 
 > **Purpose:** One place to track known bugs, debug cruft, and deferred quality work discovered while executing the roadmap. Items here are **intentionally not fixed immediately** when fixing them would collide with in-flight work (e.g. M1b crypto) or when several related issues should be addressed together after a foundational change lands.
@@ -34,7 +34,9 @@
 | [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
 | [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
 | [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | done | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
-| [TD-004](#td-004-temp-offline-client-error-log) | Offline QA / debug | Low | in progress | **Remove after offline editor bug is fixed** | Temporary dev file log (`logs/client-errors.log`) + `__rhodesErrors()` |
+| [TD-004](#td-004-temp-offline-client-error-log) | Offline QA / debug | Low | in progress | Remove before **M13** | Temporary dev file log (`logs/client-errors.log`) + `__rhodesErrors()` |
+| [TD-005](#td-005-unbounded-indexeddb-document-cache) | Client IDB lifecycle | High | done | [27](implementation_plan/27-client-cache-lifecycle.md) (M1c) | LRU cap, metadata-only pull, quota UI |
+| [TD-006](#td-006-offline-debug-banner) | Dev UX | Low | open | Remove before **M13** | `OfflineDebugBanner` — opt-in via `__rhodesShowDebugBanner()` |
 
 *(Add new rows at the bottom; keep IDs stable.)*
 
@@ -158,12 +160,58 @@ Capture React crashes and unhandled errors to a **file in the repo** (`rhodes-ap
 | Revert | [EditorView.tsx](apps/web/src/views/EditorView.tsx) — remove `EditorErrorBoundary`, `sessionError` UI, log copy |
 | Revert | [EditorView.css](apps/web/src/views/EditorView.css) — remove `.editor-content__load-error*` rules |
 | Delete | [logs/.gitkeep](logs/.gitkeep) (optional) |
+| Delete | [OfflineDebugBanner.tsx](apps/web/src/components/OfflineDebugBanner.tsx) |
+| Delete | [debug-banner.ts](apps/web/src/lib/dev/debug-banner.ts) |
+| Revert | [AppShell.tsx](apps/web/src/components/AppShell.tsx) — remove `<OfflineDebugBanner />` |
+| Revert | [global.css](apps/web/src/styles/global.css) — remove `.offline-debug-banner*` rules |
+| Revert | [client-error-log-init.ts](apps/web/src/lib/dev/client-error-log-init.ts) — remove `installDebugBannerConsoleHelpers()` |
 
 Log file on disk: `rhodes-app/logs/client-errors.log` (gitignored via `*.log`)
 
 ### Why temporary
 
 Production error reporting should use a proper pipeline (Sentry, etc.), not a dev log file in the repo.
+
+---
+
+## TD-005 — Unbounded IndexedDB document cache
+
+**Status:** done (M1c / Phase 27, July 28, 2026)  
+**Severity:** High — users with many documents will exhaust browser storage quota  
+**Discovered:** M1b polish + roadmap planning (July 28, 2026)
+
+### Resolution
+
+- LRU eviction per workspace (cap 100 synced docs); `last_accessed_at` on read/write.
+- Background `pullWorkspaceDocuments` advances cursor only (`include_body=false`).
+- Settings → Storage → Offline cache panel + quota banner at ~50MB.
+
+See [implementation_plan/27-client-cache-lifecycle.md](implementation_plan/27-client-cache-lifecycle.md).
+
+---
+
+## TD-006 — Offline debug banner (dev-only UI)
+
+**Status:** open — **default off** in dev as of July 28, 2026; **delete before M13**  
+**Severity:** Low — blocks bottom of app when enabled  
+**Related:** TD-004 error-log stack
+
+### Component
+
+| File | Role |
+|------|------|
+| [OfflineDebugBanner.tsx](apps/web/src/components/OfflineDebugBanner.tsx) | Red sticky strip |
+| [debug-banner.ts](apps/web/src/lib/dev/debug-banner.ts) | Opt-in flag + console helpers |
+| [AppShell.tsx](apps/web/src/components/AppShell.tsx) | Mount point |
+
+### Dev usage
+
+- Show: `await __rhodesShowDebugBanner()` (or `localStorage.setItem("rhodes:debug_banner", "1")` + reload)
+- Hide: `await __rhodesHideDebugBanner()`
+
+### Production gate
+
+Must not ship to end users. Remove component and styles in M13 pre-launch cleanup (with TD-004).
 
 ---
 

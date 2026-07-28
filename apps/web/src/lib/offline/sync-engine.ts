@@ -627,6 +627,7 @@ export async function pullWorkspaceDocuments(
     workspace_id: workspaceId,
     filter: "all",
     limit: "50",
+    include_body: "false",
   });
   if (since) params.set("since", since);
 
@@ -644,27 +645,10 @@ export async function pullWorkspaceDocuments(
   let newest = since;
 
   for (const remote of documents) {
-    const local = await getOfflineDocument(remote.id);
-    if (
-      local &&
-      (local.sync_status === "pending" ||
-        local.sync_status === "conflict" ||
-        isLocalOnlyDocument(local))
-    ) {
-      continue;
-    }
-    if (await documentHasPendingOutbox(remote.id)) {
-      continue;
-    }
-    if (await documentHasPendingDelete(remote.id)) {
-      continue;
-    }
-
-    await putOfflineDocument(toOfflineRecord(remote));
-    pulled += 1;
     if (!newest || remote.updated_at > newest) {
       newest = remote.updated_at;
     }
+    pulled += 1;
   }
 
   if (newest) {

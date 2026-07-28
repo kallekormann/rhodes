@@ -1,8 +1,9 @@
 # 28 — Product roadmap to production
 
 **Status:** accepted — **canonical living roadmap**  
-**Last updated:** July 27, 2026  
-**Current milestone:** **M1b** — Encrypted, owner-opt-in offline app shell (Phase 25)  
+**Last updated:** July 28, 2026  
+**Current milestone:** **M1c** — Client cache & storage lifecycle (Phase 27) — core complete; next: **09.2** then **M2**  
+**Previous:** M1b core complete (M1b.1–4 + polish); M1b.5–6 backlog  
 **Branch:** `main` (M1 merged; `feature/phase-09-offline-wave-a` closed)
 
 > **This document is the single source of truth** for Rhodes’ path from today’s local Docker build to public production.  
@@ -15,7 +16,8 @@
 | Milestone | Focus | Phase(s) |
 |-----------|--------|----------|
 | **M1** | Editor + Yjs collab + open-doc offline | 09 |
-| **M1b** | Encrypted, owner-opt-in offline app shell | 25 |
+| **M1b** | Encrypted offline app shell (per-share offline edit) | 25 |
+| **M1c** | Client cache & storage lifecycle (IDB caps, LRU) | 27 |
 | **M2** | Org / Team / Private scopes, picker, settings, roles | 15 |
 | **M3** | App-wide realtime (lists, views, metadata) | 24 |
 | **M4** | Rhodes Chat (doc, scope, DM, forwards) | 16–19 |
@@ -46,7 +48,7 @@
 | **Marketing after core** | M11 when product is demo-ready. |
 | **Handbook before VPS** | M12 required before M13 public cutover. |
 | **Encrypt everything cached** | All offline IDB data AES-GCM — private and team docs. |
-| **Offline is opt-in** | Owner-only “Available offline” per document (M1b). |
+| **Offline editing** | Edit shares allow offline by default; owner opts out per grantee (`offline_editing_allowed`). Owned docs always offline-eligible for owner. |
 
 ---
 
@@ -56,6 +58,7 @@
 flowchart TB
   m1["M1 Collab exit"]
   m1b["M1b Offline app"]
+  m1c["M1c IDB lifecycle"]
   m2["M2 Scope 2.1-2.6"]
   m3["M3 Realtime"]
   m4["M4 Chat"]
@@ -68,7 +71,7 @@ flowchart TB
   m11["M11 Marketing"]
   m12["M12 FAQ Handbook"]
   m13["M13 VPS"]
-  m1 --> m1b --> m2 --> m3
+  m1 --> m1b --> m1c --> m2 --> m3
   m3 --> m4 --> m5 --> m6
   m2 --> m7
   m5 --> m7
@@ -98,38 +101,59 @@ flowchart TB
 | Offline conflict review (returner) | Create/delete offline |
 | Title/metadata outbox | Full app shell; encryption policy |
 
-**Note:** IndexedDB `documents` store is **plaintext today** — acceptable for M1 UAT only. M1b.1 encrypts before broader offline.
+**Note:** M1 UAT used a plaintext IDB cache — superseded by M1b.1 encryption.
 
 ---
 
-## M1b — Offline app (Phase 25)
+## M1b — Offline app (Phase 25) — **CORE COMPLETE**
 
 ### Offline definition (locked)
 
-Rhodes is **online-first**. Offline = **opt-in, owner-controlled, encrypted cache**.
+Rhodes is **online-first**. Offline editing uses **per-share control** (see phase 25).
 
 | Rule | Policy |
 |------|--------|
-| **Encryption** | All IDB document data AES-GCM (body, metadata, index, outbox, assets, library queue). |
-| **Who** | Only **document owner** (`created_by`) may set **Available offline**. |
-| **Opt-in** | Owner toggles per document while online → encrypted download. |
-| **Works offline** | Shell; owned + offline-available docs; pending edits; sync on reconnect. |
-| **Online-only** | `OfflineUnavailable` UI for Views, Library, Ask, Insights, Chat, settings, etc. |
+| **Encryption** | All IDB document data AES-GCM (body, metadata, outbox, Yjs state, snapshots). |
+| **Who** | Document owner controls **offline editing** per share grantee. |
+| **Default** | Edit shares allow offline editing; owner can opt out in Share UI. |
+| **Works offline** | Shell; offline-eligible docs; pending edits; sync on reconnect. |
+| **Online-only** | `OfflineUnavailable` for Library, Templates mgmt, Settings, Ask, Insights, Chat, Views. |
 
-| ID | Deliverable |
-|----|-------------|
-| M1b.1 | Encrypt all offline stores (block team cache until done) |
-| M1b.2 | Owner-only “Available offline” flag + UI |
-| M1b.3 | Offline shell + `OfflineUnavailable` component |
-| M1b.4 | Offline create/delete/rename (owned docs) |
-| M1b.5 | Encrypted image asset cache + upload queue |
-| M1b.6 | Encrypted library upload queue (not browse) |
+| ID | Deliverable | Status |
+|----|-------------|--------|
+| M1b.1 | Encrypt all offline stores | ✅ |
+| M1b.2 | Per-share offline editing control | ✅ |
+| M1b.3 | Offline shell + `OfflineUnavailable` | ✅ |
+| M1b.4 | Offline create/delete/rename | ✅ |
+| M1b.5 | Encrypted image asset cache + upload queue | backlog |
+| M1b.6 | Encrypted library upload queue | backlog |
 
-**Phase doc:** [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md) — sliced into small independently-committable steps per wave; see also [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) for the key derivation and IndexedDB storage decisions it implements.
+**M1b polish (July 28):** sync coordinator (`syncIfNeeded`), metadata-only documents list API, in-memory list cache, instant editor/back navigation, app-level templates cache, debug banner opt-in (TD-006).
 
-**Precursor slice (M1.1, before M1b.1):** [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — Realtime `httpSend()` transport fix — ✅ complete (UAT July 27, 2026).
+**Phase doc:** [implementation_plan/25-offline-app-shell.md](../implementation_plan/25-offline-app-shell.md)
 
-**Post-M1b quality pass:** [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — multi-conflict classification fix + debug log cleanup ([techncial-dept.md](../techncial-dept.md) TD-001, TD-002). **Start only after M1b exit criteria.**
+**Precursor:** [09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — ✅ complete.
+
+**Post-M1c:** [09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — TD-001, TD-002. **Start after M1c.**
+
+---
+
+## M1c — Client cache & storage lifecycle (Phase 27) — **CORE COMPLETE**
+
+Prevent unbounded IndexedDB growth before M2 multiplies workspaces.
+
+| ID | Deliverable | Status |
+|----|-------------|--------|
+| M1c.1 | Storage audit | ✅ (phase doc) |
+| M1c.2 | `last_accessed_at` on IDB rows | ✅ |
+| M1c.3 | LRU eviction per workspace (cap 100) | ✅ |
+| M1c.4 | Background pull = cursor only (no bulk bodies) | ✅ |
+| M1c.5 | Quota warning (~50MB) | ✅ |
+| M1c.6 | Settings → Offline storage UI | ✅ |
+| M1c.7 | Tests + UAT at scale | ✅ automated; manual optional |
+
+**Phase doc:** [implementation_plan/27-client-cache-lifecycle.md](../implementation_plan/27-client-cache-lifecycle.md)  
+**Debt:** [TD-005](../techncial-dept.md#td-005-unbounded-indexeddb-document-cache)
 
 ---
 
@@ -251,6 +275,7 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 |-------|-------|-----------|
 | 09 | Offline editor + Yjs collab | M1 |
 | 25 | Offline app shell | M1b |
+| 27 | Client cache lifecycle | M1c |
 | 15 | Scopes, org, settings | M2 |
 | 24 | App-wide realtime | M3 |
 | 16–19 | Rhodes Chat | M4 |
@@ -275,7 +300,8 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | [implementation_plan/09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) | M1.1 — exists |
 | [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) | M1b — exists |
 | [techncial-dept.md](../techncial-dept.md) | Living — debt register |
-| [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1b — planned |
+| [implementation_plan/27-client-cache-lifecycle.md](../implementation_plan/27-client-cache-lifecycle.md) | M1c — core complete |
+| [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1c — planned |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |
 | `docs/29-use-cases-views-templates.md` | M6 |

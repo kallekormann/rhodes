@@ -1,8 +1,8 @@
 # Rhodes Implementation Plan — Index
 
 **Status:** accepted  
-**Last updated:** July 26, 2026  
-**Current focus:** Phase 25 — Offline App Shell (Milestone **M1b**); Phase 09 complete  
+**Last updated:** July 28, 2026  
+**Current focus:** Phase 09.2 — Offline conflict quality (post-M1c); M1c core complete  
 **Roadmap:** [**docs/28-product-roadmap-to-production.md**](../docs/28-product-roadmap-to-production.md) — canonical M1–M13 sequence to production  
 **Git remote:** [github.com/kallekormann/rhodes](https://github.com/kallekormann/rhodes.git)  
 **Branches:** `dev` (integration) → `main` (release/stable)
@@ -46,6 +46,8 @@ This folder contains the **executable implementation plan** for building Rhodes:
 | 08 | [08-settings-teams-metadata-templates.md](08-settings-teams-metadata-templates.md) | Settings, teams, templates, version history | ✅ complete |
 | 08.5 | [08.5-product-hardening-and-discovery.md](08.5-product-hardening-and-discovery.md) | Polish, Ask/Insights resilience, Cmd+K, discovery | ✅ complete |
 | 09 | [09-offline-sync.md](09-offline-sync.md) | IndexedDB, outbox, conflict handling | ✅ complete |
+| 25 | [25-offline-app-shell.md](25-offline-app-shell.md) | Encrypted offline app shell (M1b) | ✅ core complete |
+| 27 | [27-client-cache-lifecycle.md](27-client-cache-lifecycle.md) | IDB caps, LRU eviction (M1c) | ✅ core complete |
 | 10 | [10-internationalization.md](10-internationalization.md) | EN + ES/DE/FR/IT | 3–5 days |
 | 11 | [11-billing-lemonsqueezy.md](11-billing-lemonsqueezy.md) | Subscriptions, webhooks, feature gates | 4–6 days |
 | 12 | [12-email-privacy-and-security.md](12-email-privacy-and-security.md) | Email relay, GDPR, hardening | 4–6 days |

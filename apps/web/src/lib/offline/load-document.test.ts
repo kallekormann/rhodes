@@ -31,6 +31,19 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
           vaultRows.set((record as VaultRecord).id, record as VaultRecord);
         }
       },
+      getAllFromIndex: async (
+        store: string,
+        _index: string,
+        workspaceId: string,
+      ) => {
+        if (store !== "documents") return [];
+        return Array.from(documentRows.values()).filter(
+          (row) => row.workspace_id === workspaceId,
+        );
+      },
+      delete: async (store: string, key: string) => {
+        if (store === "documents") documentRows.delete(key);
+      },
     })),
   };
 });

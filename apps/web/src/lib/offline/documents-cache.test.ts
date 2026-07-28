@@ -95,7 +95,8 @@ describe("documents-cache encryption", () => {
     expect(stored?.content_enc?.ciphertext).not.toContain("blocks");
 
     const loaded = await getOfflineDocument(docId);
-    expect(loaded).toEqual(record);
+    expect(loaded).toMatchObject(record);
+    expect(loaded?.last_accessed_at).toBeTruthy();
   });
 
   it("rejects writes when the docs vault is locked", async () => {

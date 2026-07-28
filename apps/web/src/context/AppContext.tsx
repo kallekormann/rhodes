@@ -18,6 +18,8 @@ import {
 } from "@/data/scopes";
 import { useCreateDocument } from "@/hooks/useCreateDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import type { TemplateRecord } from "@/hooks/useTemplates";
+import { useWorkspaceTemplates } from "@/hooks/useWorkspaceTemplates";
 import { buildFeatureGates } from "@/lib/features/gates";
 import { pathToView, viewToPath } from "@/lib/navigation";
 import {
@@ -46,12 +48,31 @@ export type AppView =
 export type PanelTab = "insights" | "ask" | "comments" | "properties";
 export type Theme = "light" | "dark";
 export type ThemeMode = Theme | "system";
-export type ToastVariant = "success" | "error" | "info";
+export type ToastVariant = "success" | "error" | "info" | "warning";
+
+export type ToastPlacement = "default" | "bottom-center";
+
+export type ToastAction = {
+  href: string;
+  label: string;
+};
 
 export type ToastItem = {
   id: string;
   message: string;
   variant: ToastVariant;
+  persistent?: boolean;
+  placement?: ToastPlacement;
+  action?: ToastAction;
+};
+
+export type ShowToastOptions = {
+  variant?: ToastVariant;
+  persistent?: boolean;
+  placement?: ToastPlacement;
+  /** Stable id — skips duplicate toasts and enables dismiss side-effects. */
+  id?: string;
+  action?: ToastAction;
 };
 
 export type AppSession = {
@@ -110,8 +131,15 @@ type AppContextValue = {
   canCreateTeamSpace: boolean;
   canWriteActiveScope: boolean;
   featureGates: ReturnType<typeof buildFeatureGates>;
+  overviewTemplates: TemplateRecord[];
+  overviewTemplatesLoading: boolean;
+  refreshOverviewTemplates: () => Promise<void>;
   toasts: ToastItem[];
-  showToast: (message: string, variant?: ToastVariant) => void;
+  showToast: (
+    message: string,
+    variant?: ToastVariant,
+    options?: Omit<ShowToastOptions, "variant">,
+  ) => void;
   dismissToast: (id: string) => void;
 };
 
@@ -224,6 +252,11 @@ export function AppProvider({
     session.userId,
     online,
   );
+  const {
+    templates: overviewTemplates,
+    loading: overviewTemplatesLoading,
+    refresh: refreshOverviewTemplates,
+  } = useWorkspaceTemplates(workspaceId, "all", online);
 
   useEffect(() => {
     if (!workspaceId || !online) return;
@@ -310,13 +343,42 @@ export function AppProvider({
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+    if (
+      id === "offline-quota-warning" &&
+      typeof sessionStorage !== "undefined"
+    ) {
+      sessionStorage.setItem("rhodes:idb_quota_toast_dismissed", "1");
+    }
   }, []);
 
   const showToast = useCallback(
-    (message: string, variant: ToastVariant = "info") => {
-      const id = crypto.randomUUID();
-      setToasts((prev) => [...prev, { id, message, variant }]);
-      window.setTimeout(() => dismissToast(id), 4000);
+    (
+      message: string,
+      variant: ToastVariant = "info",
+      options?: Omit<ShowToastOptions, "variant">,
+    ) => {
+      const persistent = options?.persistent ?? false;
+      const placement = options?.placement ?? "default";
+      const id = options?.id ?? crypto.randomUUID();
+
+      setToasts((prev) => {
+        if (prev.some((t) => t.id === id)) return prev;
+        return [
+          ...prev,
+          {
+            id,
+            message,
+            variant,
+            persistent,
+            placement,
+            action: options?.action,
+          },
+        ];
+      });
+
+      if (!persistent) {
+        window.setTimeout(() => dismissToast(id), 4000);
+      }
     },
     [dismissToast],
   );
@@ -635,6 +697,9 @@ export function AppProvider({
       canCreateTeamSpace: allowTeamCreate,
       canWriteActiveScope,
       featureGates,
+      overviewTemplates,
+      overviewTemplatesLoading,
+      refreshOverviewTemplates,
       toasts,
       showToast,
       dismissToast,
@@ -681,6 +746,9 @@ export function AppProvider({
       allowTeamCreate,
       canWriteActiveScope,
       featureGates,
+      overviewTemplates,
+      overviewTemplatesLoading,
+      refreshOverviewTemplates,
       toasts,
       showToast,
       dismissToast,

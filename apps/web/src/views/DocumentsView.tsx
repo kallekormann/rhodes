@@ -25,7 +25,6 @@ import {
 } from "@/lib/metadata/schemas";
 import { useDocuments } from "@/hooks/useDocuments";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
-import { useTemplates } from "@/hooks/useTemplates";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
 import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
 import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
@@ -58,6 +57,8 @@ export function DocumentsView() {
     showToast,
     canWriteActiveScope,
     session,
+    overviewTemplates,
+    overviewTemplatesLoading,
   } = useApp();
   const { online } = useOnlineStatus(workspaceId);
   const [tab, setTab] = useState<DocTab>("recent");
@@ -88,10 +89,9 @@ export function DocumentsView() {
     [filterField],
   );
 
-  const { templates, loading: templatesLoading } = useTemplates(workspaceId, "all");
-  const overviewTemplates = useMemo(
-    () => pickOverviewTemplates(templates).map(templateRecordToUi),
-    [templates],
+  const overviewTemplateCards = useMemo(
+    () => pickOverviewTemplates(overviewTemplates).map(templateRecordToUi),
+    [overviewTemplates],
   );
 
   const filtered = useMemo(
@@ -167,7 +167,7 @@ export function DocumentsView() {
               title="Templates"
               action={{ label: "More templates", onClick: () => setView("templates") }}
             />
-            {templatesLoading && overviewTemplates.length === 0 ? (
+            {overviewTemplatesLoading && overviewTemplateCards.length === 0 ? (
               <LoaderState
                 label="Loading templates…"
                 size="s"
@@ -175,7 +175,7 @@ export function DocumentsView() {
               />
             ) : (
               <TemplateCardGrid>
-                {overviewTemplates.map((template) => (
+                {overviewTemplateCards.map((template) => (
                   <TemplateCard
                     key={template.id}
                     name={template.name}

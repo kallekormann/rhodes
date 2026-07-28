@@ -2,26 +2,36 @@
 
 import { useEffect, useState } from "react";
 import type { ClientErrorEntry } from "@/lib/dev/client-error-log-types";
+import { isDebugBannerEnabled } from "@/lib/dev/debug-banner";
 
 const SESSION_KEY = "rhodes:client_errors:v1";
+
+/** Dev-only sources that are routine telemetry, not errors. */
+const IGNORED_SOURCES = new Set(["editor-open"]);
 
 function readSessionErrors(): ClientErrorEntry[] {
   if (typeof sessionStorage === "undefined") return [];
   try {
     const raw = sessionStorage.getItem(SESSION_KEY);
     const rows = raw ? (JSON.parse(raw) as ClientErrorEntry[]) : [];
-    return Array.isArray(rows) ? rows : [];
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((row) => !IGNORED_SOURCES.has(row.source ?? ""));
   } catch {
     return [];
   }
 }
 
-/** TEMP (TD-004): sticky last-error strip — survives editor crashes / navigation. */
+/** TEMP (TD-006): sticky last-error strip — opt-in via __rhodesShowDebugBanner(). */
 export function OfflineDebugBanner() {
+  const [enabled, setEnabled] = useState(false);
   const [rows, setRows] = useState<ClientErrorEntry[]>([]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
+
+    const bannerEnabled = isDebugBannerEnabled();
+    setEnabled(bannerEnabled);
+    if (!bannerEnabled) return;
 
     const refresh = () => setRows(readSessionErrors());
     refresh();
@@ -40,7 +50,7 @@ export function OfflineDebugBanner() {
     };
   }, []);
 
-  if (process.env.NODE_ENV === "production" || rows.length === 0) {
+  if (process.env.NODE_ENV === "production" || !enabled || rows.length === 0) {
     return null;
   }
 

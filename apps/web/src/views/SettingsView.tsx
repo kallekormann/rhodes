@@ -18,6 +18,7 @@ import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
 import { ProfileAvatarField } from "@/components/settings/ProfileAvatarField";
 import { LibraryStorageQuota } from "@/components/settings/LibraryStorageQuota";
+import { OfflineStoragePanel } from "@/components/settings/OfflineStoragePanel";
 import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
 import { Toggle } from "@/components/Toggle";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -934,6 +935,16 @@ export function SettingsView() {
                 invited members in your teams count toward this total.
               </p>
               <LibraryStorageQuota />
+
+              <Divider />
+
+              <GroupLabel>Offline cache</GroupLabel>
+              <p className="caption settings-section__intro">
+                Local copies of documents for offline editing on this device.
+                Clearing removes cached files only — nothing is deleted from the
+                server.
+              </p>
+              <OfflineStoragePanel scopes={scopes} />
             </div>
           )}
 

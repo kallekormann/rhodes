@@ -5,6 +5,7 @@ import type { DocumentFilter } from "@/lib/documents/schemas";
 import type { DocumentRecord } from "@/hooks/useDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
+  getOfflineDocument,
   listMergeableOfflineDocumentsForWorkspace,
   listOfflineDocumentSummariesForWorkspace,
   toOfflineDocumentRecord,

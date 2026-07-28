@@ -132,7 +132,8 @@ describe("offline storage invariants (M1b.1 slice 12)", () => {
       sync_status: "pending",
     });
     await putOfflineDocument(record);
-    expect(await getOfflineDocument(docId)).toEqual(record);
+    expect(await getOfflineDocument(docId)).toMatchObject(record);
+    expect((await getOfflineDocument(docId))?.last_accessed_at).toBeTruthy();
 
     await enqueueDocumentPatch({
       documentId: docId,

@@ -29,7 +29,6 @@ import { isDocumentId } from "@/lib/documents/ids";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
 import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
-import { appendDevLog } from "@/lib/dev/client-error-log";
 import { pushOutbox } from "@/lib/offline/sync-engine";
 import { registerEditorSaveFlush } from "@/lib/offline/editor-save-flush";
 import {
@@ -225,15 +224,6 @@ export function useEditorSession() {
   const [crossScopeAccess, setCrossScopeAccess] = useState<
     "allowed" | "pending" | "denied"
   >("allowed");
-
-  useEffect(() => {
-    if (!document?.id || isEditingTemplate) return;
-    void appendDevLog("editor-open", {
-      docId: document.id,
-      offline: browserOffline,
-      hydrated: contentHydratedForId === document.id,
-    });
-  }, [browserOffline, contentHydratedForId, document?.id, isEditingTemplate]);
 
   const refreshShareContext = useCallback(() => {
     setShareContextVersion((version) => version + 1);

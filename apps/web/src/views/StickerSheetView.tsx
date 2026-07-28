@@ -702,11 +702,43 @@ export function StickerSheetView() {
           <Button variant="secondary" onClick={() => showToast("Switched to Book Draft", "info")}>
             Info
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              showToast(
+                "Browser storage is almost full. Clear offline cache to free space.",
+                "warning",
+                {
+                  persistent: true,
+                  placement: "bottom-center",
+                  action: {
+                    href: "/settings?mode=user&section=Storage",
+                    label: "Open Storage settings",
+                  },
+                },
+              )
+            }
+          >
+            Warning
+          </Button>
         </div>
         <div className="sticker-toast-preview">
           <Toast toast={{ id: "1", message: "Document saved", variant: "success" }} onDismiss={() => {}} />
           <Toast toast={{ id: "2", message: "Could not sync library", variant: "error" }} onDismiss={() => {}} />
           <Toast toast={{ id: "3", message: "Switched to Book Draft", variant: "info" }} onDismiss={() => {}} />
+          <Toast
+            toast={{
+              id: "4",
+              message:
+                "Browser storage is almost full. Clear offline cache to free space.",
+              variant: "warning",
+              action: {
+                href: "/settings?mode=user&section=Storage",
+                label: "Open Storage settings",
+              },
+            }}
+            onDismiss={() => {}}
+          />
         </div>
       </section>
 

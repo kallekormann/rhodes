@@ -1,6 +1,6 @@
 # Phase 25 — Offline App Shell (M1b)
 
-**Status:** planned
+**Status:** core complete (M1b.5–6 backlog)
 **Milestone:** M1b
 **Depends on:** Phase 09 (M1, complete), [docs/31-offline-security-and-privacy.md](../docs/31-offline-security-and-privacy.md)
 **Independent of:** Phase 09.1 (realtime transport hardening) — no shared code path, can ship in either order

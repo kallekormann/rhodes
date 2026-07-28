@@ -16,12 +16,15 @@ import { CmdKModal } from "@/components/CmdKModal";
 import { GlobalAskPanel } from "@/components/GlobalAskPanel";
 import { LibraryUploadHost } from "@/components/LibraryUploadHost";
 import { OfflineDebugBanner } from "@/components/OfflineDebugBanner";
+import { useOfflineQuotaToast } from "@/hooks/useOfflineQuotaToast";
 import { ToastContainer } from "@/components/Toast";
 import { AppViewSwitch } from "@/components/AppViewSwitch";
 
 function AppShellContent({ children }: { children: ReactNode }) {
   const { view, toasts, dismissToast, session } = useApp();
   const isEditor = view === "editor";
+
+  useOfflineQuotaToast();
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;

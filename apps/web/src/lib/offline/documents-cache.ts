@@ -9,6 +9,7 @@ import {
   type OfflineDocumentStorageRecord,
   type OfflineSyncStatus,
 } from "@/lib/offline/db";
+import { evictWorkspaceDocumentsIfNeeded } from "@/lib/offline/cache-eviction";
 import {
   decryptDocsJson,
   encryptDocsJson,
@@ -55,6 +56,8 @@ async function toStorageRecord(
     updated_at: record.updated_at,
     created_at: record.created_at,
     sync_status: record.sync_status,
+    last_accessed_at:
+      record.last_accessed_at ?? new Date().toISOString(),
   };
 }
 
@@ -91,6 +94,7 @@ async function fromStorageRecord(
     updated_at: row.updated_at,
     created_at: row.created_at,
     sync_status: row.sync_status,
+    last_accessed_at: row.last_accessed_at,
   };
 }
 
@@ -127,7 +131,9 @@ export async function getOfflineDocumentStrict(
   }
 
   try {
-    return await fromStorageRecord(row);
+    const record = await fromStorageRecord(row);
+    void touchOfflineDocumentAccess(documentId);
+    return record;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Decrypt failed";
     const reason: OfflineDocumentReadFailureReason =
@@ -237,10 +243,25 @@ export async function listOfflineDocumentsForWorkspace(
   );
 }
 
+export async function touchOfflineDocumentAccess(
+  documentId: string,
+): Promise<void> {
+  const db = await getOfflineDB();
+  const existing = await db.get("documents", documentId);
+  if (!existing) return;
+  await db.put("documents", {
+    ...existing,
+    last_accessed_at: new Date().toISOString(),
+  });
+}
+
 export async function putOfflineDocument(
   record: OfflineDocumentRecord,
 ): Promise<void> {
-  const storage = await toStorageRecord(record);
+  const storage = await toStorageRecord({
+    ...record,
+    last_accessed_at: record.last_accessed_at ?? new Date().toISOString(),
+  });
   const db = await getOfflineDB();
   await db.put("documents", storage);
   const verified = await db.get("documents", storage.id);
@@ -249,6 +270,7 @@ export async function putOfflineDocument(
       `[documents-cache] put verify failed for document ${storage.id}`,
     );
   }
+  await evictWorkspaceDocumentsIfNeeded(record.workspace_id);
 }
 
 export async function deleteOfflineDocument(documentId: string): Promise<void> {
