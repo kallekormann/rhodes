@@ -647,6 +647,7 @@ services:
         condition: service_healthy
     environment:
       RHODES_IN_DOCKER: "1"
+      RHODES_ALLOW_LOCAL_STORAGE_FALLBACK: "0"
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
       TIKA_URL: http://tika:9998

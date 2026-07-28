@@ -1,5 +1,6 @@
 import { createAdminClient } from "@rhodes/db";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
+import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { readLocalLibraryFile } from "./local-storage";
 
 export async function downloadLibraryFile(filePath: string): Promise<Uint8Array> {
@@ -12,7 +13,9 @@ export async function downloadLibraryFile(filePath: string): Promise<Uint8Array>
     if (bytes.length > 0) return bytes;
   }
 
-  const local = await readLocalLibraryFile(filePath);
+  const local = allowLocalStorageFallback()
+    ? await readLocalLibraryFile(filePath)
+    : null;
   if (local && local.length > 0) return local;
 
   throw new Error(

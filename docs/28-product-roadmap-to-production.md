@@ -2,7 +2,7 @@
 
 **Status:** accepted — **canonical living roadmap**  
 **Last updated:** July 28, 2026  
-**Current milestone:** **M1c** — Client cache & storage lifecycle (Phase 27) — core complete; next: **09.2** then **M2**  
+**Current focus:** Phase 28 — Production storage (M1d slice 1); then **09.2** → **M2**  
 **Previous:** M1b core complete (M1b.1–4 + polish); M1b.5–6 backlog  
 **Branch:** `main` (M1 merged; `feature/phase-09-offline-wave-a` closed)
 
@@ -18,6 +18,7 @@
 | **M1** | Editor + Yjs collab + open-doc offline | 09 |
 | **M1b** | Encrypted offline app shell (per-share offline edit) | 25 |
 | **M1c** | Client cache & storage lifecycle (IDB caps, LRU) | 27 |
+| **M1d** | Production object storage & bandwidth (Supabase Storage) | 28 |
 | **M2** | Org / Team / Private scopes, picker, settings, roles | 15 |
 | **M3** | App-wide realtime (lists, views, metadata) | 24 |
 | **M4** | Rhodes Chat (doc, scope, DM, forwards) | 16–19 |
@@ -59,6 +60,7 @@ flowchart TB
   m1["M1 Collab exit"]
   m1b["M1b Offline app"]
   m1c["M1c IDB lifecycle"]
+  m1d["M1d Storage + bandwidth"]
   m2["M2 Scope 2.1-2.6"]
   m3["M3 Realtime"]
   m4["M4 Chat"]
@@ -71,7 +73,7 @@ flowchart TB
   m11["M11 Marketing"]
   m12["M12 FAQ Handbook"]
   m13["M13 VPS"]
-  m1 --> m1b --> m1c --> m2 --> m3
+  m1 --> m1b --> m1c --> m1d --> m2 --> m3
   m3 --> m4 --> m5 --> m6
   m2 --> m7
   m5 --> m7
@@ -154,6 +156,23 @@ Prevent unbounded IndexedDB growth before M2 multiplies workspaces.
 
 **Phase doc:** [implementation_plan/27-client-cache-lifecycle.md](../implementation_plan/27-client-cache-lifecycle.md)  
 **Debt:** [TD-005](../techncial-dept.md#td-005-unbounded-indexeddb-document-cache)
+
+---
+
+## M1d — Production storage & bandwidth (Phase 28) — **IN PROGRESS**
+
+Self-hosted Supabase Storage as the real object-store path in Docker dev (same topology as VPS).
+
+| ID | Deliverable | Status |
+|----|-------------|--------|
+| M1d.1 | Workspace Storage RLS + fallback policy | ✅ |
+| M1d.2 | Documents list `include_body` default false | ✅ |
+| M1d.3 | Storage adapter interface | ✅ (contract) |
+| M1d.4 | Wire Supabase adapter + S3 VPS backend | planned |
+| M1d.5 | Quota reconciliation + storage healthcheck | planned |
+
+**Phase doc:** [implementation_plan/28-production-storage-architecture.md](../implementation_plan/28-production-storage-architecture.md)  
+**Policy:** [docs/33-storage-and-bandwidth.md](33-storage-and-bandwidth.md)
 
 ---
 
@@ -276,6 +295,7 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | 09 | Offline editor + Yjs collab | M1 |
 | 25 | Offline app shell | M1b |
 | 27 | Client cache lifecycle | M1c |
+| 28 | Production storage architecture | M1d |
 | 15 | Scopes, org, settings | M2 |
 | 24 | App-wide realtime | M3 |
 | 16–19 | Rhodes Chat | M4 |
@@ -301,6 +321,8 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | [docs/31-offline-security-and-privacy.md](31-offline-security-and-privacy.md) | M1b — exists |
 | [techncial-dept.md](../techncial-dept.md) | Living — debt register |
 | [implementation_plan/27-client-cache-lifecycle.md](../implementation_plan/27-client-cache-lifecycle.md) | M1c — core complete |
+| [implementation_plan/28-production-storage-architecture.md](../implementation_plan/28-production-storage-architecture.md) | M1d — in progress |
+| [docs/33-storage-and-bandwidth.md](33-storage-and-bandwidth.md) | Storage & bandwidth policy |
 | [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1c — planned |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
+import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
   contentDispositionForLibraryFile,
@@ -59,10 +60,14 @@ export async function GET(request: Request, context: RouteContext) {
     source.file_type,
   );
 
-  const localBytes = await readLocalLibraryFile(source.file_path);
-  if (localBytes) {
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from(LIBRARY_BUCKET)
+    .download(source.file_path);
+
+  if (blob && blob.size > 0) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
     return withSecurityHeaders(
-      new NextResponse(Buffer.from(localBytes), {
+      new NextResponse(Buffer.from(bytes), {
         headers: {
           "Content-Type": contentType,
           "Content-Disposition": contentDisposition,
@@ -72,27 +77,25 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
 
-  const { data: blob, error: downloadError } = await supabase.storage
-    .from(LIBRARY_BUCKET)
-    .download(source.file_path);
-
-  if (downloadError || !blob) {
-    return withSecurityHeaders(
-      NextResponse.json(
-        { error: downloadError?.message ?? "File unavailable" },
-        { status: 404 },
-      ),
-    );
+  if (allowLocalStorageFallback()) {
+    const localBytes = await readLocalLibraryFile(source.file_path);
+    if (localBytes) {
+      return withSecurityHeaders(
+        new NextResponse(Buffer.from(localBytes), {
+          headers: {
+            "Content-Type": contentType,
+            "Content-Disposition": contentDisposition,
+            "Cache-Control": "private, max-age=3600",
+          },
+        }),
+      );
+    }
   }
 
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const response = new NextResponse(Buffer.from(bytes), {
-    headers: {
-      "Content-Type": contentType,
-      "Content-Disposition": contentDisposition,
-      "Cache-Control": "private, max-age=3600",
-    },
-  });
-
-  return withSecurityHeaders(response);
+  return withSecurityHeaders(
+    NextResponse.json(
+      { error: downloadError?.message ?? "File unavailable" },
+      { status: 404 },
+    ),
+  );
 }

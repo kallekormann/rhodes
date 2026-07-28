@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@rhodes/db";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import {
   saveLocalDocumentImage,
 } from "@/lib/documents/local-image-storage";
@@ -102,7 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
   if (uploadError) {
-    if (process.env.NODE_ENV !== "production") {
+    if (allowLocalStorageFallback()) {
       try {
         await saveLocalDocumentImage(path, bytes);
         return withSecurityHeaders(

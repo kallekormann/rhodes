@@ -12,7 +12,9 @@
     "./scope-views": "./src/scope-views.ts",
     "./chunk-metadata": "./src/chunk-metadata.ts",
     "./citation-location": "./src/citation-location.ts",
-    "./library-failure": "./src/library-failure.ts"
+    "./library-failure": "./src/library-failure.ts",
+    "./storage-env": "./src/storage-env.ts",
+    "./storage-adapter": "./src/storage-adapter.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

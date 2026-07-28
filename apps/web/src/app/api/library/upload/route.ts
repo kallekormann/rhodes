@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@rhodes/db";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
+import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { assertLibraryUploadAllowed } from "@/lib/library/account-quota";
 import { saveLocalLibraryFile } from "@/lib/library/local-storage";
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     });
 
   if (uploadError) {
-    if (process.env.NODE_ENV !== "production") {
+    if (allowLocalStorageFallback()) {
       try {
         await saveLocalLibraryFile(filePath, bytes);
       } catch (localError) {

@@ -37,11 +37,11 @@ export const listDocumentsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
   /** Pull cursor — documents with updated_at strictly after this ISO timestamp. */
   since: z.string().min(1).optional(),
-  /** When false, list rows omit document body fields (smaller payload for the list UI). */
+  /** When false (default), list rows omit document body fields. Pass include_body=true to opt in. */
   include_body: z
     .enum(["true", "false"])
     .optional()
-    .transform((value) => value !== "false"),
+    .transform((value) => value === "true"),
 });
 
 export type DocumentFilter = z.infer<typeof documentFilterSchema>;
