@@ -52,6 +52,17 @@
   background: var(--color-accent-subtle);
 }
 
+.bubble-menu__ask--disabled,
+.bubble-menu__ask:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bubble-menu__ask--disabled:hover,
+.bubble-menu__ask:disabled:hover {
+  background: transparent;
+}
+
 .bubble-menu__divider {
   width: 1px;
   height: 20px;

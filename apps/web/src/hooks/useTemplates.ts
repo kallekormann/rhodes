@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type TemplateRecord = {
   id: string;
@@ -20,13 +20,53 @@ export type TemplateDetail = TemplateRecord & {
 
 export type TemplateFilter = "all" | "mine";
 
+type TemplatesCacheEntry = {
+  templates: TemplateRecord[];
+  fetchedAt: number;
+};
+
+const templatesCache = new Map<string, TemplatesCacheEntry>();
+
+function templatesCacheKey(
+  workspaceId: string,
+  filter: TemplateFilter,
+): string {
+  return `${workspaceId}:${filter}`;
+}
+
+function readTemplatesCache(
+  workspaceId: string | null,
+  filter: TemplateFilter,
+): TemplatesCacheEntry | undefined {
+  if (!workspaceId) return undefined;
+  return templatesCache.get(templatesCacheKey(workspaceId, filter));
+}
+
+function writeTemplatesCache(
+  workspaceId: string,
+  filter: TemplateFilter,
+  templates: TemplateRecord[],
+): void {
+  templatesCache.set(templatesCacheKey(workspaceId, filter), {
+    templates,
+    fetchedAt: Date.now(),
+  });
+}
+
 export function useTemplates(
   workspaceId: string | null,
   filter: TemplateFilter = "all",
 ) {
-  const [templates, setTemplates] = useState<TemplateRecord[]>([]);
-  const [loading, setLoading] = useState(Boolean(workspaceId));
+  const cached = readTemplatesCache(workspaceId, filter);
+  const [templates, setTemplates] = useState<TemplateRecord[]>(
+    () => cached?.templates ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !cached && Boolean(workspaceId),
+  );
   const [error, setError] = useState<string | null>(null);
+  const templatesRef = useRef(templates);
+  templatesRef.current = templates;
 
   const refresh = useCallback(async () => {
     if (!workspaceId) {
@@ -35,28 +75,48 @@ export function useTemplates(
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
-    const params = new URLSearchParams({
-      workspace_id: workspaceId,
-      filter,
-    });
-
-    const response = await fetch(`/app/api/templates?${params}`);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      setError(
-        typeof data.error === "string" ? data.error : "Failed to load templates",
-      );
-      setTemplates([]);
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       setLoading(false);
+      setError(null);
       return;
     }
 
-    setTemplates((data.templates as TemplateRecord[]) ?? []);
-    setLoading(false);
+    const showLoadingState = templatesRef.current.length === 0;
+    if (showLoadingState) {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({
+        workspace_id: workspaceId,
+        filter,
+      });
+
+      const response = await fetch(`/app/api/templates?${params}`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(
+          typeof data.error === "string" ? data.error : "Failed to load templates",
+        );
+        if (showLoadingState) {
+          setTemplates([]);
+        }
+        return;
+      }
+
+      const nextTemplates = (data.templates as TemplateRecord[]) ?? [];
+      setTemplates(nextTemplates);
+      writeTemplatesCache(workspaceId, filter, nextTemplates);
+    } catch {
+      setError("Failed to load templates");
+      if (showLoadingState) {
+        setTemplates([]);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [workspaceId, filter]);
 
   useEffect(() => {

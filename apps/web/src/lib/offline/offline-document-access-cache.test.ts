@@ -14,6 +14,7 @@ import {
   purgeDocumentOfflineCache,
   syncOfflineDocumentAccess,
 } from "@/lib/offline/offline-document-access-cache";
+import { getOfflineDocument } from "@/lib/offline/documents-cache";
 
 describe("offline-document-access-cache", () => {
   const userId = "user-1";
@@ -111,5 +112,50 @@ describe("offline-document-access-cache", () => {
 
     const db = await getOfflineDB();
     expect(await db.get("documents", documentId)).toBeTruthy();
+  });
+
+  it("cacheDocumentForOfflineAccess preserves richer local body", async () => {
+    await putOfflineDocument(
+      toOfflineDocumentRecord({
+        ...document,
+        content: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "rich local body" }],
+            },
+          ],
+        },
+        content_plain: "rich local body",
+        server_updated_at: document.updated_at,
+        sync_status: "synced",
+      }),
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ can_offline_edit: true }),
+      }),
+    );
+
+    await syncOfflineDocumentAccess({
+      documentId,
+      userId,
+      activeWorkspaceId: "ws-1",
+      document: {
+        ...document,
+        content: { type: "doc", content: [] },
+        content_plain: "",
+      },
+    });
+
+    const db = await getOfflineDB();
+    const row = await db.get("documents", documentId);
+    expect(row?.sync_status).toBe("pending");
+    const cached = await getOfflineDocument(documentId);
+    expect(cached?.content_plain).toBe("rich local body");
   });
 });

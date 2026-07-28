@@ -21,6 +21,8 @@ import {
 
 const PERSIST_DEBOUNCE_MS = 1_500;
 
+const activePersistences = new Map<string, RhodesYjsPersistence>();
+
 export class RhodesYjsPersistence {
   readonly whenSynced: Promise<void>;
   private readonly documentId: string;
@@ -36,6 +38,7 @@ export class RhodesYjsPersistence {
     this.documentId = documentId;
     this.doc = doc;
     this.userId = userId ?? null;
+    activePersistences.set(documentId, this);
     this.whenSynced = this.bootstrap();
   }
 
@@ -75,8 +78,20 @@ export class RhodesYjsPersistence {
     }, PERSIST_DEBOUNCE_MS);
   }
 
+  async flushNow(): Promise<void> {
+    if (this.persistTimer != null) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    await this.writeState();
+  }
+
   private async flush(): Promise<void> {
     if (this.destroyed) return;
+    await this.writeState();
+  }
+
+  private async writeState(): Promise<void> {
     try {
       await persistLocalYjsState(
         this.documentId,
@@ -89,12 +104,26 @@ export class RhodesYjsPersistence {
   }
 
   destroy(): void {
-    this.destroyed = true;
     if (this.persistTimer != null) {
       clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
     this.doc.off("update", this.onDocUpdate);
+    if (activePersistences.get(this.documentId) === this) {
+      activePersistences.delete(this.documentId);
+    }
+    void this.flushNow();
+    this.destroyed = true;
+  }
+}
+
+/** Flush debounced Yjs bytes for a document (e.g. before navigation or sync). */
+export async function flushRhodesYjsPersistence(
+  documentId: string,
+): Promise<void> {
+  const persistence = activePersistences.get(documentId);
+  if (persistence) {
+    await persistence.flushNow();
   }
 }
 

@@ -1,45 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { pullWorkspaceDocuments, pushOutbox } from "@/lib/offline/sync-engine";
+import { useCallback, useEffect, useState } from "react";
 
-/** Give the network a moment to stabilize before retrying queued patches. */
-const RECONNECT_PUSH_DEFER_MS = 1_000;
+/** Give the network a moment to stabilize after reconnect. */
+const RECONNECT_DEFER_MS = 1_000;
 
 function readNavigatorOnline(): boolean {
   return typeof navigator === "undefined" ? true : navigator.onLine;
 }
 
-export function useOnlineStatus(workspaceId?: string | null) {
+export function useOnlineStatus(_workspaceId?: string | null) {
   const [online, setOnline] = useState(readNavigatorOnline);
-  const workspaceIdRef = useRef(workspaceId);
-  workspaceIdRef.current = workspaceId;
-
-  const retrySync = useCallback(() => {
-    if (typeof navigator === "undefined" || !navigator.onLine) return;
-    void (async () => {
-      await pushOutbox();
-      const ws = workspaceIdRef.current;
-      if (ws) await pullWorkspaceDocuments(ws);
-    })();
-  }, []);
-
-  const scheduleRetrySync = useCallback(() => {
-    if (typeof window === "undefined") {
-      retrySync();
-      return;
-    }
-    window.setTimeout(() => {
-      retrySync();
-    }, RECONNECT_PUSH_DEFER_MS);
-  }, [retrySync]);
 
   useEffect(() => {
     const syncOnline = () => setOnline(readNavigatorOnline());
-    const onOnline = () => {
-      setOnline(true);
-      scheduleRetrySync();
-    };
+    const onOnline = () => setOnline(true);
     const onOffline = () => setOnline(false);
 
     syncOnline();
@@ -53,7 +28,23 @@ export function useOnlineStatus(workspaceId?: string | null) {
       window.removeEventListener("focus", syncOnline);
       document.removeEventListener("visibilitychange", syncOnline);
     };
-  }, [scheduleRetrySync]);
+  }, []);
 
-  return { online, retrySync };
+  const onReconnect = useCallback((handler: () => void) => {
+    if (typeof window === "undefined") return () => {};
+    let deferTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const run = () => {
+      if (deferTimer != null) clearTimeout(deferTimer);
+      deferTimer = setTimeout(handler, RECONNECT_DEFER_MS);
+    };
+
+    window.addEventListener("online", run);
+    return () => {
+      if (deferTimer != null) clearTimeout(deferTimer);
+      window.removeEventListener("online", run);
+    };
+  }, []);
+
+  return { online, onReconnect };
 }

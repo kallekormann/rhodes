@@ -2,12 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { useApp } from "@/context/AppContext";
-import { useLibrarySources } from "@/hooks/useLibrarySources";
 import {
   isLibraryFileAllowed,
   LIBRARY_FILE_ACCEPT,
   LIBRARY_FILE_LABEL,
 } from "@/lib/library/schemas";
+import { uploadLibraryFiles } from "@/lib/library/upload-files";
 
 /**
  * Hidden file picker owned by AppShell so Cmd+K (and others) can open upload
@@ -23,7 +23,6 @@ export function LibraryUploadHost() {
     setView,
   } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
-  const { uploadFiles } = useLibrarySources(workspaceId);
   const canUpload =
     canWriteActiveScope && featureGates.can("library.upload");
 
@@ -64,7 +63,12 @@ export function LibraryUploadHost() {
       "info",
     );
 
-    const result = await uploadFiles(allowed);
+    if (!workspaceId) {
+      showToast("No workspace selected", "error");
+      return;
+    }
+
+    const result = await uploadLibraryFiles(workspaceId, allowed);
     if (result.ok) {
       showToast("Upload complete — indexing started", "success");
     } else if ("error" in result) {

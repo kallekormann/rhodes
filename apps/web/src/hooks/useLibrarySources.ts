@@ -9,6 +9,8 @@ import type {
 } from "@/lib/library/schemas";
 import { librarySourceIsInFlight } from "@/lib/library/pipeline";
 import { toLibrarySourceRecord, upsertLibrarySource } from "@/lib/library/realtime";
+import { uploadLibraryFiles } from "@/lib/library/upload-files";
+import { ensureRealtimeAuth } from "@/lib/supabase/ensure-realtime-auth";
 
 export const LIBRARY_PAGE_SIZE = 20;
 
@@ -96,6 +98,13 @@ export function useLibrarySources(workspaceId: string | null) {
   const fallbackPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pageCacheRef = useRef<Map<string, PageCacheEntry>>(new Map());
   const queryRef = useRef(query);
+  const loadPageRef = useRef<
+    (
+      nextQuery: LibraryQueryState,
+      options?: { silent?: boolean; preferCache?: boolean },
+    ) => Promise<void>
+  >(() => Promise.resolve());
+  const clearPageCacheRef = useRef<() => void>(() => {});
   queryRef.current = query;
 
   const clearPageCache = useCallback(() => {
@@ -205,6 +214,9 @@ export function useLibrarySources(workspaceId: string | null) {
     [applyPage, workspaceId],
   );
 
+  loadPageRef.current = loadPage;
+  clearPageCacheRef.current = clearPageCache;
+
   const refresh = useCallback(async () => {
     clearPageCache();
     await loadPage(queryRef.current);
@@ -229,55 +241,74 @@ export function useLibrarySources(workspaceId: string | null) {
       return;
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setLive(false);
+      return;
+    }
+
     const supabase = createClient();
-    const channel = supabase
-      .channel(`library-sources:${workspaceId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "library_sources",
-          filter: `workspace_id=eq.${workspaceId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const id =
-              typeof payload.old.id === "string" ? payload.old.id : null;
-            if (!id) return;
-            setSources((current) => current.filter((source) => source.id !== id));
-            setTotal((current) => Math.max(0, current - 1));
-            clearPageCache();
-            return;
-          }
+    let cancelled = false;
+    const channelName = `library-sources:${workspaceId}:${crypto.randomUUID()}`;
 
-          if (payload.eventType === "INSERT") {
-            clearPageCache();
-            if (queryRef.current.offset === 0) {
-              void loadPage({ ...queryRef.current, offset: 0 }, { silent: true });
-            }
-            return;
-          }
+    const channel = supabase.channel(channelName).on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "library_sources",
+        filter: `workspace_id=eq.${workspaceId}`,
+      },
+      (payload) => {
+        if (payload.eventType === "DELETE") {
+          const id =
+            typeof payload.old.id === "string" ? payload.old.id : null;
+          if (!id) return;
+          setSources((current) => current.filter((source) => source.id !== id));
+          setTotal((current) => Math.max(0, current - 1));
+          clearPageCacheRef.current();
+          return;
+        }
 
-          const record = toLibrarySourceRecord(
-            payload.new as Record<string, unknown>,
-          );
-          if (!record) return;
-          setSources((current) => {
-            if (!current.some((s) => s.id === record.id)) return current;
-            return upsertLibrarySource(current, record);
-          });
-        },
-      )
-      .subscribe((status) => {
-        setLive(status === "SUBSCRIBED");
+        if (payload.eventType === "INSERT") {
+          clearPageCacheRef.current();
+          if (queryRef.current.offset === 0) {
+            void loadPageRef.current(
+              { ...queryRef.current, offset: 0 },
+              { silent: true },
+            );
+          }
+          return;
+        }
+
+        const record = toLibrarySourceRecord(
+          payload.new as Record<string, unknown>,
+        );
+        if (!record) return;
+        setSources((current) => {
+          if (!current.some((s) => s.id === record.id)) return current;
+          return upsertLibrarySource(current, record);
+        });
+      },
+    );
+
+    void (async () => {
+      try {
+        await ensureRealtimeAuth(supabase);
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+      channel.subscribe((status) => {
+        if (!cancelled) setLive(status === "SUBSCRIBED");
       });
+    })();
 
     return () => {
+      cancelled = true;
       setLive(false);
       void supabase.removeChannel(channel);
     };
-  }, [workspaceId, clearPageCache, loadPage]);
+  }, [workspaceId]);
 
   useEffect(() => {
     const indexing = sources.some((source) => librarySourceIsInFlight(source));
@@ -337,23 +368,10 @@ export function useLibrarySources(workspaceId: string | null) {
       setError(null);
 
       try {
-        for (const file of files) {
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("workspace_id", workspaceId);
-
-          const response = await fetch("/app/api/library/upload", {
-            method: "POST",
-            body: formData,
-          });
-
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            const message =
-              typeof data.error === "string" ? data.error : "Upload failed";
-            setError(message);
-            return { ok: false as const, error: message };
-          }
+        const result = await uploadLibraryFiles(workspaceId, files);
+        if (!result.ok) {
+          setError(result.error);
+          return result;
         }
 
         clearPageCache();

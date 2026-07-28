@@ -177,3 +177,19 @@
     padding-right: var(--space-md);
   }
 }
+
+.editor-content__load-error {
+  padding: var(--space-lg) 0;
+  max-width: 36rem;
+}
+
+.editor-content__load-error-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+
+.editor-content__load-error-message {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-md);
+}

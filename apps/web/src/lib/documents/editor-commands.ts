@@ -108,6 +108,10 @@ export function insertCitation(editor: Editor, input: CitationInsertInput) {
 export async function resolveDocumentImageUrls(
   content: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return normalizeDocumentImageContent(content);
+  }
+
   const cloned = structuredClone(content);
   const paths: string[] = [];
 

@@ -50,11 +50,13 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
   };
 });
 
-import { lockDocsVault, unlockDocsVault } from "@/lib/offline/docs-vault";
+import { lockDocsVault, unlockDocsVault, encryptDocsJson } from "@/lib/offline/docs-vault";
 import {
   enqueueDocumentPatch,
   getOutboxForDocument,
   listOutbox,
+  sortOutboxForDrain,
+  documentHasPendingDelete,
 } from "@/lib/offline/outbox";
 
 describe("outbox encryption", () => {
@@ -113,5 +115,59 @@ describe("outbox encryption", () => {
       metadata: { v: 2 },
     });
     expect(rows[0]?.expected_updated_at).toBe("2026-07-27T00:00:00.000Z");
+  });
+
+  it("sorts drain queue with deletes before creates and patches", () => {
+    const rows = sortOutboxForDrain([
+      {
+        id: 3,
+        document_id: "doc-patch",
+        mutation: "patch",
+        payload: { title: "Patch" },
+        expected_updated_at: "2026-07-27T02:00:00.000Z",
+        created_at: "2026-07-27T02:00:00.000Z",
+        retries: 0,
+      },
+      {
+        id: 1,
+        document_id: "doc-delete",
+        mutation: "delete",
+        payload: {},
+        expected_updated_at: "2026-07-27T00:00:00.000Z",
+        created_at: "2026-07-27T01:00:00.000Z",
+        retries: 0,
+      },
+      {
+        id: 2,
+        document_id: "doc-create",
+        mutation: "create",
+        payload: { workspace_id: "ws-1", title: "New" },
+        expected_updated_at: "",
+        created_at: "2026-07-27T00:30:00.000Z",
+        retries: 0,
+      },
+    ]);
+
+    expect(rows.map((row) => row.mutation)).toEqual([
+      "delete",
+      "create",
+      "patch",
+    ]);
+  });
+
+  it("detects pending delete outbox rows", async () => {
+    await unlockDocsVault(userId);
+
+    outboxRows.set(1, {
+      id: 1,
+      document_id: docId,
+      mutation: "delete",
+      payload_enc: await encryptDocsJson({}),
+      expected_updated_at: "2026-07-27T00:00:00.000Z",
+      created_at: "2026-07-27T00:00:00.000Z",
+      retries: 0,
+    });
+
+    expect(await documentHasPendingDelete(docId)).toBe(true);
   });
 });

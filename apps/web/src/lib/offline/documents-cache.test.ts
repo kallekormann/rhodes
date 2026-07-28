@@ -21,6 +21,16 @@ vi.mock("@/lib/offline/db", async (importOriginal) => {
         if (store === "documents") return Array.from(documentRows.values());
         return [];
       },
+      getAllFromIndex: async (
+        store: string,
+        _index: string,
+        workspaceId: string,
+      ) => {
+        if (store !== "documents") return [];
+        return Array.from(documentRows.values()).filter(
+          (row) => row.workspace_id === workspaceId,
+        );
+      },
       put: async (
         store: string,
         record: OfflineDocumentStorageRecord | VaultRecord,

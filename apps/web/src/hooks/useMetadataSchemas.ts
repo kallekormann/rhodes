@@ -47,27 +47,39 @@ export function useMetadataSchemas(workspaceId: string | null) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
-    const params = new URLSearchParams({ workspace_id: workspaceId });
-    const response = await fetch(`/app/api/metadata-schemas?${params}`);
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const message = parseApiErrorMessage(data, "Failed to load metadata schemas");
-      setError(message);
-      setSchemas([]);
-      setGroups([]);
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       setLoading(false);
+      setError(null);
       return;
     }
 
-    setSchemas((data.schemas as MetadataSchemaField[]) ?? []);
-    setGroups(
-      ((data.groups as MetadataSchemaGroup[]) ?? []).map(mapGroupFromApi),
-    );
-    setLoading(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({ workspace_id: workspaceId });
+      const response = await fetch(`/app/api/metadata-schemas?${params}`);
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const message = parseApiErrorMessage(data, "Failed to load metadata schemas");
+        setError(message);
+        setSchemas([]);
+        setGroups([]);
+        return;
+      }
+
+      setSchemas((data.schemas as MetadataSchemaField[]) ?? []);
+      setGroups(
+        ((data.groups as MetadataSchemaGroup[]) ?? []).map(mapGroupFromApi),
+      );
+    } catch {
+      setError("Failed to load metadata schemas");
+      setSchemas([]);
+      setGroups([]);
+    } finally {
+      setLoading(false);
+    }
   }, [workspaceId]);
 
   useEffect(() => {

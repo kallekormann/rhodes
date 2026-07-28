@@ -6,9 +6,12 @@ import type { DocumentRecord } from "@/hooks/useDocument";
 import { deleteYjsState } from "@/lib/offline/db";
 import {
   deleteOfflineDocument,
+  getOfflineDocument,
   putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
+import { bodyRichness } from "@/lib/offline/document-body";
+import { isLocalOnlyDocument } from "@/lib/offline/local-document";
 import { ensureDocsVaultUnlocked } from "@/lib/offline/offline-vault-session";
 import { clearOutboxForDocument } from "@/lib/offline/outbox";
 import { clearOfflineSnapshots } from "@/lib/offline/yjs-offline-snapshot";
@@ -37,6 +40,31 @@ export async function cacheDocumentForOfflineAccess(
   userId: string,
 ): Promise<void> {
   await ensureDocsVaultUnlocked(userId);
+  const existing = await getOfflineDocument(document.id);
+  if (existing) {
+    const localRich = bodyRichness(existing.content, existing.content_plain);
+    const remoteRich = bodyRichness(document.content, document.content_plain);
+    if (
+      existing.sync_status === "pending" ||
+      existing.sync_status === "conflict" ||
+      isLocalOnlyDocument(existing) ||
+      localRich > remoteRich
+    ) {
+      await putOfflineDocument(
+        toOfflineDocumentRecord({
+          ...existing,
+          title: document.title || existing.title,
+          server_updated_at: document.updated_at,
+          sync_status:
+            localRich > remoteRich || existing.sync_status !== "synced"
+              ? "pending"
+              : existing.sync_status,
+        }),
+      );
+      return;
+    }
+  }
+
   await putOfflineDocument(
     toOfflineDocumentRecord({
       ...document,

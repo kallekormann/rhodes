@@ -1,3 +1,14 @@
+.documents-view {
+  position: relative;
+}
+
+.documents-view .rhodes-activity-rail {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  z-index: 20;
+}
+
 .documents-view__scroll {
   flex: 1;
   width: 100%;

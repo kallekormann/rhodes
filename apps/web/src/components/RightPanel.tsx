@@ -227,7 +227,13 @@ export function RightPanel({
             />
           </div>
         )}
-        {panelTab === "properties" && (
+        {panelTab === "properties" &&
+          (!online ? (
+            <OfflineUnavailable
+              title="Properties unavailable offline"
+              message="Metadata and property fields need an internet connection. You can still write in the document."
+            />
+          ) : (
           <PropertiesTab
             mode={propertiesMode}
             stage={propertiesStage}
@@ -254,7 +260,7 @@ export function RightPanel({
             onVersionRestored={onVersionRestored}
             onNavigateToActivity={onNavigateToActivity}
           />
-        )}
+          ))}
       </div>
     </aside>
   );

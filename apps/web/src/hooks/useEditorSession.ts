@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
+import { readDocIdFromBrowserLocation } from "@/lib/navigation/app-path";
 import { getScopeMetaLabel } from "@/data/scopes";
 import { EMPTY_DOCUMENT_CONTENT } from "@/lib/documents/schemas";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
@@ -25,8 +26,12 @@ import {
 } from "@/lib/documents/comments";
 import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { isDocumentId } from "@/lib/documents/ids";
+import { getOfflineDocument } from "@/lib/offline/documents-cache";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
+import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
+import { appendDevLog } from "@/lib/dev/client-error-log";
 import { pushOutbox } from "@/lib/offline/sync-engine";
+import { registerEditorSaveFlush } from "@/lib/offline/editor-save-flush";
 import {
   buildTemplateMetadata,
   parseTemplateMetadata,
@@ -139,25 +144,33 @@ export function useEditorSession() {
     scopes,
     setDocumentTitle,
     setDocumentId,
+    documentId: appDocumentId,
     documentTitle,
     setView,
     showToast,
     canWriteActiveScope,
     session,
   } = useApp();
-  const resolvedWorkspaceId = workspaceId;
+  const resolvedWorkspaceId = workspaceId ?? readActiveWorkspaceId();
+  const browserOffline =
+    typeof navigator !== "undefined" && !navigator.onLine;
 
   const requestedId = searchParams.get("doc");
+  const browserDocId = readDocIdFromBrowserLocation();
+  const effectiveRequestedId =
+    (requestedId && isDocumentId(requestedId) ? requestedId : null) ??
+    (isDocumentId(appDocumentId) ? appDocumentId : null) ??
+    (browserDocId && isDocumentId(browserDocId) ? browserDocId : null);
   const requestedTemplateId = searchParams.get("template");
   const isEditingTemplate = isTemplateId(requestedTemplateId);
 
   const [resolvedId, setResolvedId] = useState<string | null>(
     isEditingTemplate
       ? null
-      : isDocumentId(requestedId)
-        ? requestedId
-        : null,
+      : effectiveRequestedId,
   );
+  const resolvedIdRef = useRef(resolvedId);
+  resolvedIdRef.current = resolvedId;
   const { online } = useOnlineStatus(
     isEditingTemplate ? null : (resolvedWorkspaceId ?? null),
   );
@@ -165,6 +178,8 @@ export function useEditorSession() {
     isEditingTemplate ? null : resolvedId,
     online,
   );
+  const effectiveWorkspaceId =
+    resolvedWorkspaceId ?? document?.workspace_id ?? readActiveWorkspaceId();
   const [templateRecord, setTemplateRecord] = useState<TemplateDetail | null>(
     null,
   );
@@ -211,14 +226,29 @@ export function useEditorSession() {
     "allowed" | "pending" | "denied"
   >("allowed");
 
+  useEffect(() => {
+    if (!document?.id || isEditingTemplate) return;
+    void appendDevLog("editor-open", {
+      docId: document.id,
+      offline: browserOffline,
+      hydrated: contentHydratedForId === document.id,
+    });
+  }, [browserOffline, contentHydratedForId, document?.id, isEditingTemplate]);
+
   const refreshShareContext = useCallback(() => {
     setShareContextVersion((version) => version + 1);
   }, []);
 
   useEffect(() => {
-    if (!document?.id || isEditingTemplate || !resolvedWorkspaceId) {
+    if (!document?.id || isEditingTemplate || !effectiveWorkspaceId) {
       setShareContext(emptyShareContext());
       setCanEditDocument(true);
+      return;
+    }
+
+    if (browserOffline) {
+      setShareContext(emptyShareContext());
+      setCanEditDocument(canWriteActiveScope);
       return;
     }
 
@@ -229,8 +259,8 @@ export function useEditorSession() {
 
     async function loadShareContext() {
       const params = new URLSearchParams();
-      if (resolvedWorkspaceId) {
-        params.set("active_workspace_id", resolvedWorkspaceId);
+      if (effectiveWorkspaceId) {
+        params.set("active_workspace_id", effectiveWorkspaceId);
       }
 
       const response = await fetch(
@@ -251,7 +281,7 @@ export function useEditorSession() {
       }
 
       const shares = body.shares ?? [];
-      const isOrigin = documentWorkspaceId === resolvedWorkspaceId;
+      const isOrigin = documentWorkspaceId === effectiveWorkspaceId;
 
       if (isOrigin) {
         const sharedWith = shares.map((share) => share.label).filter(Boolean);
@@ -279,13 +309,39 @@ export function useEditorSession() {
     return () => {
       cancelled = true;
     };
-  }, [canWriteActiveScope, document?.id, document?.workspace_id, isEditingTemplate, resolvedWorkspaceId, scopes, shareContextVersion]);
+  }, [browserOffline, canWriteActiveScope, document?.id, document?.workspace_id, effectiveWorkspaceId, isEditingTemplate, scopes, shareContextVersion]);
+
+  useLayoutEffect(() => {
+    if (isEditingTemplate || !document?.id || !browserOffline) return;
+    if (contentHydratedForId === document.id) return;
+
+    const raw =
+      (document.content as Record<string, unknown> | null) ??
+      EMPTY_DOCUMENT_CONTENT;
+    const normalized = normalizeDocumentImageContent(raw);
+    const docId = document.id;
+
+    setEditorContent(normalized);
+    latestContentRef.current = normalized;
+    setContentPlain(document.content_plain?.trim() ?? "");
+    setContentHydratedForId(docId);
+    hydratedDocumentIdRef.current = docId;
+    setContentSyncToken((token) => token + 1);
+    setComments(parseDocumentComments(document.metadata));
+  }, [
+    browserOffline,
+    contentHydratedForId,
+    document?.content,
+    document?.content_plain,
+    document?.id,
+    document?.metadata,
+    isEditingTemplate,
+  ]);
 
   useEffect(() => {
     if (isEditingTemplate || !document?.id) return;
-    if (hydratedDocumentIdRef.current === document.id) return;
-
-    hydratedDocumentIdRef.current = document.id;
+    if (contentHydratedForId === document.id) return;
+    if (browserOffline) return;
 
     const raw =
       (document.content as Record<string, unknown> | null) ??
@@ -301,7 +357,12 @@ export function useEditorSession() {
       const normalized = normalizeDocumentImageContent(raw);
       let resolved = normalized;
       try {
-        resolved = await resolveDocumentImageUrls(normalized);
+        resolved = await Promise.race([
+          resolveDocumentImageUrls(normalized),
+          new Promise<Record<string, unknown>>((resolve) => {
+            window.setTimeout(() => resolve(normalized), 5_000);
+          }),
+        ]);
       } catch {
         resolved = normalized;
       }
@@ -311,6 +372,7 @@ export function useEditorSession() {
       latestContentRef.current = resolved;
       setContentPlain(docContentPlain?.trim() ?? "");
       setContentHydratedForId(docId);
+      hydratedDocumentIdRef.current = docId;
       setContentSyncToken((token) => token + 1);
       setComments(parseDocumentComments(docMetadata));
     }
@@ -320,10 +382,19 @@ export function useEditorSession() {
     return () => {
       cancelled = true;
     };
-  }, [document?.id, document?.content, document?.metadata, isEditingTemplate]);
+  }, [
+    browserOffline,
+    contentHydratedForId,
+    document?.id,
+    document?.content,
+    document?.metadata,
+    document?.content_plain,
+    isEditingTemplate,
+  ]);
 
   const collabActiveRef = useRef(false);
   const editorForConflictRef = useRef<Editor | null>(null);
+  const flushBodyToCacheRef = useRef<() => void>(() => {});
   const ydocForSnapshotRef = useRef<import("yjs").Doc | null>(null);
 
   const {
@@ -423,7 +494,8 @@ export function useEditorSession() {
     setBaselineUpdatedAt,
   } = useDocumentRealtime({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
-    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    enabled:
+      !isEditingTemplate && crossScopeAccess === "allowed" && !browserOffline,
     isDirty,
     onRemoteUpdate: applyRemoteDocument,
   });
@@ -550,37 +622,59 @@ export function useEditorSession() {
   }, [isEditingTemplate, requestedTemplateId, setDocumentTitle, setDocumentId]);
 
   useEffect(() => {
-    if (scopesLoading || isEditingTemplate) return;
+    if (isEditingTemplate) return;
 
-    if (requestedId && isDocumentId(requestedId)) {
-      setResolvedId(requestedId);
+    const browserOffline =
+      typeof navigator !== "undefined" && !navigator.onLine;
+    if (scopesLoading && !browserOffline) return;
+
+    if (effectiveRequestedId) {
+      setResolvedId(effectiveRequestedId);
       return;
     }
 
-    router.replace("/documents");
-  }, [scopesLoading, requestedId, isEditingTemplate, router]);
+    if (!browserOffline) {
+      router.replace("/documents");
+    }
+  }, [scopesLoading, effectiveRequestedId, isEditingTemplate, router]);
 
   useEffect(() => {
-    if (!document || !resolvedWorkspaceId || isEditingTemplate) {
+    if (!document || !effectiveWorkspaceId || isEditingTemplate) {
       setCrossScopeAccess("allowed");
       return;
     }
 
-    if (document.workspace_id === resolvedWorkspaceId) {
+    if (document.workspace_id === effectiveWorkspaceId) {
       setCrossScopeAccess("allowed");
       return;
+    }
+
+    if (browserOffline || !online) {
+      let cancelled = false;
+      void getOfflineDocument(document.id)
+        .then((cached) => {
+          if (!cancelled) {
+            setCrossScopeAccess(cached ? "allowed" : "denied");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setCrossScopeAccess("allowed");
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
     let cancelled = false;
     setCrossScopeAccess("pending");
 
-    const activeScope = scopes.find((scope) => scope.id === resolvedWorkspaceId);
+    const activeScope = scopes.find((scope) => scope.id === effectiveWorkspaceId);
     const isPersonalScope = activeScope?.type === "private";
 
     void documentAccessibleInActiveScope(
       document.id,
       document.workspace_id,
-      resolvedWorkspaceId,
+      effectiveWorkspaceId,
       {
         userId: session.userId,
         personalScope: isPersonalScope,
@@ -595,10 +689,12 @@ export function useEditorSession() {
       cancelled = true;
     };
   }, [
+    browserOffline,
     document?.id,
     document?.workspace_id,
+    effectiveWorkspaceId,
     isEditingTemplate,
-    resolvedWorkspaceId,
+    online,
     scopes,
     session.userId,
   ]);
@@ -608,6 +704,12 @@ export function useEditorSession() {
       router.replace("/documents");
     }
   }, [crossScopeAccess, router]);
+
+  useEffect(() => {
+    hydratedDocumentIdRef.current = null;
+    titleHydratedForIdRef.current = null;
+    setContentHydratedForId(null);
+  }, [resolvedId]);
 
   useEffect(() => {
     if (!document || isEditingTemplate) return;
@@ -620,10 +722,6 @@ export function useEditorSession() {
       writeLastDocumentId(document.workspace_id, document.id);
     }
   }, [document?.id, document?.title, isEditingTemplate, setDocumentId, setDocumentTitle]);
-
-  useEffect(() => {
-    titleHydratedForIdRef.current = null;
-  }, [resolvedId]);
 
   const persistDocument = useCallback(
     async (patch: Parameters<typeof save>[0]) => {
@@ -640,13 +738,22 @@ export function useEditorSession() {
     },
     [markSynced, online, save, showToast],
   );
+  const persistDocumentRef = useRef(persistDocument);
+  persistDocumentRef.current = persistDocument;
 
   contentPlainRef.current = contentPlain;
 
   const debouncedSaveContent = useDebouncedCallback(
     (content: Record<string, unknown>, content_plain: string) => {
-      if (!document?.id) return;
-      void persistContentProjection(document.id, content, content_plain);
+      const documentId = resolvedIdRef.current;
+      if (!documentId) return;
+      // Always persist through IndexedDB + outbox so local-only creates sync body
+      // text reliably. Direct PATCH bypasses the outbox and loses content when the
+      // server row does not exist yet.
+      void persistDocumentRef.current({
+        content: normalizeDocumentImageContent(content),
+        content_plain,
+      });
     },
     800,
   );
@@ -680,9 +787,14 @@ export function useEditorSession() {
       if (isEditingTemplate && templateRecord) {
         debouncedSaveTemplateContent(nextContent);
       } else if (!isEditingTemplate) {
-        // Durable persistence is Yjs's job (document_yjs_state); this just
-        // keeps the Postgres projection (search/RAG/activity) reasonably fresh.
-        debouncedSaveContent(nextContent, content_plain);
+        if (browserOffline) {
+          void persistDocumentRef.current({
+            content: normalizeDocumentImageContent(nextContent),
+            content_plain,
+          });
+        } else {
+          debouncedSaveContent(nextContent, content_plain);
+        }
       }
     },
     [debouncedSaveContent, debouncedSaveTemplateContent, isEditingTemplate, templateRecord],
@@ -694,32 +806,72 @@ export function useEditorSession() {
   // behind an offline editing session, even without a further keystroke.
   useEffect(() => {
     if (!online || isEditingTemplate || !document?.id) return;
-    const plain = contentPlainRef.current;
-    if (plain.trim().length === 0) return;
-    void persistContentProjection(document.id, latestContentRef.current, plain);
+    const plain = contentPlainRef.current.trim();
+    if (plain.length === 0) return;
+    void persistDocumentRef.current({
+      content: normalizeDocumentImageContent(latestContentRef.current),
+      content_plain: contentPlainRef.current,
+    });
   }, [online, isEditingTemplate, document?.id]);
 
   // Flush pending debounced saves before background sync runs on reconnect.
   useLayoutEffect(() => {
+    const flushLatestBodyToCache = () => {
+      const documentId = resolvedIdRef.current;
+      if (!documentId || isEditingTemplate) return;
+
+      const editor = editorForConflictRef.current;
+      if (editor && !editor.isDestroyed) {
+        const plain = editor.getText().trim();
+        if (plain.length === 0) return;
+        void persistDocumentRef.current({
+          content: normalizeDocumentImageContent(
+            editor.getJSON() as Record<string, unknown>,
+          ),
+          content_plain: editor.getText(),
+        });
+        return;
+      }
+
+      const plain = contentPlainRef.current.trim();
+      if (plain.length === 0) return;
+      void persistDocumentRef.current({
+        content: normalizeDocumentImageContent(latestContentRef.current),
+        content_plain: contentPlainRef.current,
+      });
+    };
+    flushBodyToCacheRef.current = flushLatestBodyToCache;
     const flushPendingSave = () => {
       debouncedSaveContentRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       debouncedSaveCommentsRef.current?.flush();
+      flushLatestBodyToCache();
     };
-    const cancelPendingSave = () => {
+    const handleOfflineTransition = () => {
       debouncedSaveCommentsRef.current?.flush();
-      debouncedSaveContentRef.current?.cancel();
+      debouncedSaveContentRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
+      flushLatestBodyToCache();
     };
+    const unregisterFlush = registerEditorSaveFlush(flushPendingSave);
     window.addEventListener("online", flushPendingSave, { capture: true });
-    window.addEventListener("offline", cancelPendingSave, { capture: true });
+    window.addEventListener("offline", handleOfflineTransition, { capture: true });
     return () => {
+      unregisterFlush();
       window.removeEventListener("online", flushPendingSave, { capture: true });
-      window.removeEventListener("offline", cancelPendingSave, { capture: true });
+      window.removeEventListener("offline", handleOfflineTransition, {
+        capture: true,
+      });
       debouncedSaveContentRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       debouncedSaveCommentsRef.current?.flush();
+      flushLatestBodyToCache();
     };
+  }, [isEditingTemplate]);
+
+  const flushEditorBodySave = useCallback(() => {
+    debouncedSaveContentRef.current?.flush();
+    flushBodyToCacheRef.current();
   }, []);
 
   // Retry queued title/metadata patches once back online.
@@ -1009,28 +1161,30 @@ export function useEditorSession() {
 
   return {
     document: document as DocumentRecord | null,
-    documentId: isEditingTemplate ? null : (document?.id ?? null),
+    documentId: isEditingTemplate ? null : (document?.id ?? resolvedId),
     documentScopeLabel,
     shareContext,
     canEditDocument,
     refreshShareContext,
     workspaceId: isEditingTemplate
-      ? (templateRecord?.workspace_id ?? resolvedWorkspaceId)
-      : (document?.workspace_id ?? null),
+      ? (templateRecord?.workspace_id ?? effectiveWorkspaceId)
+      : (document?.workspace_id ?? effectiveWorkspaceId ?? null),
     loading: isEditingTemplate
       ? templateLoading ||
         !templateRecord ||
         contentHydratedForId !== templateHydrationKey
-      : scopesLoading ||
+      : (online && !browserOffline ? scopesLoading : false) ||
         !resolvedId ||
-        !resolvedWorkspaceId ||
-        crossScopeAccess === "pending" ||
+        (!effectiveWorkspaceId && !document) ||
+        (!browserOffline && crossScopeAccess === "pending") ||
         (!document && loading) ||
         (document != null && contentHydratedForId !== document.id) ||
         (!isEditingTemplate &&
           crossScopeAccess === "allowed" &&
           document != null &&
-          !collabDocReady),
+          session.userId &&
+          !collabDocReady &&
+          ydoc == null),
     error: isEditingTemplate ? templateError : error,
     content,
     contentPlain,
@@ -1121,5 +1275,7 @@ export function useEditorSession() {
     takeAllOfflineTheirs,
     resolveOfflineCluster,
     registerEditorForConflict,
+    isOffline: browserOffline,
+    flushEditorBodySave,
   };
 }

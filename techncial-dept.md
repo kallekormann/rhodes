@@ -34,6 +34,7 @@
 | [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
 | [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
 | [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | done | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
+| [TD-004](#td-004-temp-offline-client-error-log) | Offline QA / debug | Low | in progress | **Remove after offline editor bug is fixed** | Temporary dev file log (`logs/client-errors.log`) + `__rhodesErrors()` |
 
 *(Add new rows at the bottom; keep IDs stable.)*
 
@@ -125,6 +126,44 @@ On online reload the hook calls [clearYjsIndexedDbPersistence](apps/web/src/lib/
 ### Fix (shipped)
 
 [M1b.1 slices 6–11](implementation_plan/25-offline-app-shell.md): replaced `IndexeddbPersistence` with `RhodesYjsPersistence` writing encrypted state to `rhodes-db` → `yjs_state` only; removed `y-indexeddb` dependency and added legacy per-doc DB cleanup (slice 10). Grep confirms no remaining `IndexeddbPersistence` / `y-indexeddb` usage in app code (slice 12).
+
+---
+
+## TD-004 — Temp offline client error log
+
+**Status:** in progress — **remove as soon as offline open/create editor bug is diagnosed and fixed**  
+**Severity:** Low — debug-only; no product feature  
+**Added:** July 27, 2026 (M1b offline QA)
+
+### Purpose
+
+Capture React crashes and unhandled errors to a **file in the repo** (`rhodes-app/logs/client-errors.log`) via a dev-only API route. Survives IndexedDB wipes on crash. In-memory ring buffer for the current browser session (`await __rhodesErrors()`).
+
+**Note:** DevTools “Offline” blocks POST to localhost — keep the Next dev server running and use Network throttling instead of full Offline if you need file capture while simulating a dead backend.
+
+### Removal checklist (delete all of this when bug is fixed)
+
+| Action | Path |
+|--------|------|
+| Delete | [client-error-log.ts](apps/web/src/lib/dev/client-error-log.ts) |
+| Delete | [client-error-log.test.ts](apps/web/src/lib/dev/client-error-log.test.ts) |
+| Delete | [client-error-log-server.ts](apps/web/src/lib/dev/client-error-log-server.ts) |
+| Delete | [client-error-log-server.test.ts](apps/web/src/lib/dev/client-error-log-server.test.ts) |
+| Delete | [client-error-log-types.ts](apps/web/src/lib/dev/client-error-log-types.ts) |
+| Delete | [client-error-log-path.ts](apps/web/src/lib/dev/client-error-log-path.ts) |
+| Delete | [api/dev/client-errors/route.ts](apps/web/src/app/api/dev/client-errors/route.ts) |
+| Delete | [EditorErrorBoundary.tsx](apps/web/src/components/EditorErrorBoundary.tsx) |
+| Revert | [AppShell.tsx](apps/web/src/components/AppShell.tsx) — remove `installClientErrorLog()` |
+| Revert | [AppErrorBoundary.tsx](apps/web/src/components/AppErrorBoundary.tsx) — remove `appendClientError` + log hint |
+| Revert | [EditorView.tsx](apps/web/src/views/EditorView.tsx) — remove `EditorErrorBoundary`, `sessionError` UI, log copy |
+| Revert | [EditorView.css](apps/web/src/views/EditorView.css) — remove `.editor-content__load-error*` rules |
+| Delete | [logs/.gitkeep](logs/.gitkeep) (optional) |
+
+Log file on disk: `rhodes-app/logs/client-errors.log` (gitignored via `*.log`)
+
+### Why temporary
+
+Production error reporting should use a proper pipeline (Sentry, etc.), not a dev log file in the repo.
 
 ---
 

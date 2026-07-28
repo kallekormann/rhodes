@@ -33,6 +33,8 @@ type BubbleMenuProps = {
   className?: string;
   style?: CSSProperties;
   onAsk?: () => void;
+  askDisabled?: boolean;
+  askDisabledTitle?: string;
   onLinkApply?: (payload: { mode: "external" | "internal"; value: string; label: string }) => void;
   onCommentSave?: (text: string) => void;
   onMarkClick?: (mark: BubbleActiveMark) => void;
@@ -63,6 +65,8 @@ export function BubbleMenu({
   className = "",
   style,
   onAsk,
+  askDisabled = false,
+  askDisabledTitle = "Ask unavailable offline",
   onLinkApply,
   onCommentSave,
   onMarkClick,
@@ -90,7 +94,14 @@ export function BubbleMenu({
       role="toolbar"
       aria-label="Text formatting"
     >
-      <button type="button" className="bubble-menu__ask" onClick={onAsk}>
+      <button
+        type="button"
+        className={`bubble-menu__ask ${askDisabled ? "bubble-menu__ask--disabled" : ""}`}
+        onClick={askDisabled ? undefined : onAsk}
+        disabled={askDisabled}
+        title={askDisabled ? askDisabledTitle : undefined}
+        aria-disabled={askDisabled}
+      >
         <Sparkles size={16} strokeWidth={1.75} />
         Ask
       </button>

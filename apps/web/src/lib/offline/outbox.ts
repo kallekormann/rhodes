@@ -154,3 +154,29 @@ export async function clearOutboxForDocument(documentId: string): Promise<void> 
     rows.map((row) => (row.id != null ? db.delete("outbox", row.id) : undefined)),
   );
 }
+
+export async function documentHasPendingDelete(
+  documentId: string,
+): Promise<boolean> {
+  const rows = await getOutboxForDocument(documentId);
+  return rows.some((row) => row.mutation === "delete");
+}
+
+function outboxMutationRank(mutation: OfflineOutboxRecord["mutation"]): number {
+  if (mutation === "delete") return 0;
+  if (mutation === "create") return 1;
+  return 2;
+}
+
+/** Drain order: deletes first, then creates, then patches (FIFO within each). */
+export function sortOutboxForDrain(
+  rows: OfflineOutboxRecord[],
+): OfflineOutboxRecord[] {
+  return [...rows].sort((a, b) => {
+    const rank = outboxMutationRank(a.mutation) - outboxMutationRank(b.mutation);
+    if (rank !== 0) return rank;
+    return (
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  });
+}

@@ -95,17 +95,37 @@ describe("RhodesYjsPersistence", () => {
     p2.destroy();
   });
 
+  it("flushes pending edits on destroy", async () => {
+    await unlockDocsVault(userId);
+
+    const doc = new Y.Doc();
+    const persistence = new RhodesYjsPersistence(documentId, doc, userId);
+    await persistence.whenSynced;
+
+    doc.getMap("test").set("a", 1);
+    persistence.destroy();
+    await sleep(200);
+
+    expect(yjsStateRows.has(documentId)).toBe(true);
+    doc.destroy();
+  });
+
   it("stops writing after destroy", async () => {
     await unlockDocsVault(userId);
 
     const doc = new Y.Doc();
     const persistence = new RhodesYjsPersistence(documentId, doc, userId);
     await persistence.whenSynced;
-    persistence.destroy();
-
     doc.getMap("test").set("x", 1);
     await sleep(PERSIST_WAIT_MS);
+    persistence.destroy();
+    await sleep(100);
 
-    expect(yjsStateRows.has(documentId)).toBe(false);
+    const afterDestroy = yjsStateRows.get(documentId);
+    doc.getMap("test").set("y", 2);
+    await sleep(PERSIST_WAIT_MS);
+
+    expect(yjsStateRows.get(documentId)).toEqual(afterDestroy);
+    doc.destroy();
   });
 });

@@ -27,6 +27,8 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import { useTemplates } from "@/hooks/useTemplates";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
+import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
+import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { Dialog } from "@/components/Dialog";
@@ -48,7 +50,6 @@ const ANY_PROPERTY = "__any__";
 
 export function DocumentsView() {
   const {
-    scopesLoading,
     workspaceId,
     openEditor,
     setDocumentTitle,
@@ -73,6 +74,7 @@ export function DocumentsView() {
     loading,
     error,
     offlineSource,
+    workspaceSync,
     refresh,
     updateDocument,
     deleteDocument,
@@ -154,6 +156,7 @@ export function DocumentsView() {
   })();
 
   return (
+    <DocumentsSyncGate>
     <div className="canvas-view documents-view">
       <div className="documents-view__scroll overlay-scrollbar">
         <div className="documents-view__inner">
@@ -164,7 +167,7 @@ export function DocumentsView() {
               title="Templates"
               action={{ label: "More templates", onClick: () => setView("templates") }}
             />
-            {templatesLoading || scopesLoading ? (
+            {templatesLoading && overviewTemplates.length === 0 ? (
               <LoaderState
                 label="Loading templates…"
                 size="s"
@@ -257,7 +260,7 @@ export function DocumentsView() {
               </div>
             </div>
 
-            {loading || scopesLoading ? (
+            {loading && documents.length === 0 ? (
               <LoaderState
                 label="Loading documents…"
                 size="s"
@@ -405,6 +408,18 @@ export function DocumentsView() {
         onConfirm={() => void handleDelete()}
         onClose={() => setDeleteTarget(null)}
       />
+
+      {workspaceSync.active && (
+        <RhodesActivityRail
+          processing
+          processingLabel={
+            workspaceSync.documentTitle
+              ? `Syncing “${workspaceSync.documentTitle}”`
+              : "Syncing documents…"
+          }
+        />
+      )}
     </div>
+    </DocumentsSyncGate>
   );
 }

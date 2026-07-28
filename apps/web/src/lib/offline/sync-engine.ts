@@ -5,6 +5,7 @@
  * POST/DELETE. The document body is owned by the Yjs CRDT (see useYjsCollaboration).
  */
 
+import { bodyRichness, plainTextFromBody } from "@/lib/offline/document-body";
 import {
   getOfflineDocument,
   putOfflineDocument,
@@ -23,12 +24,17 @@ import {
   getOutboxForDocument,
   listOutbox,
   removeOutboxEntry,
+  sortOutboxForDrain,
+  documentHasPendingDelete,
   type DocumentCreatePayload,
   type DocumentPatchPayload,
 } from "@/lib/offline/outbox";
 import type { OfflineSyncStatus } from "@/lib/offline/db";
 import { getOfflineDB } from "@/lib/offline/db";
 import type { DocumentRecord } from "@/hooks/useDocument";
+import { flushEditorSavesBeforeSync } from "@/lib/offline/editor-save-flush";
+import { awaitPendingDocumentSaves } from "@/lib/offline/pending-document-saves";
+import { seedServerYjsIfEmpty } from "@/lib/offline/seed-server-yjs";
 
 export type SyncStatusEvent = {
   documentId: string;
@@ -96,6 +102,46 @@ async function deleteDocumentOnServer(documentId: string): Promise<Response> {
 
 type PushMutationResult = "done" | "skipped" | "network" | "failed";
 
+function mergeCreateMetadata(
+  local: Awaited<ReturnType<typeof getOfflineDocument>>,
+  payload: DocumentCreatePayload,
+): Record<string, unknown> {
+  return {
+    ...(payload.metadata ?? {}),
+    ...(local?.metadata ?? {}),
+  };
+}
+
+function pickCreateBody(
+  local: Awaited<ReturnType<typeof getOfflineDocument>>,
+  payload: DocumentCreatePayload,
+): Pick<DocumentCreatePayload, "content" | "content_plain"> {
+  const localRich = bodyRichness(local?.content ?? null, local?.content_plain ?? null);
+  const payloadRich = bodyRichness(payload.content ?? null, payload.content_plain ?? null);
+
+  if (localRich >= payloadRich && local?.content) {
+    return {
+      content: local.content,
+      content_plain: plainTextFromBody(local.content, local.content_plain),
+    };
+  }
+
+  if (payload.content) {
+    return {
+      content: payload.content,
+      content_plain: plainTextFromBody(payload.content, payload.content_plain),
+    };
+  }
+
+  return {
+    content: local?.content ?? payload.content,
+    content_plain:
+      localRich > 0
+        ? plainTextFromBody(local?.content ?? null, local?.content_plain ?? null)
+        : plainTextFromBody(payload.content ?? null, payload.content_plain ?? null),
+  };
+}
+
 async function pushCreateMutation(entry: {
   id: number;
   document_id: string;
@@ -103,15 +149,30 @@ async function pushCreateMutation(entry: {
 }): Promise<PushMutationResult> {
   const payload = entry.payload as DocumentCreatePayload;
   const local = await getOfflineDocument(entry.document_id);
+  const body = pickCreateBody(local, payload);
+  const metadata = mergeCreateMetadata(local, payload);
+  const sendRich = bodyRichness(body.content ?? null, body.content_plain ?? null);
+
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[sync-engine] pushCreate", {
+      documentId: entry.document_id,
+      localRich: bodyRichness(local?.content ?? null, local?.content_plain ?? null),
+      payloadRich: bodyRichness(
+        payload.content ?? null,
+        payload.content_plain ?? null,
+      ),
+      sendRich,
+    });
+  }
 
   let response: Response;
   try {
     response = await createDocumentOnServer(entry.document_id, {
       workspace_id: payload.workspace_id,
       title: local?.title ?? payload.title,
-      metadata: local?.metadata ?? payload.metadata ?? {},
-      content: local?.content ?? payload.content,
-      content_plain: local?.content_plain ?? payload.content_plain ?? "",
+      metadata,
+      content: body.content,
+      content_plain: body.content_plain ?? "",
       template_id: payload.template_id,
     });
   } catch {
@@ -119,6 +180,13 @@ async function pushCreateMutation(entry: {
   }
 
   if (!response.ok) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[sync-engine] pushCreate failed", {
+        documentId: entry.document_id,
+        status: response.status,
+        sendRich,
+      });
+    }
     return "failed";
   }
 
@@ -136,27 +204,71 @@ async function pushCreateMutation(entry: {
       }
     | undefined;
 
+  if (process.env.NODE_ENV !== "production") {
+    console.info("[sync-engine] pushCreate ok", {
+      documentId: entry.document_id,
+      status: response.status,
+      serverPlainLength: (serverDoc?.content_plain ?? "").trim().length,
+      sendRich,
+    });
+  }
+
   await removeOutboxEntry(entry.id);
 
   if (serverDoc) {
+    const freshestLocal = (await getOfflineDocument(entry.document_id)) ?? local;
+    const richestBody = pickCreateBody(freshestLocal, payload);
+    const serverRich = bodyRichness(serverDoc.content, serverDoc.content_plain);
+    const richestRich = bodyRichness(richestBody.content ?? null, richestBody.content_plain ?? null);
+    const needsContentPatch =
+      richestRich > serverRich && Boolean(richestBody.content);
+    const mergedMetadata = mergeCreateMetadata(freshestLocal, payload);
+    const serverMetadataKeys = Object.keys(serverDoc.metadata ?? {}).length;
+    const mergedMetadataKeys = Object.keys(mergedMetadata).length;
+    const needsMetadataPatch = mergedMetadataKeys > serverMetadataKeys;
+
     try {
+      if (needsContentPatch || needsMetadataPatch) {
+        await enqueueDocumentPatch({
+          documentId: serverDoc.id,
+          patch: {
+            ...(needsContentPatch
+              ? {
+                  content: richestBody.content,
+                  content_plain: richestBody.content_plain,
+                }
+              : {}),
+            ...(needsMetadataPatch ? { metadata: mergedMetadata } : {}),
+          },
+          expectedUpdatedAt: serverDoc.updated_at,
+        });
+      }
+
       await putOfflineDocument({
         id: serverDoc.id,
         workspace_id: serverDoc.workspace_id,
         title: serverDoc.title,
-        content: serverDoc.content,
-        content_plain: serverDoc.content_plain,
-        metadata: serverDoc.metadata,
+        content: needsContentPatch
+          ? richestBody.content ?? serverDoc.content
+          : serverDoc.content,
+        content_plain: needsContentPatch
+          ? (richestBody.content_plain ?? serverDoc.content_plain)
+          : serverDoc.content_plain,
+        metadata: needsMetadataPatch ? mergedMetadata : serverDoc.metadata,
         server_updated_at: serverDoc.updated_at,
         updated_at: serverDoc.updated_at,
         created_at: serverDoc.created_at,
-        sync_status: "synced",
+        sync_status: needsContentPatch || needsMetadataPatch ? "pending" : "synced",
       });
       emit({
         type: "status",
         documentId: serverDoc.id,
-        status: "synced",
+        status: needsContentPatch || needsMetadataPatch ? "pending" : "synced",
       });
+
+      if (sendRich > 0 && !needsContentPatch) {
+        await seedServerYjsIfEmpty(serverDoc.id);
+      }
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.warn(
@@ -215,6 +327,9 @@ async function drainPushOutbox(): Promise<{
   pushed: number;
   stoppedOnNetwork: boolean;
 }> {
+  flushEditorSavesBeforeSync();
+  await awaitPendingDocumentSaves();
+
   let pushed = 0;
   let stoppedOnNetwork = false;
 
@@ -224,7 +339,7 @@ async function drainPushOutbox(): Promise<{
   }
 
   while (navigator.onLine) {
-    const queue = await listOutbox();
+    const queue = sortOutboxForDrain(await listOutbox());
     if (queue.length === 0) break;
 
     let progressed = false;
@@ -288,8 +403,14 @@ async function drainPushOutbox(): Promise<{
       }
 
       if (!response.ok) {
-        // Auth / validation — stop to avoid tight loops.
-        break;
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(
+            "[sync-engine] patch push failed",
+            freshEntry.document_id,
+            response.status,
+          );
+        }
+        continue;
       }
 
       const data = await response.json().catch(() => ({}));
@@ -334,6 +455,14 @@ async function drainPushOutbox(): Promise<{
           documentId: freshEntry.document_id,
           status: "synced",
         });
+
+        const patchRich = bodyRichness(
+          patch.content ?? null,
+          patch.content_plain ?? null,
+        );
+        if (patchRich > 0) {
+          await seedServerYjsIfEmpty(freshEntry.document_id);
+        }
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.warn(
@@ -525,6 +654,9 @@ export async function pullWorkspaceDocuments(
       continue;
     }
     if (await documentHasPendingOutbox(remote.id)) {
+      continue;
+    }
+    if (await documentHasPendingDelete(remote.id)) {
       continue;
     }
 

@@ -85,6 +85,10 @@ const noopEngine: SpellEngine = {
 };
 
 async function loadEngine(locale: SpellLocale): Promise<SpellEngine | null> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return noopEngine;
+  }
+
   const existing = engines.get(locale);
   if (existing) return existing;
 

@@ -9,18 +9,29 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { initialFavoriteIds } from "@/data/documents";
 import {
   canCreatePersonalSpace,
   canCreateTeamSpace,
   type Scope,
 } from "@/data/scopes";
-import { useDocuments } from "@/hooks/useDocuments";
+import { useCreateDocument } from "@/hooks/useCreateDocument";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { buildFeatureGates } from "@/lib/features/gates";
 import { pathToView, viewToPath } from "@/lib/navigation";
-import { rememberLastAppPath } from "@/lib/settings-return";
+import {
+  buildEditorPath,
+  isBrowserOffline,
+  pushAppHistory,
+  readDocIdFromBrowserLocation,
+  viewFromBrowserLocation,
+} from "@/lib/navigation/app-path";
+import { appendDevLog } from "@/lib/dev/client-error-log";
+import { flushEditorBeforeNavigation } from "@/lib/offline/editor-save-flush";
+import { awaitDocumentPushIfNeeded, syncIfNeeded } from "@/lib/offline/workspace-sync";
 import { canWriteInScope } from "@/lib/workspaces/permissions";
+import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
 import { cleanupLegacyYjsIndexedDbDatabases } from "@/lib/offline/legacy-yjs-idb-cleanup";
@@ -145,7 +156,6 @@ export function AppProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [view, setViewState] = useState<AppView>(() => pathToView(pathname));
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [theme, setThemeState] = useState<Theme>("light");
@@ -199,19 +209,70 @@ export function AppProvider({
   const allowTeamCreate = canCreateTeamSpace(featureGates.tier);
   const allowPersonalCreate = canCreatePersonalSpace(scopes, featureGates.tier);
   const canWriteActiveScope = canWriteInScope(activeScope);
-  const workspaceId = scopesLoading
-    ? null
-    : (activeScopeId ?? scopes[0]?.id ?? null);
-  const { createDocument } = useDocuments(workspaceId, "recent", session.userId);
+  const workspaceId =
+    scopesLoading &&
+    typeof navigator !== "undefined" &&
+    navigator.onLine
+      ? null
+      : (activeScopeId ??
+        readActiveWorkspaceId() ??
+        scopes[0]?.id ??
+        null);
+  const { online, onReconnect } = useOnlineStatus(workspaceId);
+  const { createDocument } = useCreateDocument(
+    workspaceId,
+    session.userId,
+    online,
+  );
 
   useEffect(() => {
+    if (!workspaceId || !online) return;
+    void syncIfNeeded(workspaceId);
+  }, [online, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return () => {};
+    return onReconnect(() => {
+      void syncIfNeeded(workspaceId);
+    });
+  }, [onReconnect, workspaceId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isBrowserOffline()) {
+      setViewState(viewFromBrowserLocation());
+      const docId = readDocIdFromBrowserLocation();
+      if (docId) {
+        setDocumentId(docId);
+      }
+      return;
+    }
     setViewState(pathToView(pathname));
   }, [pathname]);
 
   useEffect(() => {
-    const search = searchParams.toString();
-    rememberLastAppPath(search ? `${pathname}?${search}` : pathname);
-  }, [pathname, searchParams]);
+    const onOffline = () => {
+      setViewState(viewFromBrowserLocation());
+      const docId = readDocIdFromBrowserLocation();
+      if (docId) {
+        setDocumentId(docId);
+      }
+    };
+    window.addEventListener("offline", onOffline);
+    return () => window.removeEventListener("offline", onOffline);
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => {
+      setViewState(viewFromBrowserLocation());
+      const docId = readDocIdFromBrowserLocation();
+      if (docId) {
+        setDocumentId(docId);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   useEffect(() => {
     const mode = readStoredThemeMode();
@@ -373,24 +434,66 @@ export function AppProvider({
 
   const setView = useCallback(
     (next: AppView) => {
-      router.push(viewToPath[next]);
+      const path = viewToPath[next];
+      const navigate = () => {
+        if (isBrowserOffline()) {
+          setViewState(next);
+          pushAppHistory(path);
+          return;
+        }
+        setViewState(next);
+        router.push(path);
+      };
+
+      if (view === "editor" && next !== "editor") {
+        const docId = documentId || readDocIdFromBrowserLocation();
+        navigate();
+        void flushEditorBeforeNavigation(docId);
+        return;
+      }
+
+      navigate();
     },
-    [router],
+    [documentId, router, view],
   );
 
   const openEditor = useCallback(
     (docId?: string) => {
-      const base = viewToPath.editor;
-      router.push(docId ? `${base}?doc=${encodeURIComponent(docId)}` : base);
+      const path = buildEditorPath(docId);
+      const targetId = docId ?? documentId;
+      if (docId) {
+        setDocumentId(docId);
+      }
+      if (isBrowserOffline()) {
+        setViewState("editor");
+        pushAppHistory(path);
+        if (process.env.NODE_ENV !== "production") {
+          void appendDevLog("offline-open-editor", { docId, path });
+        }
+        return;
+      }
+
+      // Navigate immediately so AppViewSwitch can show the editor without
+      // flashing the documents list while a background push runs.
+      setViewState("editor");
+      router.push(path);
+
+      if (targetId && workspaceId) {
+        void awaitDocumentPushIfNeeded(targetId, workspaceId);
+      }
     },
-    [router],
+    [documentId, router, workspaceId],
   );
 
   const openTemplateEditor = useCallback(
     (templateId: string) => {
-      router.push(
-        `${viewToPath.editor}?template=${encodeURIComponent(templateId)}`,
-      );
+      const path = buildEditorPath(undefined, templateId);
+      if (isBrowserOffline()) {
+        setViewState("editor");
+        pushAppHistory(path);
+        return;
+      }
+      router.push(path);
     },
     [router],
   );
@@ -401,10 +504,10 @@ export function AppProvider({
       return;
     }
 
-    let targetWorkspaceId = workspaceId;
+    let targetWorkspaceId = workspaceId ?? readActiveWorkspaceId();
 
     if (!targetWorkspaceId) {
-      if (scopesLoading) {
+      if (scopesLoading && typeof navigator !== "undefined" && navigator.onLine) {
         showToast("Scope is still loading…", "info");
         return;
       }
@@ -420,15 +523,17 @@ export function AppProvider({
       targetWorkspaceId = scope.id;
     }
 
-    const created = await createDocument(undefined, targetWorkspaceId);
-    if (!created) {
-      showToast("Couldn't create document", "error");
-      return;
+    try {
+      const created = await createDocument(undefined, targetWorkspaceId);
+      setDocumentId(created.id);
+      setDocumentTitle(created.title);
+      openEditor(created.id);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Couldn't create document",
+        "error",
+      );
     }
-
-    setDocumentId(created.id);
-    setDocumentTitle(created.title);
-    openEditor(created.id);
   }, [
     canWriteActiveScope,
     workspaceId,

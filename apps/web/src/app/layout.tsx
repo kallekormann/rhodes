@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { ClientErrorLogBootstrap } from "@/components/ClientErrorLogBootstrap";
 import "@/styles/global.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <ClientErrorLogBootstrap />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

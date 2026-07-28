@@ -23,6 +23,7 @@ import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { EditorErrorBoundary } from "@/components/EditorErrorBoundary";
 import { useInsights } from "@/hooks/useInsights";
 import { getCommentIdsToRemove } from "@/lib/documents/comments";
 import type { CitationInsertInput } from "@/lib/documents/editor-commands";
@@ -46,6 +47,7 @@ function EditorViewContent() {
 
   const {
     loading,
+    error: sessionError,
     content,
     contentPlain,
     documentId,
@@ -115,6 +117,8 @@ function EditorViewContent() {
     takeAllOfflineTheirs,
     resolveOfflineCluster,
     registerEditorForConflict,
+    isOffline,
+    flushEditorBodySave,
   } = useEditorSession();
 
   const editorEditable =
@@ -124,7 +128,7 @@ function EditorViewContent() {
     const peerUserIds = [
       ...new Set(
         offlineConflictReviews.flatMap((review) =>
-          review.peerContributors.map((peer) => peer.userId),
+          (review.peerContributors ?? []).map((peer) => peer.userId),
         ),
       ),
     ];
@@ -267,10 +271,11 @@ function EditorViewContent() {
 
   const handleOpenAsk = useCallback(
     (selectedText?: string) => {
+      if (isOffline) return;
       if (selectedText) setAskPrefill(selectedText);
       openPanel("ask");
     },
-    [openPanel],
+    [isOffline, openPanel],
   );
 
   const handleInsertCitation = useCallback((input: CitationInsertInput) => {
@@ -494,7 +499,16 @@ function EditorViewContent() {
                 variant="meta"
                 icon={SlidersHorizontal}
                 active={panelOpen && panelTab === "properties"}
-                onClick={() => openPanel("properties")}
+                disabled={isOffline}
+                title={
+                  isOffline
+                    ? "Properties unavailable offline — you can still write"
+                    : undefined
+                }
+                onClick={() => {
+                  if (isOffline) return;
+                  openPanel("properties");
+                }}
               >
                 Properties
               </IconLabelButton>
@@ -515,6 +529,28 @@ function EditorViewContent() {
                   align="start"
                   className="editor-content__loading"
                 />
+              </div>
+              <div className="editor-content__gutter" aria-hidden="true" />
+            </div>
+          ) : sessionError && !documentId && !isEditingTemplate ? (
+            <div className="editor-content__body">
+              <div className="editor-content__gutter" aria-hidden="true" />
+              <div className="editor-content__main editor-content__main--body">
+                <div className="editor-content__load-error" role="alert">
+                  <p className="editor-content__load-error-title">
+                    Couldn&apos;t open this document
+                  </p>
+                  <p className="editor-content__load-error-message">
+                    {sessionError}
+                  </p>
+                  <p className="caption">
+                    Run <code>await __rhodesCopyErrors()</code> in the console
+                    (works offline), or{" "}
+                    <code>
+                      await __rhodesInspectDoc(&apos;{documentId ?? "DOC_ID"}&apos;)
+                    </code>
+                  </p>
+                </div>
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
             </div>
@@ -544,6 +580,7 @@ function EditorViewContent() {
                     You have view-only access to this document.
                   </p>
                 )}
+                <EditorErrorBoundary documentId={documentId}>
                 <TipTapEditor
                   key={documentId ?? "template"}
                   content={content}
@@ -570,6 +607,7 @@ function EditorViewContent() {
                   }
                   onUpdate={handleContentUpdate}
                   onAsk={handleOpenAsk}
+                  askOffline={isOffline}
                   selectedCommentId={selectedCommentId}
                   hoverCommentId={hoverCommentId}
                   scrollContainerRef={canvasRef}
@@ -592,9 +630,11 @@ function EditorViewContent() {
                   onActivateOfflineConflictCluster={handleActivateConflictCluster}
                   onResolveOfflineCluster={resolveOfflineCluster}
                   onBlur={() => {
+                    flushEditorBodySave();
                     void evaluateOnBlur();
                   }}
                 />
+                </EditorErrorBoundary>
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
             </div>

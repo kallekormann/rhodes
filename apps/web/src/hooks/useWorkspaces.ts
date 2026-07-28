@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Scope } from "@/data/scopes";
 import { createClient } from "@/lib/supabase/client";
 import {
   membershipToScope,
   readActiveWorkspaceId,
   readDefaultScopeId,
+  readScopesCache,
   writeActiveWorkspaceId,
+  writeScopesCache,
 } from "@/lib/workspaces/scope";
 
 type MembershipRow = {
@@ -32,6 +34,8 @@ type UseWorkspacesResult = {
   refresh: () => Promise<void>;
   ensureWorkspace: () => Promise<Scope | null>;
 };
+
+const SCOPE_FETCH_TIMEOUT_MS = 8_000;
 
 async function bootstrapWorkspace(): Promise<boolean> {
   const response = await fetch("/app/api/workspaces/bootstrap", {
@@ -75,53 +79,102 @@ function mergeMemberships(
     });
 }
 
+function resolveScopesFromCache(): {
+  scopes: Scope[];
+  activeScopeId: string | null;
+} | null {
+  const cached = readScopesCache();
+  if (cached) {
+    const storedId = readActiveWorkspaceId();
+    const validStored = cached.scopes.find((s) => s.id === storedId)?.id;
+    const resolvedId =
+      validStored ??
+      cached.activeScopeId ??
+      cached.scopes[0]?.id ??
+      null;
+    return { scopes: cached.scopes, activeScopeId: resolvedId };
+  }
+
+  const storedId = readActiveWorkspaceId();
+  if (storedId) {
+    return { scopes: [], activeScopeId: storedId };
+  }
+
+  return null;
+}
+
+function applyResolvedScopes(
+  resolved: { scopes: Scope[]; activeScopeId: string | null },
+  setScopes: (scopes: Scope[]) => void,
+  setActiveScopeIdState: (id: string | null) => void,
+) {
+  setScopes(resolved.scopes);
+  setActiveScopeIdState(resolved.activeScopeId);
+  if (resolved.activeScopeId) {
+    writeActiveWorkspaceId(resolved.activeScopeId);
+  }
+}
+
 export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [activeScopeId, setActiveScopeIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshGeneration = useRef(0);
 
   const loadScopes = useCallback(async (allowBootstrap: boolean) => {
     const supabase = createClient();
 
-    const { data: memberships, error: membershipError } = await supabase
-      .from("workspace_members")
-      .select("workspace_id, role");
+    const load = async (): Promise<Scope[]> => {
+      const { data: memberships, error: membershipError } = await supabase
+        .from("workspace_members")
+        .select("workspace_id, role");
 
-    if (membershipError) {
-      throw new Error(membershipError.message);
-    }
-
-    let rows: MembershipRow[] = memberships ?? [];
-
-    if (rows.length === 0 && allowBootstrap) {
-      const bootstrapped = await bootstrapWorkspace();
-      if (bootstrapped) {
-        const retry = await supabase
-          .from("workspace_members")
-          .select("workspace_id, role");
-        if (retry.error) {
-          throw new Error(retry.error.message);
-        }
-        rows = (retry.data ?? []) as MembershipRow[];
+      if (membershipError) {
+        throw new Error(membershipError.message);
       }
-    }
 
-    if (rows.length === 0) {
-      return [];
-    }
+      let rows: MembershipRow[] = memberships ?? [];
 
-    const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
-    const { data: workspaces, error: workspaceError } = await supabase
-      .from("workspaces")
-      .select("id, name, is_team_workspace, created_at, enabled_views")
-      .in("id", workspaceIds);
+      if (rows.length === 0 && allowBootstrap) {
+        const bootstrapped = await bootstrapWorkspace();
+        if (bootstrapped) {
+          const retry = await supabase
+            .from("workspace_members")
+            .select("workspace_id, role");
+          if (retry.error) {
+            throw new Error(retry.error.message);
+          }
+          rows = (retry.data ?? []) as MembershipRow[];
+        }
+      }
 
-    if (workspaceError) {
-      throw new Error(workspaceError.message);
-    }
+      if (rows.length === 0) {
+        return [];
+      }
 
-    return mergeMemberships(rows, workspaces ?? []);
+      const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
+      const { data: workspaces, error: workspaceError } = await supabase
+        .from("workspaces")
+        .select("id, name, is_team_workspace, created_at, enabled_views")
+        .in("id", workspaceIds);
+
+      if (workspaceError) {
+        throw new Error(workspaceError.message);
+      }
+
+      return mergeMemberships(rows, workspaces ?? []);
+    };
+
+    return Promise.race([
+      load(),
+      new Promise<Scope[]>((_, reject) => {
+        window.setTimeout(
+          () => reject(new Error("Scope fetch timed out")),
+          SCOPE_FETCH_TIMEOUT_MS,
+        );
+      }),
+    ]);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -133,11 +186,29 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       return;
     }
 
+    const generation = ++refreshGeneration.current;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const restored = resolveScopesFromCache();
+      if (restored) {
+        applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+      setActiveScopeIdState(null);
+      setLoading(false);
+      setError("Scopes unavailable offline");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const nextScopes = await loadScopes(true);
+      if (generation !== refreshGeneration.current) return;
+
       setScopes(nextScopes);
 
       const storedId = readActiveWorkspaceId();
@@ -151,19 +222,47 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       if (resolvedId) {
         writeActiveWorkspaceId(resolvedId);
       }
+      writeScopesCache(nextScopes, resolvedId);
     } catch (err) {
+      if (generation !== refreshGeneration.current) return;
+
       const message =
         err instanceof Error ? err.message : "Failed to load scopes";
+      const restored = resolveScopesFromCache();
+      if (restored) {
+        applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+        setError(null);
+        return;
+      }
       setError(message);
       setScopes([]);
       setActiveScopeIdState(null);
     } finally {
-      setLoading(false);
+      if (generation === refreshGeneration.current) {
+        setLoading(false);
+      }
     }
   }, [userId, loadScopes]);
 
   const ensureWorkspace = useCallback(async () => {
     if (!userId) return null;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const restored = resolveScopesFromCache();
+      if (restored) {
+        applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+        setError(null);
+        return (
+          restored.scopes.find((s) => s.id === restored.activeScopeId) ??
+          restored.scopes[0] ??
+          null
+        );
+      }
+      const storedId = readActiveWorkspaceId();
+      setActiveScopeIdState(storedId);
+      setError(storedId ? null : "Scopes unavailable offline");
+      return null;
+    }
 
     setLoading(true);
     setError(null);
@@ -192,11 +291,22 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       if (resolvedId) {
         writeActiveWorkspaceId(resolvedId);
       }
+      writeScopesCache(nextScopes, resolvedId);
 
       return nextScopes.find((s) => s.id === resolvedId) ?? nextScopes[0] ?? null;
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to prepare scope";
+      const restored = resolveScopesFromCache();
+      if (restored) {
+        applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+        setError(null);
+        return (
+          restored.scopes.find((s) => s.id === restored.activeScopeId) ??
+          restored.scopes[0] ??
+          null
+        );
+      }
       setError(message);
       return null;
     } finally {
@@ -207,6 +317,19 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const onOffline = () => {
+      refreshGeneration.current += 1;
+      const restored = resolveScopesFromCache();
+      if (!restored) return;
+      applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+      setLoading(false);
+      setError(null);
+    };
+    window.addEventListener("offline", onOffline);
+    return () => window.removeEventListener("offline", onOffline);
+  }, []);
 
   const setActiveScopeId = useCallback((workspaceId: string) => {
     setActiveScopeIdState(workspaceId);

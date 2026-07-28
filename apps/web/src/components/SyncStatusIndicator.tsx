@@ -45,9 +45,9 @@ export function SyncStatusIndicator({
       return (
         <span
           className="sync-status sync-status--pending"
-          title="Unsaved changes — will sync when online"
+          title="Saved on this device — will sync when you're back online"
         >
-          Unsaved changes
+          Pending sync
         </span>
       );
     }

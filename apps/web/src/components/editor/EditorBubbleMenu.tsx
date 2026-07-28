@@ -19,6 +19,7 @@ import "./EditorBubbleMenu.css";
 type EditorBubbleMenuProps = {
   editor: Editor;
   onAsk?: (selectedText?: string) => void;
+  askOffline?: boolean;
   workspaceId?: string | null;
   documentId?: string | null;
   onCommentSave?: (text: string, range: { from: number; to: number }) => void;
@@ -55,6 +56,7 @@ function shouldShowBubble(editor: Editor): boolean {
 export function EditorBubbleMenu({
   editor,
   onAsk,
+  askOffline = false,
   workspaceId,
   documentId,
   onCommentSave,
@@ -284,6 +286,7 @@ export function EditorBubbleMenu({
   };
 
   const handleAsk = () => {
+    if (askOffline) return;
     const { from, to } = lastSelectionRef.current;
     const selectedText =
       from < to ? editor.state.doc.textBetween(from, to, " ").trim() : "";
@@ -336,6 +339,8 @@ export function EditorBubbleMenu({
         onLinkClose={() => setLinkOpen(false)}
         onMarkClick={handleMarkClick}
         onAsk={handleAsk}
+        askDisabled={askOffline}
+        askDisabledTitle="Ask unavailable offline — you can still write"
         onLinkApply={applyLink}
         commentOpen={commentOpen}
         onCommentToggle={() => {

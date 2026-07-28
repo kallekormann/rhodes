@@ -22,6 +22,7 @@ import {
   RhodesYjsPersistence,
 } from "@/lib/offline/yjs-rhodes-persistence";
 import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
+import { seedYjsFromProjectionIfNeeded } from "@/lib/offline/seed-yjs-from-projection";
 import { avatarHueForUser } from "@/lib/profile/avatar";
 
 export type CollaborationUser = {
@@ -72,6 +73,23 @@ type PersistedYjsState = {
   seq: number;
   updatedAt: string | null;
 };
+
+const SERVER_YJS_FETCH_TIMEOUT_MS = 2_500;
+
+async function fetchPersistedStateWithTimeout(
+  documentId: string,
+  timeoutMs = SERVER_YJS_FETCH_TIMEOUT_MS,
+): Promise<PersistedYjsState> {
+  return Promise.race([
+    fetchPersistedState(documentId),
+    new Promise<PersistedYjsState>((resolve) => {
+      window.setTimeout(
+        () => resolve({ state: null, seq: 0, updatedAt: null }),
+        timeoutMs,
+      );
+    }),
+  ]);
+}
 
 async function fetchPersistedState(
   documentId: string,
@@ -392,9 +410,12 @@ export function useYjsCollaboration(params: {
       const isOffline =
         typeof navigator !== "undefined" && !navigator.onLine;
 
+      idbPersistence = new RhodesYjsPersistence(documentId, doc, userId);
+      const localReadyPromise = idbPersistence.whenSynced;
+
       let serverState: Uint8Array | null = null;
       if (!isOffline) {
-        const server = await fetchPersistedState(documentId);
+        const server = await fetchPersistedStateWithTimeout(documentId);
         if (cancelled) return;
         // Only clear local persistence after a successful server fetch so a
         // network blip does not wipe the only offline copy.
@@ -402,12 +423,10 @@ export function useYjsCollaboration(params: {
           await clearRhodesYjsPersistence(documentId);
           await clearYjsIndexedDbPersistence(documentId);
           serverState = server.state;
-          applyServerState(doc, serverState);
         }
       }
 
-      idbPersistence = new RhodesYjsPersistence(documentId, doc, userId);
-      await idbPersistence.whenSynced;
+      await localReadyPromise;
       if (cancelled) return;
 
       await clearStaleOfflineSnapshots(documentId);
@@ -416,12 +435,15 @@ export function useYjsCollaboration(params: {
       if (serverState) {
         applyServerState(doc, serverState);
       } else if (!isOffline) {
-        const server = await fetchPersistedState(documentId);
+        const server = await fetchPersistedStateWithTimeout(documentId);
         if (cancelled) return;
         if (server.state && server.state.length > 0) {
           applyServerState(doc, server.state);
         }
       }
+      if (cancelled) return;
+
+      await seedYjsFromProjectionIfNeeded(documentId, doc);
       if (cancelled) return;
 
       // Stale offline conflict snapshots must never rewind a fresh server load.

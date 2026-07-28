@@ -58,6 +58,11 @@ export function useInsights(
       return;
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setLoading(false);
+      return;
+    }
+
     if (pausedRef.current || isAskOllamaActive()) {
       return;
     }
@@ -111,6 +116,11 @@ export function useInsights(
 
     const query = queryText.trim();
     if (!workspaceId || query.length < 20) {
+      setLoading(false);
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
       setLoading(false);
       return;
     }

@@ -60,3 +60,37 @@ export function readDefaultScopeId(): string | null {
 export function writeDefaultScopeId(scopeId: string) {
   window.localStorage.setItem(DEFAULT_SCOPE_KEY, scopeId);
 }
+
+const SCOPES_CACHE_KEY = "rhodes:scopes_cache:v1";
+const SCOPES_CACHE_LOCAL_KEY = "rhodes:scopes_cache:v1:local";
+
+type ScopesCache = {
+  scopes: Scope[];
+  activeScopeId: string | null;
+};
+
+function parseScopesCache(raw: string | null): ScopesCache | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as ScopesCache;
+    if (!Array.isArray(parsed.scopes) || parsed.scopes.length === 0) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function readScopesCache(): ScopesCache | null {
+  if (typeof window === "undefined") return null;
+  return (
+    parseScopesCache(window.sessionStorage.getItem(SCOPES_CACHE_KEY)) ??
+    parseScopesCache(window.localStorage.getItem(SCOPES_CACHE_LOCAL_KEY))
+  );
+}
+
+export function writeScopesCache(scopes: Scope[], activeScopeId: string | null) {
+  if (typeof window === "undefined") return;
+  const payload = JSON.stringify({ scopes, activeScopeId });
+  window.sessionStorage.setItem(SCOPES_CACHE_KEY, payload);
+  window.localStorage.setItem(SCOPES_CACHE_LOCAL_KEY, payload);
+}

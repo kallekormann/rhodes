@@ -16,6 +16,8 @@ import { stripLeadingTitleHeading } from "@/lib/templates/content";
 
 const DOCUMENT_FIELDS =
   "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
+const DOCUMENT_LIST_FIELDS =
+  "id, workspace_id, created_by, title, metadata, updated_at, created_at";
 
 async function workspaceAcceptsPersonalUserShares(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
     q: searchParams.get("q") ?? undefined,
     limit: searchParams.get("limit") ?? undefined,
     since: searchParams.get("since") ?? undefined,
+    include_body: searchParams.get("include_body") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -45,6 +48,10 @@ export async function GET(request: Request) {
       NextResponse.json({ error: parsed.error.flatten() }, { status: 400 }),
     );
   }
+
+  const documentFields = parsed.data.include_body
+    ? DOCUMENT_FIELDS
+    : DOCUMENT_LIST_FIELDS;
 
   const supabase = await createClient();
   const {
@@ -82,7 +89,7 @@ export async function GET(request: Request) {
       await fetchIncomingSharedDocuments(
         supabase,
         parsed.data.workspace_id,
-        DOCUMENT_FIELDS,
+        documentFields,
         {
           userId: user.id,
           includePersonalUserShares,
@@ -104,7 +111,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from("documents")
-      .select(DOCUMENT_FIELDS)
+      .select(documentFields)
       .in("id", [...documentIds])
       .or("metadata->template_draft.is.null,metadata->template_draft.eq.false")
       .order("updated_at", { ascending: false });
@@ -148,7 +155,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("documents")
-    .select(DOCUMENT_FIELDS)
+    .select(documentFields)
     .eq("workspace_id", parsed.data.workspace_id)
     .order("updated_at", { ascending: false });
 
@@ -204,7 +211,7 @@ export async function GET(request: Request) {
     supabase,
     parsed.data.workspace_id,
     data ?? [],
-    DOCUMENT_FIELDS,
+    documentFields,
     {
       userId: user.id,
       includePersonalUserShares,

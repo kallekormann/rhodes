@@ -3,16 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { isDocumentId } from "@/lib/documents/ids";
+import { documentHasUnsentWork } from "@/lib/offline/document-unsent-work";
+import { bodyRichness } from "@/lib/offline/document-body";
+import { extractPlainText } from "@/lib/documents/plain-text";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
 import {
   getOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
+import {
+  loadDocumentErrorMessage,
+  loadDocumentFromIdb,
+} from "@/lib/offline/load-document";
 import { syncOfflineDocumentAccess } from "@/lib/offline/offline-document-access-cache";
 import { commitOfflineDocumentUpdate } from "@/lib/offline/offline-document-mutations";
-import {
-  ensureDocsVaultUnlocked,
-} from "@/lib/offline/offline-vault-session";
+import { ensureDocsVaultUnlocked } from "@/lib/offline/offline-vault-session";
 import { getOutboxForDocument } from "@/lib/offline/outbox";
 import {
   documentHasPendingOutbox,
@@ -24,7 +29,16 @@ import {
   subscribeSyncEngine,
   notifyDocumentSyncStatus,
 } from "@/lib/offline/sync-engine";
+import { trackPendingDocumentSave } from "@/lib/offline/pending-document-saves";
 import type { OfflineSyncStatus } from "@/lib/offline/db";
+import {
+  inspectOfflineDocument,
+  logOfflineDocInspect,
+} from "@/lib/dev/offline-doc-debug";
+
+function isBrowserOffline(): boolean {
+  return typeof navigator !== "undefined" && !navigator.onLine;
+}
 
 function logCacheError(context: string, error: unknown): void {
   console.error(`[useDocument] ${context}`, error);
@@ -72,6 +86,32 @@ function recordFromOffline(row: {
   };
 }
 
+function contentRichness(
+  content: Record<string, unknown> | null | undefined,
+  content_plain: string | null | undefined,
+): number {
+  return bodyRichness(content, content_plain);
+}
+
+function withoutRegressiveContentPatch(
+  prev: DocumentRecord,
+  patch: DocumentPatch,
+): DocumentPatch {
+  if (patch.content === undefined && patch.content_plain === undefined) {
+    return patch;
+  }
+
+  const prevRich = contentRichness(prev.content, prev.content_plain);
+  const candidateContent = patch.content ?? prev.content;
+  const candidatePlain = patch.content_plain ?? prev.content_plain;
+  const nextRich = contentRichness(candidateContent, candidatePlain);
+
+  if (nextRich >= prevRich) return patch;
+
+  const { content: _content, content_plain: _plain, ...rest } = patch;
+  return rest;
+}
+
 export function useDocument(
   documentId: string | null,
   online: boolean = true,
@@ -83,13 +123,18 @@ export function useDocument(
   const [syncStatus, setSyncStatus] = useState<OfflineSyncStatus | null>(null);
   const serverUpdatedAtRef = useRef<string | null>(null);
   const documentRef = useRef<DocumentRecord | null>(null);
+  const loadGenerationRef = useRef(0);
 
   useEffect(() => {
     documentRef.current = document;
   }, [document]);
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    const loadGeneration = ++loadGenerationRef.current;
+    const isStale = () => loadGeneration !== loadGenerationRef.current;
+
     if (!documentId || !isDocumentId(documentId)) {
+      if (isStale()) return;
       setDocument(null);
       setLoading(false);
       setError(documentId ? "Invalid document id" : null);
@@ -102,17 +147,17 @@ export function useDocument(
     }
     setError(null);
 
-    let cached: Awaited<ReturnType<typeof getOfflineDocument>> = null;
-    try {
-      cached = await getOfflineDocument(documentId);
-    } catch {
-      cached = null;
-    }
+    const idbResult = await loadDocumentFromIdb(documentId, session.userId);
+    if (isStale()) return;
+    const cached = idbResult.ok ? idbResult.document : null;
 
-    if (
-      cached &&
-      (cached.sync_status === "pending" || cached.sync_status === "conflict")
-    ) {
+    const cachedRich =
+      cached != null
+        ? bodyRichness(cached.content, cached.content_plain)
+        : 0;
+
+    if (cached && cachedRich > 0 && !isBrowserOffline() && online) {
+      if (isStale()) return;
       setDocument(recordFromOffline(cached));
       serverUpdatedAtRef.current =
         cached.server_updated_at || cached.updated_at;
@@ -120,22 +165,65 @@ export function useDocument(
       if (!options?.silent) setLoading(false);
     }
 
-    if (!online) {
+    if (
+      cached &&
+      (cached.sync_status === "pending" || cached.sync_status === "conflict")
+    ) {
+      if (isStale()) return;
+      setDocument(recordFromOffline(cached));
+      serverUpdatedAtRef.current =
+        cached.server_updated_at || cached.updated_at;
+      setSyncStatus(cached.sync_status);
+      if (!options?.silent) setLoading(false);
+    }
+
+    if (isBrowserOffline() || !online) {
       if (cached) {
+        if (isStale()) return;
         setDocument(recordFromOffline(cached));
         serverUpdatedAtRef.current =
           cached.server_updated_at || cached.updated_at;
         setSyncStatus(cached.sync_status);
+        if (process.env.NODE_ENV !== "production") {
+          const inspect = await inspectOfflineDocument(
+            documentId,
+            session.userId,
+          );
+          if (isStale()) return;
+          logOfflineDocInspect("loaded", inspect);
+        }
       } else if (!options?.silent) {
-        setError("Document not available offline");
+        if (isStale()) return;
+        setError(
+          loadDocumentErrorMessage(
+            idbResult.ok ? "not_cached" : idbResult.reason,
+            idbResult.ok ? undefined : idbResult.detail,
+          ),
+        );
         setDocument(null);
+        if (process.env.NODE_ENV !== "production") {
+          const inspect = await inspectOfflineDocument(
+            documentId,
+            session.userId,
+          );
+          if (isStale()) return;
+          logOfflineDocInspect("missing", inspect);
+        }
       }
+      if (isStale()) return;
       setLoading(false);
       return;
     }
 
     try {
-      const response = await fetch(`/app/api/documents/${documentId}`);
+      const fetchOptions: RequestInit = {};
+      if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
+        fetchOptions.signal = AbortSignal.timeout(8_000);
+      }
+      const response = await fetch(
+        `/app/api/documents/${documentId}`,
+        fetchOptions,
+      );
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
@@ -230,6 +318,61 @@ export function useDocument(
             local.server_updated_at || local.updated_at;
           setSyncStatus("pending");
           setLoading(false);
+          void pushOutbox();
+          return;
+        }
+      }
+
+      const richestCached = freshCached ?? cached;
+      const hasUnsent = await documentHasUnsentWork(
+        documentId,
+        workspaceId ?? richestCached?.workspace_id,
+      );
+
+      if (richestCached && !hasUnsent) {
+        const serverAt = richestCached.server_updated_at || "";
+        const remoteAt = remote.updated_at || "";
+        const localRich = contentRichness(
+          richestCached.content,
+          richestCached.content_plain,
+        );
+        const remoteRich = contentRichness(remote.content, remote.content_plain);
+        if (remoteAt > serverAt && remoteRich >= localRich) {
+          setDocument(remote);
+          serverUpdatedAtRef.current = remote.updated_at;
+          setSyncStatus("synced");
+          try {
+            if (session.userId) {
+              await syncOfflineDocumentAccess({
+                documentId,
+                userId: session.userId,
+                activeWorkspaceId: workspaceId,
+                document: remote,
+              });
+            }
+          } catch (error) {
+            logCacheError("cache on open failed", error);
+          }
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (richestCached) {
+        const localRich = contentRichness(
+          richestCached.content,
+          richestCached.content_plain,
+        );
+        const remoteRich = contentRichness(remote.content, remote.content_plain);
+        if (localRich > remoteRich) {
+          setDocument(recordFromOffline(richestCached));
+          serverUpdatedAtRef.current =
+            richestCached.server_updated_at || richestCached.updated_at;
+          setSyncStatus(
+            richestCached.sync_status === "synced" ? "pending" : richestCached.sync_status,
+          );
+          setLoading(false);
+          void pushOutbox();
           return;
         }
       }
@@ -268,6 +411,9 @@ export function useDocument(
 
   useEffect(() => {
     void refresh();
+    return () => {
+      loadGenerationRef.current += 1;
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -331,7 +477,8 @@ export function useDocument(
         return next;
       }
 
-      const nextLocal: DocumentRecord = { ...prev, ...patch };
+      const safePatch = withoutRegressiveContentPatch(prev, patch);
+      const nextLocal: DocumentRecord = { ...prev, ...safePatch };
 
       setDocument(nextLocal);
       documentRef.current = nextLocal;
@@ -343,29 +490,33 @@ export function useDocument(
         if (!session.userId) {
           throw new Error("Cannot save offline: no userId for docs vault");
         }
-        await ensureDocsVaultUnlocked(session.userId);
-        await commitOfflineDocumentUpdate({
-          document: toOfflineDocumentRecord({
-            id: nextLocal.id,
-            workspace_id: nextLocal.workspace_id,
-            title: nextLocal.title,
-            content: nextLocal.content,
-            content_plain: nextLocal.content_plain,
-            metadata: nextLocal.metadata,
-            updated_at: new Date().toISOString(),
-            created_at: nextLocal.created_at,
-            server_updated_at: expectedUpdatedAt,
-            sync_status: "pending",
-          }),
-          patch,
-          expectedUpdatedAt,
-        });
-        const repaired = await repairPendingStatusFromOutbox(documentId);
-        if (repaired.includes(documentId)) {
+        const persist = (async () => {
+          await ensureDocsVaultUnlocked(session.userId!);
+          await commitOfflineDocumentUpdate({
+            document: toOfflineDocumentRecord({
+              id: nextLocal.id,
+              workspace_id: nextLocal.workspace_id,
+              title: nextLocal.title,
+              content: nextLocal.content,
+              content_plain: nextLocal.content_plain,
+              metadata: nextLocal.metadata,
+              updated_at: new Date().toISOString(),
+              created_at: nextLocal.created_at,
+              server_updated_at: expectedUpdatedAt,
+              sync_status: "pending",
+            }),
+            patch: safePatch,
+            expectedUpdatedAt,
+          });
+          const repaired = await repairPendingStatusFromOutbox(documentId);
+          if (repaired.includes(documentId)) {
+            notifyDocumentSyncStatus(documentId, "pending");
+          }
+          setSyncStatus("pending");
           notifyDocumentSyncStatus(documentId, "pending");
-        }
-        setSyncStatus("pending");
-        notifyDocumentSyncStatus(documentId, "pending");
+        })();
+        trackPendingDocumentSave(persist);
+        await persist;
       } catch (error) {
         // Never fall back to direct PATCH — that masks empty IndexedDB.
         logCacheError("local save failed", error);

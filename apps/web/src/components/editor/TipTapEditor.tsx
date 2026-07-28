@@ -116,6 +116,7 @@ type TipTapEditorProps = {
   onCommentsDocumentSync?: (editor: Editor) => void;
   onUpdate: (content: Record<string, unknown>, plainText: string) => void;
   onAsk?: (selectedText?: string) => void;
+  askOffline?: boolean;
   selectedCommentId?: string | null;
   hoverCommentId?: string | null;
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
@@ -239,6 +240,7 @@ export function TipTapEditor({
   onCommentsDocumentSync,
   onUpdate,
   onAsk,
+  askOffline = false,
   selectedCommentId = null,
   hoverCommentId = null,
   scrollContainerRef,
@@ -596,7 +598,7 @@ export function TipTapEditor({
           document: ydoc,
         }),
       );
-      if (collabCursorMode && collabProvider) {
+      if (collabCursorMode && collabProvider && collaborationUser) {
         list.push(
           CollaborationCursor.configure({
             provider: collabProvider,
@@ -989,6 +991,7 @@ export function TipTapEditor({
         <EditorBubbleMenu
           editor={editor}
           onAsk={onAsk}
+          askOffline={askOffline}
           workspaceId={workspaceId}
           documentId={documentId}
           onCommentSave={handleCommentSave}

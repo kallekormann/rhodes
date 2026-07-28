@@ -113,6 +113,11 @@ export function useDocumentRealtime({
       return;
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setLive(false);
+      return;
+    }
+
     const supabase = createClient();
     let cancelled = false;
 
@@ -199,6 +204,10 @@ export function useDocumentAwayNotice(
       return;
     }
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return;
+    }
+
     if (evaluatedForRef.current === documentId) {
       return;
     }
@@ -208,42 +217,46 @@ export function useDocumentAwayNotice(
     const storageKey = `rhodes:doc-seen:${documentId}`;
 
     void (async () => {
-      const docResponse = await fetch(`/app/api/documents/${documentId}`);
-      const docData = await docResponse.json().catch(() => ({}));
-      if (!docResponse.ok || cancelled) return;
-
-      const remote = docData.document as DocumentRecord | undefined;
-      const updatedAt = remote?.updated_at;
-      if (!updatedAt) return;
-
       try {
-        const collabKey = `rhodes:collab-session:${documentId}`;
-        if (sessionStorage.getItem(collabKey) === "1") {
-          sessionStorage.setItem(`rhodes:doc-seen:${documentId}`, updatedAt);
+        const docResponse = await fetch(`/app/api/documents/${documentId}`);
+        const docData = await docResponse.json().catch(() => ({}));
+        if (!docResponse.ok || cancelled) return;
+
+        const remote = docData.document as DocumentRecord | undefined;
+        const updatedAt = remote?.updated_at;
+        if (!updatedAt) return;
+
+        try {
+          const collabKey = `rhodes:collab-session:${documentId}`;
+          if (sessionStorage.getItem(collabKey) === "1") {
+            sessionStorage.setItem(`rhodes:doc-seen:${documentId}`, updatedAt);
+            if (!cancelled) setAwayNotice(null);
+            return;
+          }
+        } catch {
+          /* private mode */
+        }
+
+        const previousSeen = sessionStorage.getItem(storageKey);
+        sessionStorage.setItem(storageKey, updatedAt);
+
+        if (!previousSeen || previousSeen === updatedAt) {
           if (!cancelled) setAwayNotice(null);
           return;
         }
+
+        const entries = await fetchDocumentActivity(documentId);
+        const entry = pickLatestOtherActivitySince(
+          entries,
+          previousSeen,
+          currentUserIdRef.current,
+        );
+
+        if (!cancelled) {
+          setAwayNotice(entry ? mapActivityToRemoteNotice(entry) : null);
+        }
       } catch {
-        /* private mode */
-      }
-
-      const previousSeen = sessionStorage.getItem(storageKey);
-      sessionStorage.setItem(storageKey, updatedAt);
-
-      if (!previousSeen || previousSeen === updatedAt) {
-        if (!cancelled) setAwayNotice(null);
-        return;
-      }
-
-      const entries = await fetchDocumentActivity(documentId);
-      const entry = pickLatestOtherActivitySince(
-        entries,
-        previousSeen,
-        currentUserIdRef.current,
-      );
-
-      if (!cancelled) {
-        setAwayNotice(entry ? mapActivityToRemoteNotice(entry) : null);
+        /* offline / network */
       }
     })();
 

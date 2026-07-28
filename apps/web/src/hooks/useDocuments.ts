@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentFilter } from "@/lib/documents/schemas";
 import type { DocumentRecord } from "@/hooks/useDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import {
-  getOfflineDocument,
-  listOfflineDocumentsForWorkspace,
+  listMergeableOfflineDocumentsForWorkspace,
+  listOfflineDocumentSummariesForWorkspace,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
 import { createLocalDocumentId, isLocalOnlyDocument } from "@/lib/offline/local-document";
@@ -20,7 +20,97 @@ import { ensureDocsVaultUnlocked } from "@/lib/offline/offline-vault-session";
 import { repairPendingStatusFromOutbox } from "@/lib/offline/offline-sync-status";
 import {
   notifyDocumentSyncStatus,
+  subscribeSyncEngine,
 } from "@/lib/offline/sync-engine";
+import {
+  subscribeWorkspaceSync,
+  type WorkspaceSyncState,
+} from "@/lib/offline/workspace-sync";
+import { bodyRichness } from "@/lib/offline/document-body";
+
+type DocumentsListCacheEntry = {
+  documents: DocumentRecord[];
+  offlineSource: boolean;
+  fetchedAt: number;
+};
+
+const documentsListCache = new Map<string, DocumentsListCacheEntry>();
+
+function documentsListCacheKey(
+  workspaceId: string,
+  filter: DocumentFilter,
+): string {
+  return `${workspaceId}:${filter}`;
+}
+
+function readDocumentsListCache(
+  workspaceId: string | null,
+  filter: DocumentFilter,
+): DocumentsListCacheEntry | undefined {
+  if (!workspaceId) return undefined;
+  return documentsListCache.get(documentsListCacheKey(workspaceId, filter));
+}
+
+function writeDocumentsListCache(
+  workspaceId: string,
+  filter: DocumentFilter,
+  entry: Omit<DocumentsListCacheEntry, "fetchedAt">,
+): void {
+  documentsListCache.set(documentsListCacheKey(workspaceId, filter), {
+    ...entry,
+    fetchedAt: Date.now(),
+  });
+}
+
+async function mergePendingLocalDocuments(
+  workspaceId: string,
+  userId: string | null | undefined,
+  serverDocs: DocumentRecord[],
+): Promise<DocumentRecord[]> {
+  if (!userId) return serverDocs;
+
+  try {
+    await ensureDocsVaultUnlocked(userId);
+    const cached = await listMergeableOfflineDocumentsForWorkspace(workspaceId);
+    const serverById = new Map(serverDocs.map((doc) => [doc.id, doc]));
+    const merged = [...serverDocs];
+
+    for (const local of cached) {
+      const localDoc = offlineRecordToDocument(local);
+      const server = serverById.get(local.id);
+
+      if (!server) {
+        if (
+          isLocalOnlyDocument(local) ||
+          local.sync_status === "pending" ||
+          local.sync_status === "conflict"
+        ) {
+          merged.unshift(localDoc);
+        }
+        continue;
+      }
+
+      const localRich = bodyRichness(local.content, local.content_plain);
+      const serverHasBody =
+        server.content != null || server.content_plain != null;
+      const serverRich = serverHasBody
+        ? bodyRichness(server.content, server.content_plain)
+        : 0;
+      if (
+        local.sync_status === "pending" ||
+        local.sync_status === "conflict" ||
+        (serverHasBody && localRich > serverRich)
+      ) {
+        const index = merged.findIndex((doc) => doc.id === local.id);
+        if (index >= 0) merged[index] = localDoc;
+      }
+    }
+
+    return merged;
+  } catch {
+    return serverDocs;
+  }
+}
 
 function offlineRecordToDocument(record: {
   id: string;
@@ -69,10 +159,27 @@ export function useDocuments(
   userId?: string | null,
 ) {
   const { online } = useOnlineStatus(workspaceId);
-  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [loading, setLoading] = useState(Boolean(workspaceId));
+  const cachedList = readDocumentsListCache(workspaceId, filter);
+  const [documents, setDocuments] = useState<DocumentRecord[]>(
+    () => cachedList?.documents ?? [],
+  );
+  const [loading, setLoading] = useState(
+    () => !cachedList && Boolean(workspaceId),
+  );
   const [error, setError] = useState<string | null>(null);
-  const [offlineSource, setOfflineSource] = useState(false);
+  const [offlineSource, setOfflineSource] = useState(
+    () => cachedList?.offlineSource ?? false,
+  );
+  const [workspaceSync, setWorkspaceSync] = useState<WorkspaceSyncState>({
+    active: false,
+    documentTitle: null,
+    pendingCount: 0,
+    pendingTitles: [],
+  });
+
+  const refreshGeneration = useRef(0);
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
 
   const refresh = useCallback(async () => {
     if (!workspaceId) {
@@ -82,15 +189,25 @@ export function useDocuments(
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    const generation = ++refreshGeneration.current;
 
-    if (!online) {
+    const browserOffline =
+      typeof navigator !== "undefined" && !navigator.onLine;
+
+    if (!online || browserOffline) {
+      setError(null);
       try {
-        const cached = await listOfflineDocumentsForWorkspace(workspaceId);
+        if (userId) await ensureDocsVaultUnlocked(userId);
+        const cached = await listOfflineDocumentSummariesForWorkspace(workspaceId);
+        if (generation !== refreshGeneration.current) return;
         setDocuments(cached.map(offlineRecordToDocument));
         setOfflineSource(true);
+        writeDocumentsListCache(workspaceId, filter, {
+          documents: cached.map(offlineRecordToDocument),
+          offlineSource: true,
+        });
       } catch {
+        if (generation !== refreshGeneration.current) return;
         setError("Failed to load offline documents");
         setDocuments([]);
         setOfflineSource(false);
@@ -99,29 +216,106 @@ export function useDocuments(
       return;
     }
 
+    const showLoadingState = documentsRef.current.length === 0;
+    if (showLoadingState) {
+      setLoading(true);
+    }
+    setError(null);
     setOfflineSource(false);
 
     const params = new URLSearchParams({
       workspace_id: workspaceId,
       filter,
+      include_body: "false",
     });
 
-    const response = await fetch(`/app/api/documents?${params}`);
-    const data = await response.json().catch(() => ({}));
+    try {
+      const fetchOptions: RequestInit = {};
+      if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
+        fetchOptions.signal = AbortSignal.timeout(8_000);
+      }
+      const response = await fetch(`/app/api/documents?${params}`, fetchOptions);
+      if (generation !== refreshGeneration.current) return;
 
-    if (!response.ok) {
-      setError(typeof data.error === "string" ? data.error : "Failed to load documents");
-      setDocuments([]);
-      setLoading(false);
-      return;
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(typeof data.error === "string" ? data.error : "Failed to load documents");
+        setDocuments([]);
+        setLoading(false);
+        return;
+      }
+
+      const serverDocs = (data.documents as DocumentRecord[]) ?? [];
+      const merged = await mergePendingLocalDocuments(
+        workspaceId,
+        userId,
+        serverDocs,
+      );
+      if (generation !== refreshGeneration.current) return;
+      setDocuments(merged);
+      writeDocumentsListCache(workspaceId, filter, {
+        documents: merged,
+        offlineSource: false,
+      });
+    } catch {
+      if (generation !== refreshGeneration.current) return;
+      try {
+        if (userId) await ensureDocsVaultUnlocked(userId);
+        const cached = await listOfflineDocumentSummariesForWorkspace(workspaceId);
+        if (generation !== refreshGeneration.current) return;
+        setDocuments(cached.map(offlineRecordToDocument));
+        setOfflineSource(true);
+        setError(null);
+        if (workspaceId) {
+          writeDocumentsListCache(workspaceId, filter, {
+            documents: cached.map(offlineRecordToDocument),
+            offlineSource: true,
+          });
+        }
+      } catch {
+        setError("Failed to load documents");
+        setDocuments([]);
+        setOfflineSource(false);
+      }
+    } finally {
+      if (generation === refreshGeneration.current) {
+        setLoading(false);
+      }
     }
-
-    setDocuments((data.documents as DocumentRecord[]) ?? []);
-    setLoading(false);
-  }, [workspaceId, filter, online]);
+  }, [workspaceId, filter, online, userId]);
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const onOffline = () => {
+      refreshGeneration.current += 1;
+      void refresh();
+    };
+    const onOnline = () => {
+      refreshGeneration.current += 1;
+      void refresh();
+    };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
+    return subscribeWorkspaceSync(setWorkspaceSync);
+  }, []);
+
+  useEffect(() => {
+    return subscribeSyncEngine((event) => {
+      if (event.type === "drained") {
+        void refresh();
+      }
+    });
   }, [refresh]);
 
   const createDocument = useCallback(
@@ -297,6 +491,7 @@ export function useDocuments(
     loading,
     error,
     offlineSource,
+    workspaceSync,
     refresh,
     createDocument,
     updateDocument,
