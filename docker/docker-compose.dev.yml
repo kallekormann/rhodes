@@ -59,6 +59,16 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
+  # macOS Docker bind mounts do not support xattrs required by Supabase Storage
+  # (error: "file system does not support extended attributes"). Named volume fixes it.
+  storage:
+    volumes:
+      - supabase-storage-data:/var/lib/storage
+
+  imgproxy:
+    volumes:
+      - supabase-storage-data:/var/lib/storage
+
   # Hot-reload worker: mount monorepo, run tsx watch. restart: always from base compose.
   worker:
     working_dir: /app
@@ -87,5 +97,6 @@ services:
       ]
 
 volumes:
+  supabase-storage-data:
   worker-node-modules:
   worker-app-node-modules:

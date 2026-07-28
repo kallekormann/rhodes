@@ -47,6 +47,8 @@ Docker stack already runs Auth, REST, Realtime, **Storage** (file backend), imgp
 - `RHODES_IN_DOCKER=1` or `RHODES_ALLOW_LOCAL_STORAGE_FALLBACK=0` → no `.data/` fallback
 - Laptop-only dev (no Docker): `RHODES_ALLOW_LOCAL_STORAGE_FALLBACK=1` optional
 
+**macOS Docker:** `docker-compose.dev.yml` mounts Supabase Storage on a **named volume** (`supabase-storage-data`) because host bind mounts do not support extended attributes (upload error: *"The file system does not support extended attributes"*). After pulling this change, recreate storage: `cd docker && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d storage imgproxy --force-recreate`. Alternative: Docker Desktop → **VirtioFS** file sharing (or use OrbStack).
+
 VPS cutover: point Storage at S3-compatible backend (Hetzner, R2, MinIO) via Supabase Storage config — same buckets and paths. See O-019 in [19-open-decisions.md](19-open-decisions.md).
 
 ---

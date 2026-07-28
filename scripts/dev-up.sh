@@ -23,4 +23,10 @@ echo "  Ollama:        http://localhost:11434"
 echo "  Tika:          http://localhost:9998"
 echo "  Worker:        rhodes-worker (restart: always — ingest/embed/document-embed)"
 echo ""
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  echo "  macOS: Supabase Storage uses Docker volume supabase-storage-data (xattr-safe)."
+  echo "         If uploads fail with 'extended attributes', recreate storage:"
+  echo "         cd docker && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d storage imgproxy --force-recreate"
+fi
+echo ""
 echo "Optional host worker (if not using Compose worker): ./scripts/dev-worker.sh"
