@@ -5,13 +5,15 @@
   "type": "module",
   "exports": {
     ".": "./src/client.ts",
-    "./types": "./src/types.ts"
+    "./types": "./src/types.ts",
+    "./object-storage": "./src/object-storage/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'"
   },
   "dependencies": {
+    "@rhodes/shared": "workspace:*",
     "@supabase/supabase-js": "^2.110.2",
     "ws": "^8.18.1"
   },

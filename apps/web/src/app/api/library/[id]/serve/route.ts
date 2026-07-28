@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
+import { createSessionObjectStorage } from "@rhodes/db/object-storage";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
   contentDispositionForLibraryFile,
   contentTypeForLibraryFile,
 } from "@/lib/library/file-types";
-import { readLocalLibraryFile } from "@/lib/library/local-storage";
 import { resolveLibrarySourceById } from "@/lib/library/resolve-source";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,42 +59,22 @@ export async function GET(request: Request, context: RouteContext) {
     source.file_type,
   );
 
-  const { data: blob, error: downloadError } = await supabase.storage
-    .from(LIBRARY_BUCKET)
-    .download(source.file_path);
+  const storage = createSessionObjectStorage(supabase);
+  const bytes = await storage.get(LIBRARY_BUCKET, source.file_path);
 
-  if (blob && blob.size > 0) {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (!bytes || bytes.length === 0) {
     return withSecurityHeaders(
-      new NextResponse(Buffer.from(bytes), {
-        headers: {
-          "Content-Type": contentType,
-          "Content-Disposition": contentDisposition,
-          "Cache-Control": "private, max-age=3600",
-        },
-      }),
+      NextResponse.json({ error: "File unavailable" }, { status: 404 }),
     );
   }
 
-  if (allowLocalStorageFallback()) {
-    const localBytes = await readLocalLibraryFile(source.file_path);
-    if (localBytes) {
-      return withSecurityHeaders(
-        new NextResponse(Buffer.from(localBytes), {
-          headers: {
-            "Content-Type": contentType,
-            "Content-Disposition": contentDisposition,
-            "Cache-Control": "private, max-age=3600",
-          },
-        }),
-      );
-    }
-  }
-
   return withSecurityHeaders(
-    NextResponse.json(
-      { error: downloadError?.message ?? "File unavailable" },
-      { status: 404 },
-    ),
+    new NextResponse(Buffer.from(bytes), {
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": contentDisposition,
+        "Cache-Control": "private, max-age=3600",
+      },
+    }),
   );
 }

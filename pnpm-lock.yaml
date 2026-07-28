@@ -230,6 +230,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@rhodes/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@supabase/supabase-js':
         specifier: ^2.110.2
         version: 2.110.2

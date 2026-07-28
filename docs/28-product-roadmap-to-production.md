@@ -2,7 +2,7 @@
 
 **Status:** accepted — **canonical living roadmap**  
 **Last updated:** July 28, 2026  
-**Current focus:** Phase 28 — Production storage (M1d slice 1); then **09.2** → **M2**  
+**Current focus:** **M2** — Scope & org platform (Phase 15); M1d 28.2 + 09.2 complete  
 **Previous:** M1b core complete (M1b.1–4 + polish); M1b.5–6 backlog  
 **Branch:** `main` (M1 merged; `feature/phase-09-offline-wave-a` closed)
 
@@ -136,7 +136,7 @@ Rhodes is **online-first**. Offline editing uses **per-share control** (see phas
 
 **Precursor:** [09.1-realtime-transport-hardening.md](../implementation_plan/09.1-realtime-transport-hardening.md) — ✅ complete.
 
-**Post-M1c:** [09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — TD-001, TD-002. **Start after M1c.**
+**Post-M1c:** [09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) — TD-001, TD-002. **Done.**
 
 ---
 
@@ -159,7 +159,7 @@ Prevent unbounded IndexedDB growth before M2 multiplies workspaces.
 
 ---
 
-## M1d — Production storage & bandwidth (Phase 28) — **IN PROGRESS**
+## M1d — Production storage & bandwidth (Phase 28) — **28.2 COMPLETE**
 
 Self-hosted Supabase Storage as the real object-store path in Docker dev (same topology as VPS).
 
@@ -167,9 +167,9 @@ Self-hosted Supabase Storage as the real object-store path in Docker dev (same t
 |----|-------------|--------|
 | M1d.1 | Workspace Storage RLS + fallback policy | ✅ |
 | M1d.2 | Documents list `include_body` default false | ✅ |
-| M1d.3 | Storage adapter interface | ✅ (contract) |
-| M1d.4 | Wire Supabase adapter + S3 VPS backend | planned |
-| M1d.5 | Quota reconciliation + storage healthcheck | planned |
+| M1d.3 | Storage adapter interface | ✅ |
+| M1d.4 | Wire Supabase adapter (28.2) | ✅ |
+| M1d.5 | S3 VPS backend + quota reconciliation | planned |
 
 **Phase doc:** [implementation_plan/28-production-storage-architecture.md](../implementation_plan/28-production-storage-architecture.md)  
 **Policy:** [docs/33-storage-and-bandwidth.md](33-storage-and-bandwidth.md)
@@ -323,7 +323,7 @@ Sticker sheet / design system (O-011–O-014) across all milestones.
 | [implementation_plan/27-client-cache-lifecycle.md](../implementation_plan/27-client-cache-lifecycle.md) | M1c — core complete |
 | [implementation_plan/28-production-storage-architecture.md](../implementation_plan/28-production-storage-architecture.md) | M1d — in progress |
 | [docs/33-storage-and-bandwidth.md](33-storage-and-bandwidth.md) | Storage & bandwidth policy |
-| [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1c — planned |
+| [implementation_plan/09.2-offline-conflict-quality.md](../implementation_plan/09.2-offline-conflict-quality.md) | Post-M1c — done |
 | `docs/30-scope-settings-matrix.md` | M2.4 |
 | `implementation_plan/24-app-wide-realtime.md` | M3 |
 | `docs/29-use-cases-views-templates.md` | M6 |

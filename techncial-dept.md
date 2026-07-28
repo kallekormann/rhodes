@@ -31,8 +31,8 @@
 
 | ID | Area | Severity | Status | Fix after | Summary |
 |----|------|----------|--------|-----------|---------|
-| [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
-| [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | planned | M1b complete → [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
+| [TD-001](#td-001-multi-conflict-misclassification) | Offline conflict UI | High | done | [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Second+ conflicts in one review session misclassified (block delete vs inline edit) |
+| [TD-002](#td-002-conflict-debug-console-logs) | Offline / collab logging | Low | done | [09.2](implementation_plan/09.2-offline-conflict-quality.md) | Verbose `console.info`/`console.debug` from Phase 09 conflict implementation |
 | [TD-003](#td-003-y-indexeddb-per-document-plaintext-store) | Offline Yjs persistence | Medium | done | M1b.1 slices 6–11 → [25](implementation_plan/25-offline-app-shell.md) | Separate UUID IndexedDB DB per open doc (`y-indexeddb`), plaintext Yjs updates |
 | [TD-004](#td-004-temp-offline-client-error-log) | Offline QA / debug | Low | in progress | Remove before **M13** | Temporary dev file log (`logs/client-errors.log`) + `__rhodesErrors()` |
 | [TD-005](#td-005-unbounded-indexeddb-document-cache) | Client IDB lifecycle | High | done | [27](implementation_plan/27-client-cache-lifecycle.md) (M1c) | LRU cap, metadata-only pull, quota UI |

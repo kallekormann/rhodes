@@ -5,6 +5,7 @@ import {
   type ProseMirrorJsonNode,
 } from "@/lib/offline/yjs-offline-divergence";
 import { offlineSnapshotToDoc } from "@/lib/offline/yjs-offline-snapshot";
+import { offlineConflictLog } from "@/lib/offline/debug-conflict";
 import { getBlockContributors } from "@/lib/collaboration/block-audit";
 import type { DeferredPeerUpdate } from "@/lib/collaboration/supabase-yjs-provider";
 
@@ -123,20 +124,17 @@ export function peerEditContributorsForBlock(params: {
     liveDoc,
   } = params;
 
-  if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
-    console.info(
-      "[peer-edit-contributions] start",
-      JSON.stringify({
-        blockId,
-        blockIndex,
-        localUserId,
-        deferredUpdateCount: deferredUpdates.length,
-        deferredSources: deferredUpdates.map((u) => u.source ?? "update"),
-        hasLiveDocFallback: Boolean(liveDoc),
-      }),
-    );
-  }
+  offlineConflictLog(
+    "[peer-edit-contributions] start",
+    JSON.stringify({
+      blockId,
+      blockIndex,
+      localUserId,
+      deferredUpdateCount: deferredUpdates.length,
+      deferredSources: deferredUpdates.map((u) => u.source ?? "update"),
+      hasLiveDocFallback: Boolean(liveDoc),
+    }),
+  );
 
   const windowStartMs = windowStartMsFromSnapshot(baseSnapshot);
 

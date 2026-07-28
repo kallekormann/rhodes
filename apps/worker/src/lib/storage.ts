@@ -1,24 +1,13 @@
-import { createAdminClient } from "@rhodes/db";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
-import { readLocalLibraryFile } from "./local-storage";
 
 export async function downloadLibraryFile(filePath: string): Promise<Uint8Array> {
-  const admin = createAdminClient();
-  const { data, error } = await admin.storage.from(LIBRARY_BUCKET).download(filePath);
+  const storage = createAdminObjectStorage();
+  const bytes = await storage.get(LIBRARY_BUCKET, filePath);
 
-  if (!error && data) {
-    const bytes = new Uint8Array(await data.arrayBuffer());
-    // Empty blob is treated as a miss so we can fall back to local dev storage.
-    if (bytes.length > 0) return bytes;
+  if (!bytes || bytes.length === 0) {
+    throw new Error(`Could not download library file: ${filePath}`);
   }
 
-  const local = allowLocalStorageFallback()
-    ? await readLocalLibraryFile(filePath)
-    : null;
-  if (local && local.length > 0) return local;
-
-  throw new Error(
-    error?.message ?? `Could not download library file: ${filePath}`,
-  );
+  return bytes;
 }

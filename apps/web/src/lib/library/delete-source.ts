@@ -1,6 +1,6 @@
 import { createAdminClient } from "@rhodes/db";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
-import { deleteLocalLibraryFile } from "@/lib/library/local-storage";
 import { cancelLibrarySourceJobs } from "@/lib/library/queue";
 
 export async function removeLibrarySource(input: {
@@ -9,6 +9,7 @@ export async function removeLibrarySource(input: {
 }) {
   await cancelLibrarySourceJobs(input.sourceId);
 
+  const storage = createAdminObjectStorage();
   const admin = createAdminClient();
 
   const { error: deleteRowError } = await admin
@@ -20,13 +21,11 @@ export async function removeLibrarySource(input: {
     throw new Error(deleteRowError.message);
   }
 
-  const { error: storageError } = await admin.storage
-    .from(LIBRARY_BUCKET)
-    .remove([input.filePath]);
-
-  if (storageError && process.env.NODE_ENV === "production") {
-    throw new Error(storageError.message);
+  try {
+    await storage.remove(LIBRARY_BUCKET, [input.filePath]);
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") {
+      throw error instanceof Error ? error : new Error("Storage delete failed");
+    }
   }
-
-  await deleteLocalLibraryFile(input.filePath);
 }

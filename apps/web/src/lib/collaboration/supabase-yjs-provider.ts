@@ -9,6 +9,7 @@ import * as encoding from "lib0/encoding";
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as Y from "yjs";
+import { offlineConflictLog } from "@/lib/offline/debug-conflict";
 
 type SyncListener = (synced: boolean) => void;
 type AuthErrorListener = (failed: boolean) => void;
@@ -985,16 +986,13 @@ export class SupabaseYjsProvider {
           return;
         }
         if (this.remoteAwarenessPeerCount > 0) {
-          if (process.env.NODE_ENV !== "production") {
-            // eslint-disable-next-line no-console
-            console.info(
-              "[supabase-yjs-provider] solo catchup postponed — remote peers present, waiting for peer sync",
-              JSON.stringify({
-                documentId: this.documentId,
-                remotePeers: this.remoteAwarenessPeerCount,
-              }),
-            );
-          }
+          offlineConflictLog(
+            "[supabase-yjs-provider] solo catchup postponed — remote peers present, waiting for peer sync",
+            JSON.stringify({
+              documentId: this.documentId,
+              remotePeers: this.remoteAwarenessPeerCount,
+            }),
+          );
           void this.sendSyncStep1();
           this.scheduleSoloSyncFallback();
           return;
@@ -1035,8 +1033,7 @@ export class SupabaseYjsProvider {
 
     if (process.env.NODE_ENV !== "production") {
       this.connectAttemptCount += 1;
-      // eslint-disable-next-line no-console
-      console.info(
+      offlineConflictLog(
         "[supabase-yjs-provider] connect attempt",
         JSON.stringify({
           attempt: this.connectAttemptCount,
@@ -1113,13 +1110,10 @@ export class SupabaseYjsProvider {
         }
         this.setSynced(false);
         this.onDisconnected?.();
-        if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.info(
-            "[supabase-yjs-provider] channel closed, scheduling reconnect",
-            JSON.stringify({ status, documentId: this.documentId }),
-          );
-        }
+        offlineConflictLog(
+          "[supabase-yjs-provider] channel closed, scheduling reconnect",
+          JSON.stringify({ status, documentId: this.documentId }),
+        );
         this.scheduleReconnect();
       }
     });

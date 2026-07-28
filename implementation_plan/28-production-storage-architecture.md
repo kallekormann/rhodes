@@ -26,11 +26,11 @@ Use self-hosted Supabase Storage as the production object-store path **today in 
 | `RhodesObjectStorage` interface | ✅ `@rhodes/shared/storage-adapter` |
 | Architecture doc | ✅ [docs/33-storage-and-bandwidth.md](../docs/33-storage-and-bandwidth.md) |
 
-### 28.2 — Storage adapter implementation — planned
+### 28.2 — Storage adapter implementation — **done**
 
-- `SupabaseObjectStorage` in `@rhodes/db` or `apps/web`
-- Wire upload, serve, worker, delete through adapter
-- Env: `RHODES_STORAGE_BACKEND=supabase` (default)
+- `@rhodes/db/object-storage` — `SupabaseObjectStorage`, `LocalFilesystemObjectStorage`, `CompositeObjectStorage`
+- `createAdminObjectStorage()` / `createSessionObjectStorage()` — default `RHODES_STORAGE_BACKEND=supabase`
+- Wired: library upload/serve/delete, document images, avatars, worker download
 
 ### 28.3 — VPS S3 backend — planned
 

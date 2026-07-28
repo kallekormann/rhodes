@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
+import { createSessionObjectStorage } from "@rhodes/db/object-storage";
+import { AVATAR_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
-import { AVATAR_BUCKET } from "@/lib/profile/avatar";
-import {
-  contentTypeForAvatarPath,
-  readLocalAvatar,
-} from "@/lib/profile/local-avatar-storage";
+import { contentTypeForAvatarPath } from "@/lib/profile/local-avatar-storage";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -28,10 +26,12 @@ export async function GET(request: Request) {
     );
   }
 
-  const localBytes = await readLocalAvatar(storagePath);
-  if (localBytes) {
+  const storage = createSessionObjectStorage(supabase);
+  const bytes = await storage.get(AVATAR_BUCKET, storagePath);
+
+  if (bytes && bytes.length > 0) {
     return withSecurityHeaders(
-      new NextResponse(Buffer.from(localBytes), {
+      new NextResponse(Buffer.from(bytes), {
         headers: {
           "Content-Type": contentTypeForAvatarPath(storagePath),
           "Cache-Control": "private, max-age=3600",

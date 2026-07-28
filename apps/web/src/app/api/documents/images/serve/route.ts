@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
+import { createSessionObjectStorage } from "@rhodes/db/object-storage";
+import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
-import {
-  contentTypeForPath,
-  readLocalDocumentImage,
-} from "@/lib/documents/local-image-storage";
+import { contentTypeForPath } from "@/lib/documents/local-image-storage";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -45,29 +43,30 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data: signed, error } = await supabase.storage
-    .from("document-images")
-    .createSignedUrl(path, 60 * 60);
+  const storage = createSessionObjectStorage(supabase);
+  const signedUrl = await storage.signedUrl(
+    DOCUMENT_IMAGES_BUCKET,
+    path,
+    60 * 60,
+  );
 
-  if (signed?.signedUrl) {
-    return NextResponse.redirect(signed.signedUrl);
+  if (signedUrl) {
+    return NextResponse.redirect(signedUrl);
   }
 
-  if (allowLocalStorageFallback()) {
-    const localBytes = await readLocalDocumentImage(path);
-    if (localBytes) {
-      return withSecurityHeaders(
-        new NextResponse(Buffer.from(localBytes), {
-          headers: {
-            "Content-Type": contentTypeForPath(path),
-            "Cache-Control": "private, max-age=3600",
-          },
-        }),
-      );
-    }
+  const bytes = await storage.get(DOCUMENT_IMAGES_BUCKET, path);
+  if (bytes && bytes.length > 0) {
+    return withSecurityHeaders(
+      new NextResponse(Buffer.from(bytes), {
+        headers: {
+          "Content-Type": contentTypeForPath(path),
+          "Cache-Control": "private, max-age=3600",
+        },
+      }),
+    );
   }
 
   return withSecurityHeaders(
-    NextResponse.json({ error: error?.message ?? "Sign failed" }, { status: 400 }),
+    NextResponse.json({ error: "Image unavailable" }, { status: 404 }),
   );
 }

@@ -58,6 +58,7 @@ VPS cutover: point Storage at S3-compatible backend (Hetzner, R2, MinIO) via Sup
 - Serve/download paths: **Storage first**, local fallback only when allowed
 - Documents list API: **`include_body` defaults false**
 - `RhodesObjectStorage` adapter interface (`@rhodes/shared/storage-adapter`)
+- `createAdminObjectStorage()` / `createSessionObjectStorage()` (`@rhodes/db/object-storage`)
 
 ---
 

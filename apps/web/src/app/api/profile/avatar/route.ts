@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@rhodes/db";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
+import { AVATAR_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import {
-  AVATAR_BUCKET,
   assertAvatarFile,
   avatarExtensionForContentType,
   avatarStoragePath,
   resolveAvatarImageContentType,
 } from "@/lib/profile/avatar";
-import {
-  removeLocalAvatar,
-  saveLocalAvatar,
-} from "@/lib/profile/local-avatar-storage";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -52,29 +47,21 @@ export async function POST(request: Request) {
   const ext = avatarExtensionForContentType(contentType);
   const path = avatarStoragePath(user.id, ext);
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const storage = createAdminObjectStorage();
 
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage.from(AVATAR_BUCKET).upload(path, bytes, {
-    contentType,
-    upsert: true,
-  });
-
-  if (uploadError) {
-    if (allowLocalStorageFallback()) {
-      try {
-        await saveLocalAvatar(path, bytes);
-      } catch (localError) {
-        const message =
-          localError instanceof Error ? localError.message : "Local save failed";
-        return withSecurityHeaders(
-          NextResponse.json({ error: message }, { status: 400 }),
-        );
-      }
-    } else {
-      return withSecurityHeaders(
-        NextResponse.json({ error: uploadError.message }, { status: 400 }),
-      );
-    }
+  try {
+    await storage.put({
+      bucket: AVATAR_BUCKET,
+      path,
+      bytes,
+      contentType,
+      upsert: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return withSecurityHeaders(
+      NextResponse.json({ error: message }, { status: 400 }),
+    );
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -120,9 +107,8 @@ export async function DELETE() {
     .maybeSingle();
 
   if (profile?.avatar_url) {
-    const admin = createAdminClient();
-    await admin.storage.from(AVATAR_BUCKET).remove([profile.avatar_url]).catch(() => {});
-    await removeLocalAvatar(profile.avatar_url);
+    const storage = createAdminObjectStorage();
+    await storage.remove(AVATAR_BUCKET, [profile.avatar_url]).catch(() => {});
   }
 
   const { error } = await supabase

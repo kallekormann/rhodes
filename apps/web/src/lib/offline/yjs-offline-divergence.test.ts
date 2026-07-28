@@ -343,6 +343,151 @@ describe("offline Yjs block overlap detection", () => {
     peerDoc.destroy();
   });
 
+  it("peer delete of another block does not mark shifted blocks as deleted", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one");
+    seedParagraph(base, "b2", "Block two");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, baseBytes);
+    deleteBlock(peer, 0);
+
+    expect(peerTouchedBlock("b1", base, peer)).toBe(true);
+    expect(peerTouchedBlock("b2", base, peer)).toBe(false);
+
+    base.destroy();
+    peer.destroy();
+  });
+
+  it("TD-001 wave 1: only peer delete deferred — block 2 not misclassified as delete", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one original");
+    seedParagraph(base, "b2", "shared word here");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Block one offline");
+    setBlockText(mine, 1, "shared OFFLINE here");
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    deleteBlock(peerB, 0);
+
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, baseBytes);
+    Y.applyUpdate(
+      peerDoc,
+      Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
+    );
+
+    const wave1 = detectOfflineBlockConflicts(
+      base,
+      mine,
+      peerDoc,
+      undefined,
+      { catchupComplete: true },
+    );
+
+    expect(wave1.some((c) => c.blockId === "b1")).toBe(true);
+    expect(
+      wave1.some(
+        (c) => c.blockId === "b2" && c.kind === "mine_edited_peer_deleted",
+      ),
+    ).toBe(false);
+
+    const peerC = new Y.Doc();
+    Y.applyUpdate(peerC, baseBytes);
+    setBlockText(peerC, 1, "shared ONLINE here");
+    Y.applyUpdate(
+      peerDoc,
+      Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
+    );
+
+    const wave2 = detectOfflineBlockConflicts(
+      base,
+      mine,
+      peerDoc,
+      undefined,
+      { catchupComplete: true },
+    );
+    const block2 = wave2.find((c) => c.blockId === "b2");
+    expect(block2?.kind).toBe("both_edited");
+
+    base.destroy();
+    mine.destroy();
+    peerB.destroy();
+    peerC.destroy();
+    peerDoc.destroy();
+    vectorDoc.destroy();
+  });
+
+  it("TD-001: block delete + same-word edit — block 2 stays both_edited", () => {
+    const base = new Y.Doc();
+    seedParagraph(base, "b1", "Block one original");
+    seedParagraph(base, "b2", "shared word here");
+    const baseBytes = Y.encodeStateAsUpdate(base);
+    const baseVector = Y.encodeStateVector(base);
+
+    const mine = new Y.Doc();
+    Y.applyUpdate(mine, baseBytes);
+    setBlockText(mine, 0, "Block one offline");
+    setBlockText(mine, 1, "shared OFFLINE here");
+
+    const vectorDoc = new Y.Doc();
+    Y.applyUpdate(vectorDoc, baseBytes);
+
+    const peerB = new Y.Doc();
+    Y.applyUpdate(peerB, baseBytes);
+    deleteBlock(peerB, 0);
+
+    const peerC = new Y.Doc();
+    Y.applyUpdate(peerC, baseBytes);
+    setBlockText(peerC, 1, "shared ONLINE here");
+
+    const peerDoc = new Y.Doc();
+    Y.applyUpdate(peerDoc, baseBytes);
+    Y.applyUpdate(
+      peerDoc,
+      Y.encodeStateAsUpdate(peerB, Y.encodeStateVector(vectorDoc)),
+    );
+    Y.applyUpdate(
+      peerDoc,
+      Y.encodeStateAsUpdate(peerC, Y.encodeStateVector(vectorDoc)),
+    );
+
+    const conflicts = detectOfflineBlockConflicts(
+      base,
+      mine,
+      peerDoc,
+      undefined,
+      { catchupComplete: true },
+    );
+
+    const block1 = conflicts.find((c) => c.blockId === "b1");
+    const block2 = conflicts.find((c) => c.blockId === "b2");
+
+    expect(block1?.kind).toBe("mine_edited_peer_deleted");
+    expect(block2?.kind).toBe("both_edited");
+    expect(peerTouchedBlock("b2", base, peerDoc)).toBe(true);
+    expect(
+      conflicts.some(
+        (c) => c.blockId === "b2" && c.kind === "mine_edited_peer_deleted",
+      ),
+    ).toBe(false);
+
+    base.destroy();
+    mine.destroy();
+    peerB.destroy();
+    peerC.destroy();
+    peerDoc.destroy();
+    vectorDoc.destroy();
+  });
+
   it("blank peer doc (outbound leak wipe) misclassifies same-word edit as peer delete", () => {
     // When A's mine-shield restores leak and blank B/C, their catch-up looks
     // like every block was deleted — detection must not treat that as truth

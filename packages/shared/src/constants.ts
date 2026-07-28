@@ -141,6 +141,8 @@ export function resolveOllamaFastModel(): string {
 }
 
 export const LIBRARY_BUCKET = "library-files" as const;
+export const DOCUMENT_IMAGES_BUCKET = "document-images" as const;
+export const AVATAR_BUCKET = "avatars" as const;
 
 export const LIBRARY_INGEST_QUEUE = "library-ingest" as const;
 export const LIBRARY_EMBED_QUEUE = "library-embed" as const;

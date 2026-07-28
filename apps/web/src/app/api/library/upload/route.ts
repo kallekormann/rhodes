@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@rhodes/db";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
 import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { assertLibraryUploadAllowed } from "@/lib/library/account-quota";
-import { saveLocalLibraryFile } from "@/lib/library/local-storage";
 import { enqueueLibraryIngest } from "@/lib/library/queue";
 import {
   isLibraryFileAllowed,
@@ -86,31 +84,21 @@ export async function POST(request: Request) {
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_");
   const filePath = `${workspaceId}/library/${sourceId}/${safeName}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const storage = createAdminObjectStorage();
 
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from(LIBRARY_BUCKET)
-    .upload(filePath, bytes, {
+  try {
+    await storage.put({
+      bucket: LIBRARY_BUCKET,
+      path: filePath,
+      bytes,
       contentType: mimeType,
       upsert: false,
     });
-
-  if (uploadError) {
-    if (allowLocalStorageFallback()) {
-      try {
-        await saveLocalLibraryFile(filePath, bytes);
-      } catch (localError) {
-        const message =
-          localError instanceof Error ? localError.message : "Local save failed";
-        return withSecurityHeaders(
-          NextResponse.json({ error: message }, { status: 400 }),
-        );
-      }
-    } else {
-      return withSecurityHeaders(
-        NextResponse.json({ error: uploadError.message }, { status: 400 }),
-      );
-    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return withSecurityHeaders(
+      NextResponse.json({ error: message }, { status: 400 }),
+    );
   }
 
   const { data: source, error: insertError } = await supabase
@@ -133,7 +121,7 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !source) {
-    await admin.storage.from(LIBRARY_BUCKET).remove([filePath]).catch(() => {});
+    await storage.remove(LIBRARY_BUCKET, [filePath]).catch(() => {});
     return withSecurityHeaders(
       NextResponse.json(
         { error: insertError?.message ?? "Failed to create library source" },
@@ -150,7 +138,7 @@ export async function POST(request: Request) {
       mimeType,
     });
   } catch (queueError) {
-    await admin
+    await supabase
       .from("library_sources")
       .update({ embedding_status: "failed" })
       .eq("id", source.id);

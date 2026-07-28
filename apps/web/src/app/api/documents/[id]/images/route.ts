@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@rhodes/db";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
+import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
-import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
-import {
-  saveLocalDocumentImage,
-} from "@/lib/documents/local-image-storage";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -93,33 +90,20 @@ export async function POST(request: Request, context: RouteContext) {
   const ext = file.name.split(".").pop()?.toLowerCase() || "png";
   const path = `${document.workspace_id}/${id}/${crypto.randomUUID()}.${ext}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const storage = createAdminObjectStorage();
 
-  const admin = createAdminClient();
-  const { error: uploadError } = await admin.storage
-    .from("document-images")
-    .upload(path, bytes, {
+  try {
+    await storage.put({
+      bucket: DOCUMENT_IMAGES_BUCKET,
+      path,
+      bytes,
       contentType,
       upsert: false,
     });
-
-  if (uploadError) {
-    if (allowLocalStorageFallback()) {
-      try {
-        await saveLocalDocumentImage(path, bytes);
-        return withSecurityHeaders(
-          NextResponse.json({ path, storage: "local" }, { status: 201 }),
-        );
-      } catch (localError) {
-        const message =
-          localError instanceof Error ? localError.message : "Local save failed";
-        return withSecurityHeaders(
-          NextResponse.json({ error: message }, { status: 400 }),
-        );
-      }
-    }
-
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed";
     return withSecurityHeaders(
-      NextResponse.json({ error: uploadError.message }, { status: 400 }),
+      NextResponse.json({ error: message }, { status: 400 }),
     );
   }
 

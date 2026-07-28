@@ -158,11 +158,20 @@ export function peerTouchedBlock(
     return true;
   }
   if (inBase && !inPeer) {
-    // Missing blockId in peer extract alone is often CRDT structure noise —
-    // require an actual block-count drop to treat as a peer delete.
-    return (
-      extractOrderedBlocks(peerDoc).length < extractOrderedBlocks(baseDoc).length
-    );
+    const baseOrdered = extractOrderedBlocks(baseDoc);
+    const peerOrdered = extractOrderedBlocks(peerDoc);
+    if (peerOrdered.length >= baseOrdered.length) {
+      return false;
+    }
+    if (peerOrdered.some((block) => block.blockId === blockId)) {
+      return false;
+    }
+    const baseIndex = baseOrdered.findIndex((block) => block.blockId === blockId);
+    if (baseIndex < 0) return false;
+    if (baseIndex < peerOrdered.length) {
+      return peerOrdered[baseIndex]?.blockId !== blockId;
+    }
+    return true;
   }
   return false;
 }

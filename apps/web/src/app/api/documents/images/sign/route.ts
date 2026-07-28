@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { createSessionObjectStorage } from "@rhodes/db/object-storage";
+import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const storage = createSessionObjectStorage(supabase);
   const urls: Record<string, string> = {};
 
   for (const path of paths) {
@@ -34,12 +37,14 @@ export async function POST(request: Request) {
     });
     if (!allowed) continue;
 
-    const { data: signed } = await supabase.storage
-      .from("document-images")
-      .createSignedUrl(path, 60 * 60 * 24);
+    const signedUrl = await storage.signedUrl(
+      DOCUMENT_IMAGES_BUCKET,
+      path,
+      60 * 60 * 24,
+    );
 
-    if (signed?.signedUrl) {
-      urls[path] = signed.signedUrl;
+    if (signedUrl) {
+      urls[path] = signedUrl;
       continue;
     }
 

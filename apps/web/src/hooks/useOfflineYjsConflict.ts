@@ -51,6 +51,10 @@ import {
   ydocBodyMatchesSnapshot,
 } from "@/lib/offline/yjs-offline-restore";
 import { pruneBlockAudit } from "@/lib/collaboration/block-audit";
+import {
+  isOfflineConflictDebugEnabled,
+  offlineConflictLog,
+} from "@/lib/offline/debug-conflict";
 
 /** Audit entries older than this are dropped on every commit — comfortably
  * covers any realistic offline window while keeping the map small. */
@@ -237,29 +241,22 @@ export function useOfflineYjsConflict(params: {
 
   const commitResolvedConflicts = useCallback(async () => {
     if (committingRef.current) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] commitResolvedConflicts bailed: already committing",
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] commitResolvedConflicts bailed: already committing",
+      );
       return;
     }
     if (!documentId || !ydoc) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] commitResolvedConflicts bailed: missing documentId/ydoc",
-          JSON.stringify({ hasDocumentId: Boolean(documentId), hasYdoc: Boolean(ydoc) }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] commitResolvedConflicts bailed: missing documentId/ydoc",
+        JSON.stringify({ hasDocumentId: Boolean(documentId), hasYdoc: Boolean(ydoc) }),
+      );
       return;
     }
     if (!(await ownsOfflineConflictReview(documentId, TAB_ID))) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info("[offline-patch] commitResolvedConflicts bailed: non-owner");
-      }
+      offlineConflictLog(
+        "[offline-patch] commitResolvedConflicts bailed: non-owner",
+      );
       await endConflictReviewSession("non-owner");
       return;
     }
@@ -279,16 +276,13 @@ export function useOfflineYjsConflict(params: {
     workingBlockTextRef.current = new Map();
 
     if (!baseSnapshot || !mineBytes) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] commitResolvedConflicts bailed: missing state",
-          JSON.stringify({
-            hasBaseSnapshot: Boolean(baseSnapshot),
-            hasMineBytes: Boolean(mineBytes),
-          }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] commitResolvedConflicts bailed: missing state",
+        JSON.stringify({
+          hasBaseSnapshot: Boolean(baseSnapshot),
+          hasMineBytes: Boolean(mineBytes),
+        }),
+      );
       await endConflictReviewSession("commit-missing-state");
       return;
     }
@@ -307,21 +301,18 @@ export function useOfflineYjsConflict(params: {
         decisions,
       });
 
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] commit sides",
-          JSON.stringify({
-            decisions: Array.from(decisions.entries()),
-            plan: blockPlan.map((entry) => ({
-              blockId: entry.blockId,
-              side: entry.side,
-              xmlPreview: entry.xml.toString().slice(0, 120),
-            })),
-            baseCapturedAt: baseSnapshot.capturedAt,
-          }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] commit sides",
+        JSON.stringify({
+          decisions: Array.from(decisions.entries()),
+          plan: blockPlan.map((entry) => ({
+            blockId: entry.blockId,
+            side: entry.side,
+            xmlPreview: entry.xml.toString().slice(0, 120),
+          })),
+          baseCapturedAt: baseSnapshot.capturedAt,
+        }),
+      );
 
       // Decision plan encodes peer/mine sides; commitResolvedDoc suppresses
       // outbound during the patch then broadcasts one baseline-relative update.
@@ -338,10 +329,9 @@ export function useOfflineYjsConflict(params: {
       flushPersist();
       pruneBlockAudit(ydoc, BLOCK_AUDIT_RETENTION_MS);
 
-      if (process.env.NODE_ENV !== "production") {
+      if (isOfflineConflictDebugEnabled()) {
         const immediateChecksum = debugBlockChecksum(ydoc);
-        // eslint-disable-next-line no-console
-        console.info(
+        offlineConflictLog(
           "[offline-patch] post-commit checksum (t+0ms)",
           JSON.stringify(immediateChecksum),
         );
@@ -350,8 +340,7 @@ export function useOfflineYjsConflict(params: {
           const drifted =
             JSON.stringify(delayedChecksum) !==
             JSON.stringify(immediateChecksum);
-          // eslint-disable-next-line no-console
-          console.info(
+          offlineConflictLog(
             `[offline-patch] post-commit checksum (t+3000ms) drifted=${drifted}`,
             JSON.stringify(delayedChecksum),
           );
@@ -387,16 +376,13 @@ export function useOfflineYjsConflict(params: {
 
       const awareness = providerRef.current?.awareness;
       if (!awareness) {
-        if (process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
-          console.info(
-            "[offline-patch] computeContributorsForConflicts bailed: no awareness",
-            JSON.stringify({
-              hasProvider: Boolean(providerRef.current),
-              conflictBlockIds: conflictsList.map((c) => c.blockId),
-            }),
-          );
-        }
+        offlineConflictLog(
+          "[offline-patch] computeContributorsForConflicts bailed: no awareness",
+          JSON.stringify({
+            hasProvider: Boolean(providerRef.current),
+            conflictBlockIds: conflictsList.map((c) => c.blockId),
+          }),
+        );
         return { peerContributorsByBlock, authorByBlock };
       }
 
@@ -632,16 +618,13 @@ export function useOfflineYjsConflict(params: {
       const { peerContributorsByBlock, authorByBlock } =
         computeContributorsForConflicts(found, baseSnapshot);
 
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] conflicts found, attribution result",
-          JSON.stringify({
-            blockIds: found.map((c) => c.blockId),
-            authorByBlock: Array.from(authorByBlock.entries()),
-          }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] conflicts found, attribution result",
+        JSON.stringify({
+          blockIds: found.map((c) => c.blockId),
+          authorByBlock: Array.from(authorByBlock.entries()),
+        }),
+      );
 
       const nextClusters = clustersFromBlockConflicts(found, authorByBlock);
       const nextReviews = buildBlockReviewModels(
@@ -694,13 +677,10 @@ export function useOfflineYjsConflict(params: {
       !peerDataReceived &&
       remotePeers > 0
     ) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] auto-merge blocked: peers present but no peer sync yet",
-          JSON.stringify({ settled, onlyLocal, remotePeers }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] auto-merge blocked: peers present but no peer sync yet",
+        JSON.stringify({ settled, onlyLocal, remotePeers }),
+      );
       return;
     }
     if (
@@ -708,18 +688,15 @@ export function useOfflineYjsConflict(params: {
       catchupCompleteRef.current &&
       (settled || onlyLocal)
     ) {
-      if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
-        console.info(
-          "[offline-patch] auto-merge (no conflict review), releasing deferred updates",
-          JSON.stringify({
-            settled,
-            onlyLocal,
-            peerDataReceived,
-            remotePeers,
-          }),
-        );
-      }
+      offlineConflictLog(
+        "[offline-patch] auto-merge (no conflict review), releasing deferred updates",
+        JSON.stringify({
+          settled,
+          onlyLocal,
+          peerDataReceived,
+          remotePeers,
+        }),
+      );
       providerRef.current?.setOfflineReviewActive(false);
       providerRef.current?.setOfflineSessionPending(false);
       providerRef.current?.releaseDeferredPeerUpdates();

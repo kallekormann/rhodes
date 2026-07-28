@@ -1,4 +1,6 @@
-export const AVATAR_BUCKET = "avatars";
+import { AVATAR_BUCKET } from "@rhodes/shared/constants";
+
+export { AVATAR_BUCKET };
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
