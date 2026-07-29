@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import "@/app/auth/auth.css";
 import "./OnboardingScreen.css";
 
 type OnboardingScreenProps = {
@@ -11,11 +12,11 @@ type OnboardingScreenProps = {
 
 export function OnboardingScreen({ title, lead, children }: OnboardingScreenProps) {
   return (
-    <div className="onboarding-screen">
-      <div className="onboarding-card">
-        <p className="onboarding-brand">Rhodes</p>
-        <h1 className="onboarding-title">{title}</h1>
-        {lead ? <p className="onboarding-lead">{lead}</p> : null}
+    <div className="auth-shell onboarding-screen">
+      <div className="auth-card onboarding-card">
+        <p className="auth-brand">Rhodes</p>
+        <h1 className="auth-title">{title}</h1>
+        {lead ? <p className="auth-subtitle">{lead}</p> : null}
         {children}
       </div>
     </div>

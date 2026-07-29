@@ -1,81 +1,32 @@
-.onboarding-screen {
+.onboarding-screen.auth-shell {
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.onboarding-card.auth-card {
+  max-width: 440px;
+}
+
+.onboarding-form {
+  margin-top: var(--space-md);
+}
+
+.onboarding-footer {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  background: var(--color-bg-subtle, #f6f6f4);
-}
-
-.onboarding-card {
-  width: min(100%, 28rem);
-  background: var(--color-surface, #fff);
-  border: 1px solid var(--color-border, #e5e5e0);
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 8px 32px rgb(0 0 0 / 6%);
-}
-
-.onboarding-brand {
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-text-muted, #6b6b66);
-  margin: 0 0 0.5rem;
-}
-
-.onboarding-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: var(--color-text, #1a1a18);
-}
-
-.onboarding-lead {
-  margin: 0 0 1.5rem;
-  color: var(--color-text-muted, #6b6b66);
-  line-height: 1.5;
-}
-
-.onboarding-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
-}
-
-.onboarding-actions--row {
-  flex-direction: row;
   justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
 }
 
-.onboarding-error {
-  margin: 0.75rem 0 0;
-  color: var(--color-danger, #b42318);
-  font-size: 0.875rem;
+.onboarding-footer--stack {
+  flex-direction: column;
 }
 
-.onboarding-fork-option {
-  text-align: left;
-  padding: 1rem;
-  border: 1px solid var(--color-border, #e5e5e0);
-  border-radius: 8px;
-  background: var(--color-surface, #fff);
-  cursor: pointer;
-  transition: border-color 0.15s ease;
+.onboarding-footer--stack .btn,
+.onboarding-form > .btn {
+  width: 100%;
 }
 
-.onboarding-fork-option:hover {
-  border-color: var(--color-accent, #2f6fed);
-}
-
-.onboarding-fork-option strong {
-  display: block;
-  margin-bottom: 0.25rem;
-}
-
-.onboarding-fork-option span {
-  font-size: 0.875rem;
-  color: var(--color-text-muted, #6b6b66);
+.auth-form .onboarding-footer .btn {
+  width: auto;
 }
