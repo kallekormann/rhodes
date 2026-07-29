@@ -282,8 +282,6 @@ export function SettingsView() {
 
   const scopePolicyWorkspaceId =
     activeScope.id === "loading" ? null : activeScope.id;
-  const scopePolicyPending =
-    activeScope.id === "loading" || scopePolicyLoading;
   const [createKind, setCreateKind] = useState<CreateKind>(null);
   const [displayName, setDisplayName] = useState(session.displayName);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(session.avatarUrl);
@@ -335,6 +333,9 @@ export function SettingsView() {
     savePolicy,
     saveEnabledViews,
   } = useScopePolicy(scopePolicyWorkspaceId);
+
+  const scopePolicyPending =
+    activeScope.id === "loading" || scopePolicyLoading;
 
   const canEditScopePolicy =
     activeScope.role === "owner" || activeScope.role === "admin";
