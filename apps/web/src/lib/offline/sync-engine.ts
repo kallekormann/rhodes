@@ -52,6 +52,32 @@ const listeners = new Set<SyncListener>();
 let pushTail: Promise<{ pushed: number; stoppedOnNetwork: boolean }> =
   Promise.resolve({ pushed: 0, stoppedOnNetwork: false });
 
+const PUSH_BACKOFF_INITIAL_MS = 5_000;
+const PUSH_BACKOFF_MAX_MS = 60_000;
+let pushBackoffUntil = 0;
+let pushBackoffMs = PUSH_BACKOFF_INITIAL_MS;
+
+/** True while backing off after a network failure — avoids hammering a down server. */
+export function shouldDeferDocumentPush(): boolean {
+  return Date.now() < pushBackoffUntil;
+}
+
+/** @internal test helper */
+export function resetDocumentPushBackoff(): void {
+  pushBackoffUntil = 0;
+  pushBackoffMs = PUSH_BACKOFF_INITIAL_MS;
+}
+
+function recordPushNetworkFailure(): void {
+  pushBackoffUntil = Date.now() + pushBackoffMs;
+  pushBackoffMs = Math.min(pushBackoffMs * 2, PUSH_BACKOFF_MAX_MS);
+}
+
+function recordPushSuccess(): void {
+  pushBackoffMs = PUSH_BACKOFF_INITIAL_MS;
+  pushBackoffUntil = 0;
+}
+
 export function subscribeSyncEngine(listener: SyncListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -313,6 +339,9 @@ export async function pushOutbox(): Promise<{
   if (!navigator.onLine) {
     return { pushed: 0, stoppedOnNetwork: true };
   }
+  if (shouldDeferDocumentPush()) {
+    return { pushed: 0, stoppedOnNetwork: true };
+  }
 
   const job = () => drainPushOutbox();
   const next = pushTail.then(job, job);
@@ -485,6 +514,12 @@ async function drainPushOutbox(): Promise<{
     }
 
     if (stoppedOnNetwork || !progressed) break;
+  }
+
+  if (stoppedOnNetwork) {
+    recordPushNetworkFailure();
+  } else if (pushed > 0) {
+    recordPushSuccess();
   }
 
   if (pushed > 0) {

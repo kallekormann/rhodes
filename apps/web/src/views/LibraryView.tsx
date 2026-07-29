@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { FileText, Loader, Search, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { FileText, Search, Trash2 } from "lucide-react";
 import { normalizeLibrarySummary } from "@rhodes/ai";
 import {
   libraryFailureOffersReplace,
@@ -35,6 +35,7 @@ import {
   readLibraryFailureCode,
   readLibraryFailureMessage,
 } from "@/lib/library/pipeline";
+import { openKnowledgeSourcePreview } from "@/lib/library/preview";
 import {
   isLibraryFileAllowed,
   LIBRARY_FILE_ACCEPT,
@@ -195,6 +196,41 @@ export function LibraryView() {
     }
   };
 
+  const openSource = (sourceId: string) => {
+    openKnowledgeSourcePreview({
+      originType: "library",
+      sourceRefId: sourceId,
+    });
+  };
+
+  const handleRowClick = (
+    event: MouseEvent<HTMLElement>,
+    sourceId: string,
+    isDeleting: boolean,
+  ) => {
+    if (isDeleting) return;
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        "button, a, .source-row__actions, .source-row__actions-end",
+      )
+    ) {
+      return;
+    }
+    openSource(sourceId);
+  };
+
+  const handleRowKeyDown = (
+    event: KeyboardEvent<HTMLElement>,
+    sourceId: string,
+    isDeleting: boolean,
+  ) => {
+    if (isDeleting) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openSource(sourceId);
+  };
+
   return (
     <OfflineGate
       title="Library unavailable offline"
@@ -302,8 +338,21 @@ export function LibraryView() {
                 return (
                   <li key={source.id}>
                     <div
-                      className={`source-row${isDeleting ? " source-row--deleting" : ""}${isFailed ? " source-row--failed" : ""}`}
+                      className={`source-row${isDeleting ? " source-row--deleting" : " source-row--openable"}`}
                       aria-busy={isDeleting}
+                      role={isDeleting ? undefined : "button"}
+                      tabIndex={isDeleting ? undefined : 0}
+                      aria-label={
+                        isDeleting
+                          ? undefined
+                          : `Open ${source.file_name}`
+                      }
+                      onClick={(event) =>
+                        handleRowClick(event, source.id, isDeleting)
+                      }
+                      onKeyDown={(event) =>
+                        handleRowKeyDown(event, source.id, isDeleting)
+                      }
                     >
                       <FileText
                         size={20}
@@ -369,7 +418,7 @@ export function LibraryView() {
                       <StatusPill
                         variant={pill.variant}
                         label={pill.label}
-                        icon={isDeleting || inFlight ? Loader : undefined}
+                        loading={isDeleting || inFlight}
                       />
                       <span className="source-row__date">
                         {formatLibraryDate(source.created_at)}

@@ -84,6 +84,19 @@
   pointer-events: none;
 }
 
+.source-row--openable {
+  cursor: pointer;
+}
+
+.source-row--openable:hover .source-row__name {
+  color: var(--color-accent);
+}
+
+.source-row--openable:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .source-row__main {
   min-width: 0;
 }

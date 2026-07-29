@@ -19,6 +19,10 @@ function stripBasePath(pathname: string) {
   return pathname;
 }
 
+function isImageServePath(pathname: string) {
+  return stripBasePath(pathname).startsWith("/api/documents/images/serve");
+}
+
 function isPublicPath(pathname: string) {
   const path = stripBasePath(pathname);
 
@@ -45,7 +49,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/favicon") ||
     pathname.includes(".") ||
     pathname.startsWith("/app/supabase/") ||
-    pathname.startsWith("/supabase/")
+    pathname.startsWith("/supabase/") ||
+    isImageServePath(pathname)
   ) {
     return NextResponse.next();
   }

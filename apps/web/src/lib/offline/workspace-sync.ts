@@ -294,9 +294,10 @@ export async function awaitDocumentPushIfNeeded(
       attempts < 12 &&
       (await documentHasUnsentWork(documentId, workspaceId))
     ) {
-      await pushOutbox();
+      const result = await pushOutbox();
       attempts += 1;
       if (typeof navigator !== "undefined" && !navigator.onLine) break;
+      if (result.stoppedOnNetwork) break;
     }
   } finally {
     emitWorkspaceSync({

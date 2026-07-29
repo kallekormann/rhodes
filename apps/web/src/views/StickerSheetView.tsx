@@ -749,7 +749,7 @@ export function StickerSheetView() {
           <StatusPill variant="success" icon={CircleCheck} />
           <StatusPill variant="warning" icon={TriangleAlert} />
           <StatusPill variant="info" icon={Info} />
-          <StatusPill variant="progress" icon={Loader} />
+          <StatusPill variant="progress" loading />
         </div>
       </section>
 

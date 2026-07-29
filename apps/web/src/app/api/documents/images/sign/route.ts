@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createSessionObjectStorage } from "@rhodes/db/object-storage";
-import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { imageServeUrl } from "@/lib/documents/document-image-urls";
+import { canReadDocumentImage } from "@/lib/documents/image-access";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
@@ -25,30 +25,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const storage = createSessionObjectStorage(supabase);
   const urls: Record<string, string> = {};
 
-  for (const path of paths) {
-    const workspaceId = path.split("/")[0];
-    if (!workspaceId) continue;
-
-    const { data: allowed } = await supabase.rpc("is_workspace_member", {
-      ws_id: workspaceId,
-    });
-    if (!allowed) continue;
-
-    const signedUrl = await storage.signedUrl(
-      DOCUMENT_IMAGES_BUCKET,
+  const allowed = await Promise.all(
+    paths.map(async (path) => ({
       path,
-      60 * 60 * 24,
-    );
-
-    if (signedUrl) {
-      urls[path] = signedUrl;
-      continue;
-    }
-
-    urls[path] = `/app/api/documents/images/serve?path=${encodeURIComponent(path)}`;
+      ok: await canReadDocumentImage(supabase, path, user.id),
+    })),
+  );
+  for (const entry of allowed) {
+    if (!entry.ok) continue;
+    urls[entry.path] = imageServeUrl(entry.path);
   }
 
   return withSecurityHeaders(NextResponse.json({ urls }));

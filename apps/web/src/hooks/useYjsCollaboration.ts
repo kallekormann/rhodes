@@ -15,9 +15,7 @@ import {
   clearStaleOfflineSnapshots,
   hasOfflineSessionMarker,
 } from "@/lib/offline/yjs-offline-snapshot";
-import { clearYjsIndexedDbPersistence } from "@/lib/collaboration/yjs-idb";
 import {
-  clearRhodesYjsPersistence,
   persistLocalYjsState,
   RhodesYjsPersistence,
 } from "@/lib/offline/yjs-rhodes-persistence";
@@ -256,6 +254,8 @@ export function useYjsCollaboration(params: {
   }, []);
 
   const collabEnabled = Boolean(documentId && enabled && userId);
+  const displayNameRef = useRef(displayName);
+  displayNameRef.current = displayName;
 
   useEffect(() => {
     if (!collabEnabled || !documentId) {
@@ -276,6 +276,7 @@ export function useYjsCollaboration(params: {
     docRef.current = doc;
     let idbPersistence: RhodesYjsPersistence | null = null;
     let serverPullTimer: number | null = null;
+    let skipNextSyncedServerPull = false;
 
     const createProvider = async (attempt = 0): Promise<void> => {
       if (cancelled || providerRef.current) return;
@@ -312,7 +313,7 @@ export function useYjsCollaboration(params: {
       // Merge latest server state so reconnecting after offline has a correct
       // broadcast baseline (local-only ops = diff vs server, not vs current doc).
       let unsentBaselineVector: Uint8Array | null = null;
-      const server = await fetchPersistedState(documentId);
+      const server = await fetchPersistedStateWithTimeout(documentId);
       if (cancelled) return;
       if (server.state && server.state.length > 0) {
         const serverDoc = new Y.Doc();
@@ -320,6 +321,7 @@ export function useYjsCollaboration(params: {
         unsentBaselineVector = Y.encodeStateVector(serverDoc);
         Y.applyUpdate(doc, server.state);
         serverDoc.destroy();
+        skipNextSyncedServerPull = true;
       }
 
       const nextProvider = new SupabaseYjsProvider({
@@ -341,7 +343,7 @@ export function useYjsCollaboration(params: {
 
       nextProvider.awareness.setLocalStateField("user", {
         id: userId,
-        name: displayName || "Collaborator",
+        name: displayNameRef.current || "Collaborator",
         color: userColor(userId),
       });
 
@@ -351,6 +353,10 @@ export function useYjsCollaboration(params: {
           void fetchPersistedState(documentId).then((server) => {
             if (cancelled || !server.state || server.state.length === 0) return;
             if (hasOfflineSessionMarker(documentId)) return;
+            if (skipNextSyncedServerPull) {
+              skipNextSyncedServerPull = false;
+              return;
+            }
             applyServerState(doc, server.state);
           });
         }
@@ -381,7 +387,7 @@ export function useYjsCollaboration(params: {
       const refreshAwareness = () => {
         nextProvider.awareness.setLocalStateField("user", {
           id: userId,
-          name: displayName || "Collaborator",
+          name: displayNameRef.current || "Collaborator",
           color: userColor(userId),
         });
         nextProvider.nudgeLocalAwareness();
@@ -410,32 +416,24 @@ export function useYjsCollaboration(params: {
       const isOffline =
         typeof navigator !== "undefined" && !navigator.onLine;
 
+      const serverPrefetch = isOffline
+        ? Promise.resolve<PersistedYjsState>({
+            state: null,
+            seq: 0,
+            updatedAt: null,
+          })
+        : fetchPersistedStateWithTimeout(documentId);
+
       idbPersistence = new RhodesYjsPersistence(documentId, doc, userId);
-      const localReadyPromise = idbPersistence.whenSynced;
 
-      let serverState: Uint8Array | null = null;
-      if (!isOffline) {
-        const server = await fetchPersistedStateWithTimeout(documentId);
-        if (cancelled) return;
-        // Only clear local persistence after a successful server fetch so a
-        // network blip does not wipe the only offline copy.
-        if (server.state && server.state.length > 0) {
-          await clearRhodesYjsPersistence(documentId);
-          await clearYjsIndexedDbPersistence(documentId);
-          serverState = server.state;
-        }
-      }
-
-      await localReadyPromise;
+      await idbPersistence.whenSynced;
       if (cancelled) return;
 
       await clearStaleOfflineSnapshots(documentId);
       if (cancelled) return;
 
-      if (serverState) {
-        applyServerState(doc, serverState);
-      } else if (!isOffline) {
-        const server = await fetchPersistedStateWithTimeout(documentId);
+      if (!isOffline) {
+        const server = await serverPrefetch;
         if (cancelled) return;
         if (server.state && server.state.length > 0) {
           applyServerState(doc, server.state);
@@ -458,13 +456,8 @@ export function useYjsCollaboration(params: {
       setLocalReady(true);
       setYdoc(doc);
 
-      if (isOffline) {
-        await createProvider();
-        return;
-      }
-
-      await createProvider();
-      if (cancelled) return;
+      // Realtime provider connects in the background — editing uses the local Y.Doc.
+      void createProvider();
     })();
 
     const onOnlineRetry = () => {
@@ -510,7 +503,18 @@ export function useYjsCollaboration(params: {
       setLocalReady(false);
       setNeedsInitialSeed(false);
     };
-  }, [collabEnabled, documentId, displayName, userId]);
+  }, [collabEnabled, documentId, userId]);
+
+  useEffect(() => {
+    const provider = providerRef.current;
+    if (!provider || !userId) return;
+    provider.awareness.setLocalStateField("user", {
+      id: userId,
+      name: displayNameRef.current || "Collaborator",
+      color: userColor(userId),
+    });
+    provider.nudgeLocalAwareness();
+  }, [displayName, userId]);
 
   const collaborationUser = useMemo((): CollaborationUser | null => {
     if (!userId) return null;

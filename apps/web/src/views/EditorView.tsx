@@ -106,6 +106,7 @@ function EditorViewContent() {
     collabSynced,
     collabNeedsInitialSeed,
     onCollabBootstrapped,
+    onDocumentImageInserted,
     collaborationUser,
     offlineConflictBlocks,
     offlineConflictClusters,
@@ -591,6 +592,7 @@ function EditorViewContent() {
                   collabSynced={collabSynced}
                   collabNeedsInitialSeed={collabNeedsInitialSeed}
                   onCollabBootstrapped={onCollabBootstrapped}
+                  onDocumentImageInserted={onDocumentImageInserted}
                   collaborationUser={collaborationUser}
                   lockedBlockId={lockedBlockId}
                   lockedBlockIndex={lockedBlockIndex}

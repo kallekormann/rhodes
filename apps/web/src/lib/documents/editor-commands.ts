@@ -1,6 +1,12 @@
 import type { Editor } from "@tiptap/react";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
+import {
+  extractDocumentImageStoragePath,
+  imageServeUrl,
+} from "@/lib/documents/document-image-urls";
 import { findRelatedBlockInsertPosition } from "@/lib/insights/place-citation";
+
+export { imageServeUrl } from "@/lib/documents/document-image-urls";
 
 /** Match ui-mock: insert a new empty paragraph directly below the current doc block. */
 export function insertParagraphAfterBlock(editor: Editor) {
@@ -48,10 +54,6 @@ export function insertParagraphAfterTable(editor: Editor) {
       return;
     }
   }
-}
-
-export function imageServeUrl(storagePath: string) {
-  return `/app/api/documents/images/serve?path=${encodeURIComponent(storagePath)}`;
 }
 
 export type CitationPlacement = "cursor" | "related-block";
@@ -105,70 +107,11 @@ export function insertCitation(editor: Editor, input: CitationInsertInput) {
   editor.chain().focus().insertContent(citation).scrollIntoView().run();
 }
 
+/** Normalize image attrs to stable `/serve?path=` URLs (auth checked on serve). */
 export async function resolveDocumentImageUrls(
   content: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return normalizeDocumentImageContent(content);
-  }
-
-  const cloned = structuredClone(content);
-  const paths: string[] = [];
-
-  function walk(node: Record<string, unknown>) {
-    if (node.type === "image") {
-      const attrs = (node.attrs as Record<string, unknown> | undefined) ?? {};
-      const storagePath =
-        (typeof attrs.storagePath === "string" && attrs.storagePath) ||
-        extractStoragePath(typeof attrs.src === "string" ? attrs.src : null);
-      if (storagePath) paths.push(storagePath);
-    }
-    const children = node.content;
-    if (Array.isArray(children)) {
-      for (const child of children) {
-        if (child && typeof child === "object") {
-          walk(child as Record<string, unknown>);
-        }
-      }
-    }
-  }
-
-  walk(cloned);
-  if (paths.length === 0) return cloned;
-
-  const unique = [...new Set(paths)];
-  const response = await fetch("/app/api/documents/images/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paths: unique }),
-  });
-  const data = await response.json().catch(() => ({}));
-  const signed = (data.urls as Record<string, string> | undefined) ?? {};
-
-  function apply(node: Record<string, unknown>) {
-    if (node.type === "image") {
-      const attrs = { ...((node.attrs as Record<string, unknown> | undefined) ?? {}) };
-      const storagePath =
-        (typeof attrs.storagePath === "string" && attrs.storagePath) ||
-        extractStoragePath(typeof attrs.src === "string" ? attrs.src : null);
-      if (storagePath) {
-        attrs.storagePath = storagePath;
-        attrs.src = signed[storagePath] ?? imageServeUrl(storagePath);
-      }
-      node.attrs = attrs;
-    }
-    const children = node.content;
-    if (Array.isArray(children)) {
-      for (const child of children) {
-        if (child && typeof child === "object") {
-          apply(child as Record<string, unknown>);
-        }
-      }
-    }
-  }
-
-  apply(cloned);
-  return cloned;
+  return normalizeDocumentImageContent(content);
 }
 
 export function normalizeDocumentImageContent(
@@ -181,7 +124,9 @@ export function normalizeDocumentImageContent(
       const attrs = { ...((node.attrs as Record<string, unknown> | undefined) ?? {}) };
       const storagePath =
         (typeof attrs.storagePath === "string" && attrs.storagePath) ||
-        extractStoragePath(typeof attrs.src === "string" ? attrs.src : null);
+        extractDocumentImageStoragePath(
+          typeof attrs.src === "string" ? attrs.src : null,
+        );
       if (storagePath) {
         attrs.storagePath = storagePath;
         attrs.src = imageServeUrl(storagePath);
@@ -200,17 +145,4 @@ export function normalizeDocumentImageContent(
 
   walk(cloned);
   return cloned;
-}
-
-function extractStoragePath(src: string | null): string | null {
-  if (!src) return null;
-  if (src.startsWith("blob:")) return null;
-  try {
-    const url = new URL(src, "http://localhost");
-    const path = url.searchParams.get("path");
-    return path || null;
-  } catch {
-    if (src.includes("/") && !src.startsWith("http")) return src;
-    return null;
-  }
 }

@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
-import { createSessionObjectStorage } from "@rhodes/db/object-storage";
+import { createAdminObjectStorage } from "@rhodes/db/object-storage";
 import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
+import { allowLocalStorageFallback } from "@rhodes/shared/storage-env";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
-import { contentTypeForPath } from "@/lib/documents/local-image-storage";
+import { canReadDocumentImage } from "@/lib/documents/image-access";
+import {
+  contentTypeForPath,
+  readLocalDocumentImage,
+} from "@/lib/documents/local-image-storage";
 import { createClient } from "@/lib/supabase/server";
+import { toBrowserSupabaseUrl } from "@/lib/supabase/urls";
+
+const SIGNED_URL_TTL_SECONDS = 3600;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,13 +20,6 @@ export async function GET(request: Request) {
   if (!path) {
     return withSecurityHeaders(
       NextResponse.json({ error: "path required" }, { status: 400 }),
-    );
-  }
-
-  const workspaceId = path.split("/")[0];
-  if (!workspaceId) {
-    return withSecurityHeaders(
-      NextResponse.json({ error: "Invalid path" }, { status: 400 }),
     );
   }
 
@@ -33,9 +34,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const { data: allowed } = await supabase.rpc("is_workspace_member", {
-    ws_id: workspaceId,
-  });
+  const allowed = await canReadDocumentImage(supabase, path, user.id);
 
   if (!allowed) {
     return withSecurityHeaders(
@@ -43,27 +42,32 @@ export async function GET(request: Request) {
     );
   }
 
-  const storage = createSessionObjectStorage(supabase);
+  const storage = createAdminObjectStorage();
   const signedUrl = await storage.signedUrl(
     DOCUMENT_IMAGES_BUCKET,
     path,
-    60 * 60,
+    SIGNED_URL_TTL_SECONDS,
   );
 
   if (signedUrl) {
-    return NextResponse.redirect(signedUrl);
+    const browserUrl = toBrowserSupabaseUrl(signedUrl);
+    const response = NextResponse.redirect(browserUrl, 307);
+    response.headers.set("Cache-Control", "private, max-age=300");
+    return withSecurityHeaders(response);
   }
 
-  const bytes = await storage.get(DOCUMENT_IMAGES_BUCKET, path);
-  if (bytes && bytes.length > 0) {
-    return withSecurityHeaders(
-      new NextResponse(Buffer.from(bytes), {
-        headers: {
-          "Content-Type": contentTypeForPath(path),
-          "Cache-Control": "private, max-age=3600",
-        },
-      }),
-    );
+  if (allowLocalStorageFallback()) {
+    const bytes = await readLocalDocumentImage(path);
+    if (bytes && bytes.length > 0) {
+      return withSecurityHeaders(
+        new NextResponse(Buffer.from(bytes), {
+          headers: {
+            "Content-Type": contentTypeForPath(path),
+            "Cache-Control": "private, max-age=3600",
+          },
+        }),
+      );
+    }
   }
 
   return withSecurityHeaders(

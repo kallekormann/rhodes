@@ -202,7 +202,11 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       return;
     }
 
-    setLoading(true);
+    const showLoadingSpinner =
+      scopes.length === 0 && resolveScopesFromCache() == null;
+    if (showLoadingSpinner) {
+      setLoading(true);
+    }
     setError(null);
 
     try {

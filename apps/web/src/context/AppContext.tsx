@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,6 +28,7 @@ import {
   isBrowserOffline,
   pushAppHistory,
   readDocIdFromBrowserLocation,
+  replaceAppHistory,
   viewFromBrowserLocation,
 } from "@/lib/navigation/app-path";
 import { appendDevLog } from "@/lib/dev/client-error-log";
@@ -184,6 +186,7 @@ export function AppProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const pendingViewRef = useRef<AppView | null>(null);
   const [view, setViewState] = useState<AppView>(() => pathToView(pathname));
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
   const [theme, setThemeState] = useState<Theme>("light");
@@ -238,14 +241,7 @@ export function AppProvider({
   const allowPersonalCreate = canCreatePersonalSpace(scopes, featureGates.tier);
   const canWriteActiveScope = canWriteInScope(activeScope);
   const workspaceId =
-    scopesLoading &&
-    typeof navigator !== "undefined" &&
-    navigator.onLine
-      ? null
-      : (activeScopeId ??
-        readActiveWorkspaceId() ??
-        scopes[0]?.id ??
-        null);
+    activeScopeId ?? readActiveWorkspaceId() ?? scopes[0]?.id ?? null;
   const { online, onReconnect } = useOnlineStatus(workspaceId);
   const { createDocument } = useCreateDocument(
     workspaceId,
@@ -280,8 +276,39 @@ export function AppProvider({
       }
       return;
     }
-    setViewState(pathToView(pathname));
+
+    const routeView = pathToView(pathname);
+    if (pendingViewRef.current) {
+      if (routeView === pendingViewRef.current) {
+        pendingViewRef.current = null;
+      }
+      return;
+    }
+    setViewState(routeView);
   }, [pathname]);
+
+  const commitAppNavigation = useCallback(
+    (next: AppView, path: string, mode: "push" | "replace" = "replace") => {
+      pendingViewRef.current = next;
+      setViewState(next);
+      if (isBrowserOffline()) {
+        if (mode === "push") {
+          pushAppHistory(path);
+        } else {
+          replaceAppHistory(path);
+        }
+        pendingViewRef.current = null;
+        return;
+      }
+      replaceAppHistory(path);
+      if (mode === "push") {
+        router.push(path);
+      } else {
+        router.replace(path);
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
     const onOffline = () => {
@@ -498,13 +525,7 @@ export function AppProvider({
     (next: AppView) => {
       const path = viewToPath[next];
       const navigate = () => {
-        if (isBrowserOffline()) {
-          setViewState(next);
-          pushAppHistory(path);
-          return;
-        }
-        setViewState(next);
-        router.push(path);
+        commitAppNavigation(next, path, "replace");
       };
 
       if (view === "editor" && next !== "editor") {
@@ -516,7 +537,7 @@ export function AppProvider({
 
       navigate();
     },
-    [documentId, router, view],
+    [commitAppNavigation, documentId, view],
   );
 
   const openEditor = useCallback(
@@ -527,37 +548,28 @@ export function AppProvider({
         setDocumentId(docId);
       }
       if (isBrowserOffline()) {
-        setViewState("editor");
-        pushAppHistory(path);
+        commitAppNavigation("editor", path, "push");
         if (process.env.NODE_ENV !== "production") {
           void appendDevLog("offline-open-editor", { docId, path });
         }
         return;
       }
 
-      // Navigate immediately so AppViewSwitch can show the editor without
-      // flashing the documents list while a background push runs.
-      setViewState("editor");
-      router.push(path);
+      commitAppNavigation("editor", path, "replace");
 
       if (targetId && workspaceId) {
         void awaitDocumentPushIfNeeded(targetId, workspaceId);
       }
     },
-    [documentId, router, workspaceId],
+    [commitAppNavigation, documentId, workspaceId],
   );
 
   const openTemplateEditor = useCallback(
     (templateId: string) => {
       const path = buildEditorPath(undefined, templateId);
-      if (isBrowserOffline()) {
-        setViewState("editor");
-        pushAppHistory(path);
-        return;
-      }
-      router.push(path);
+      commitAppNavigation("editor", path, "replace");
     },
-    [router],
+    [commitAppNavigation],
   );
 
   const createNewDocument = useCallback(async () => {

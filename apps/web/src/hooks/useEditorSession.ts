@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { readDocIdFromBrowserLocation } from "@/lib/navigation/app-path";
+import {
+  readDocIdFromBrowserLocation,
+  replaceAppHistory,
+} from "@/lib/navigation/app-path";
 import { getScopeMetaLabel } from "@/data/scopes";
 import { EMPTY_DOCUMENT_CONTENT } from "@/lib/documents/schemas";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
@@ -15,6 +18,7 @@ import {
   normalizeDocumentImageContent,
   resolveDocumentImageUrls,
 } from "@/lib/documents/editor-commands";
+import { prefetchDocumentImages, stripInFlightDocumentImages } from "@/lib/documents/document-image-urls";
 import { withUserMetadataValue, type MetadataFieldValue } from "@/lib/metadata/schemas";
 import {
   createDocumentComment,
@@ -29,7 +33,11 @@ import { isDocumentId } from "@/lib/documents/ids";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
 import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
-import { pushOutbox } from "@/lib/offline/sync-engine";
+import {
+  pushOutbox,
+  shouldDeferDocumentPush,
+} from "@/lib/offline/sync-engine";
+import { flushRhodesYjsPersistence } from "@/lib/offline/yjs-rhodes-persistence";
 import { registerEditorSaveFlush } from "@/lib/offline/editor-save-flush";
 import {
   buildTemplateMetadata,
@@ -113,12 +121,15 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
  * RhodesYjsPersistence retains offline body edits in rhodes-db; the next online edit (or
  * reconnect flush) will catch the projection back up.
  */
+const COLLAB_PROJECTION_DEBOUNCE_MS = 15_000;
+
 async function persistContentProjection(
   documentId: string,
   content: Record<string, unknown>,
   contentPlain: string,
 ): Promise<void> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
+  if (shouldDeferDocumentPush()) return;
   try {
     await fetch(`/app/api/documents/${documentId}`, {
       method: "PATCH",
@@ -198,6 +209,10 @@ export function useEditorSession() {
   const debouncedSaveContentRef = useRef<DebouncedCallback<
     (content: Record<string, unknown>, content_plain: string) => void
   > | null>(null);
+  const debouncedSaveCollabProjectionRef = useRef<DebouncedCallback<
+    (content: Record<string, unknown>, content_plain: string) => void
+  > | null>(null);
+  const collabDocReadyRef = useRef(false);
   const debouncedSaveTitleRef = useRef<DebouncedCallback<
     (title: string) => void
   > | null>(null);
@@ -302,7 +317,7 @@ export function useEditorSession() {
   }, [browserOffline, canWriteActiveScope, document?.id, document?.workspace_id, effectiveWorkspaceId, isEditingTemplate, scopes, shareContextVersion]);
 
   useLayoutEffect(() => {
-    if (isEditingTemplate || !document?.id || !browserOffline) return;
+    if (isEditingTemplate || !document?.id) return;
     if (contentHydratedForId === document.id) return;
 
     const raw =
@@ -318,67 +333,13 @@ export function useEditorSession() {
     hydratedDocumentIdRef.current = docId;
     setContentSyncToken((token) => token + 1);
     setComments(parseDocumentComments(document.metadata));
+    prefetchDocumentImages(normalized);
   }, [
-    browserOffline,
     contentHydratedForId,
     document?.content,
     document?.content_plain,
     document?.id,
     document?.metadata,
-    isEditingTemplate,
-  ]);
-
-  useEffect(() => {
-    if (isEditingTemplate || !document?.id) return;
-    if (contentHydratedForId === document.id) return;
-    if (browserOffline) return;
-
-    const raw =
-      (document.content as Record<string, unknown> | null) ??
-      EMPTY_DOCUMENT_CONTENT;
-
-    let cancelled = false;
-
-    const docId = document.id;
-    const docMetadata = document.metadata;
-    const docContentPlain = document.content_plain;
-
-    async function hydrateDocumentContent() {
-      const normalized = normalizeDocumentImageContent(raw);
-      let resolved = normalized;
-      try {
-        resolved = await Promise.race([
-          resolveDocumentImageUrls(normalized),
-          new Promise<Record<string, unknown>>((resolve) => {
-            window.setTimeout(() => resolve(normalized), 5_000);
-          }),
-        ]);
-      } catch {
-        resolved = normalized;
-      }
-      if (cancelled) return;
-
-      setEditorContent(resolved);
-      latestContentRef.current = resolved;
-      setContentPlain(docContentPlain?.trim() ?? "");
-      setContentHydratedForId(docId);
-      hydratedDocumentIdRef.current = docId;
-      setContentSyncToken((token) => token + 1);
-      setComments(parseDocumentComments(docMetadata));
-    }
-
-    void hydrateDocumentContent();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    browserOffline,
-    contentHydratedForId,
-    document?.id,
-    document?.content,
-    document?.metadata,
-    document?.content_plain,
     isEditingTemplate,
   ]);
 
@@ -386,6 +347,12 @@ export function useEditorSession() {
   const editorForConflictRef = useRef<Editor | null>(null);
   const flushBodyToCacheRef = useRef<() => void>(() => {});
   const ydocForSnapshotRef = useRef<import("yjs").Doc | null>(null);
+  const [collabBootstrappedForId, setCollabBootstrappedForId] = useState<
+    string | null
+  >(null);
+  const [editorShellRevealedForId, setEditorShellRevealedForId] = useState<
+    string | null
+  >(null);
 
   const {
     ydoc,
@@ -399,18 +366,52 @@ export function useEditorSession() {
     flushPersist: flushCollabPersist,
   } = useYjsCollaboration({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
-    enabled: !isEditingTemplate && crossScopeAccess === "allowed",
+    enabled: !isEditingTemplate && crossScopeAccess !== "denied",
     userId: session.userId,
     displayName: session.displayName || session.userEmail,
   });
   ydocForSnapshotRef.current = ydoc;
   collabActiveRef.current = collabActive;
+  collabDocReadyRef.current = collabDocReady;
+
+  useEffect(() => {
+    setCollabBootstrappedForId(null);
+    setEditorShellRevealedForId(null);
+  }, [resolvedId]);
+
+  useEffect(() => {
+    if (
+      isEditingTemplate ||
+      crossScopeAccess === "denied" ||
+      !session.userId ||
+      !document?.id ||
+      !collabDocReady
+    ) {
+      return;
+    }
+    setCollabBootstrappedForId(document.id);
+  }, [
+    collabDocReady,
+    crossScopeAccess,
+    document?.id,
+    isEditingTemplate,
+    session.userId,
+  ]);
 
   const collabCursorMode = Boolean(collabProvider && collaborationUser);
 
   const handleCollabBootstrapped = useCallback(() => {
     flushCollabPersist();
   }, [flushCollabPersist]);
+
+  const handleDocumentImageInserted = useCallback(() => {
+    const documentId = document?.id;
+    if (!documentId) return;
+    window.setTimeout(() => {
+      flushCollabPersist();
+      void flushRhodesYjsPersistence(documentId);
+    }, 300);
+  }, [document?.id, flushCollabPersist]);
 
   const {
     offlineConflictBlocks,
@@ -692,6 +693,7 @@ export function useEditorSession() {
   useEffect(() => {
     if (crossScopeAccess === "denied") {
       router.replace("/documents");
+      replaceAppHistory("/documents");
     }
   }, [crossScopeAccess, router]);
 
@@ -733,6 +735,19 @@ export function useEditorSession() {
 
   contentPlainRef.current = contentPlain;
 
+  const debouncedSaveCollabProjection = useDebouncedCallback(
+    (content: Record<string, unknown>, content_plain: string) => {
+      const documentId = resolvedIdRef.current;
+      if (!documentId) return;
+      void persistContentProjection(
+        documentId,
+        stripInFlightDocumentImages(content),
+        content_plain,
+      );
+    },
+    COLLAB_PROJECTION_DEBOUNCE_MS,
+  );
+
   const debouncedSaveContent = useDebouncedCallback(
     (content: Record<string, unknown>, content_plain: string) => {
       const documentId = resolvedIdRef.current;
@@ -741,7 +756,9 @@ export function useEditorSession() {
       // text reliably. Direct PATCH bypasses the outbox and loses content when the
       // server row does not exist yet.
       void persistDocumentRef.current({
-        content: normalizeDocumentImageContent(content),
+        content: normalizeDocumentImageContent(
+          stripInFlightDocumentImages(content),
+        ),
         content_plain,
       });
     },
@@ -779,18 +796,29 @@ export function useEditorSession() {
       } else if (!isEditingTemplate) {
         if (browserOffline) {
           void persistDocumentRef.current({
-            content: normalizeDocumentImageContent(nextContent),
+            content: normalizeDocumentImageContent(
+              stripInFlightDocumentImages(nextContent),
+            ),
             content_plain,
           });
+        } else if (collabDocReadyRef.current) {
+          debouncedSaveCollabProjection(nextContent, content_plain);
         } else {
           debouncedSaveContent(nextContent, content_plain);
         }
       }
     },
-    [debouncedSaveContent, debouncedSaveTemplateContent, isEditingTemplate, templateRecord],
+    [
+      debouncedSaveCollabProjection,
+      debouncedSaveContent,
+      debouncedSaveTemplateContent,
+      isEditingTemplate,
+      templateRecord,
+    ],
   );
 
   debouncedSaveContentRef.current = debouncedSaveContent;
+  debouncedSaveCollabProjectionRef.current = debouncedSaveCollabProjection;
 
   // Flush the projection once back online so search/RAG doesn't lag too far
   // behind an offline editing session, even without a further keystroke.
@@ -798,11 +826,19 @@ export function useEditorSession() {
     if (!online || isEditingTemplate || !document?.id) return;
     const plain = contentPlainRef.current.trim();
     if (plain.length === 0) return;
+    if (collabDocReady) {
+      void persistContentProjection(
+        document.id,
+        normalizeDocumentImageContent(latestContentRef.current),
+        contentPlainRef.current,
+      );
+      return;
+    }
     void persistDocumentRef.current({
       content: normalizeDocumentImageContent(latestContentRef.current),
       content_plain: contentPlainRef.current,
     });
-  }, [online, isEditingTemplate, document?.id]);
+  }, [collabDocReady, online, isEditingTemplate, document?.id]);
 
   // Flush pending debounced saves before background sync runs on reconnect.
   useLayoutEffect(() => {
@@ -833,6 +869,7 @@ export function useEditorSession() {
     flushBodyToCacheRef.current = flushLatestBodyToCache;
     const flushPendingSave = () => {
       debouncedSaveContentRef.current?.flush();
+      debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       debouncedSaveCommentsRef.current?.flush();
       flushLatestBodyToCache();
@@ -840,6 +877,7 @@ export function useEditorSession() {
     const handleOfflineTransition = () => {
       debouncedSaveCommentsRef.current?.flush();
       debouncedSaveContentRef.current?.flush();
+      debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       flushLatestBodyToCache();
     };
@@ -853,6 +891,7 @@ export function useEditorSession() {
         capture: true,
       });
       debouncedSaveContentRef.current?.flush();
+      debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       debouncedSaveCommentsRef.current?.flush();
       flushLatestBodyToCache();
@@ -861,6 +900,7 @@ export function useEditorSession() {
 
   const flushEditorBodySave = useCallback(() => {
     debouncedSaveContentRef.current?.flush();
+    debouncedSaveCollabProjectionRef.current?.flush();
     flushBodyToCacheRef.current();
   }, []);
 
@@ -1139,6 +1179,50 @@ export function useEditorSession() {
     : null;
   const documentScopeLabel = documentScope ? getScopeMetaLabel(documentScope) : null;
 
+  const collabEnabled =
+    !isEditingTemplate &&
+    crossScopeAccess !== "denied" &&
+    Boolean(session.userId);
+
+  const contentReady =
+    document == null ||
+    contentHydratedForId === document.id ||
+    (collabEnabled && collabDocReady);
+
+  const waitingForCollabStack =
+    collabEnabled &&
+    document != null &&
+    collabBootstrappedForId !== document.id &&
+    !collabDocReady;
+
+  const blockingLoad = isEditingTemplate
+    ? templateLoading ||
+      !templateRecord ||
+      contentHydratedForId !== templateHydrationKey
+    : !resolvedId ||
+      (!effectiveWorkspaceId && !document) ||
+      (!browserOffline && crossScopeAccess === "pending") ||
+      (!document && loading) ||
+      (document != null && !contentReady) ||
+      waitingForCollabStack;
+
+  const templateShellKey = isEditingTemplate
+    ? `template:${requestedTemplateId ?? ""}`
+    : null;
+  const documentShellKey = document?.id ?? null;
+  const shellRevealed = isEditingTemplate
+    ? editorShellRevealedForId === templateShellKey && Boolean(templateShellKey)
+    : editorShellRevealedForId === documentShellKey && Boolean(documentShellKey);
+
+  useEffect(() => {
+    if (blockingLoad) return;
+    if (isEditingTemplate) {
+      if (templateShellKey) setEditorShellRevealedForId(templateShellKey);
+      return;
+    }
+    if (documentShellKey) setEditorShellRevealedForId(documentShellKey);
+  }, [blockingLoad, documentShellKey, isEditingTemplate, templateShellKey]);
+
   const reloadRemoteDocument = useCallback(async () => {
     if (!document?.id) return null;
     const response = await fetch(`/app/api/documents/${document.id}`);
@@ -1159,22 +1243,7 @@ export function useEditorSession() {
     workspaceId: isEditingTemplate
       ? (templateRecord?.workspace_id ?? effectiveWorkspaceId)
       : (document?.workspace_id ?? effectiveWorkspaceId ?? null),
-    loading: isEditingTemplate
-      ? templateLoading ||
-        !templateRecord ||
-        contentHydratedForId !== templateHydrationKey
-      : (online && !browserOffline ? scopesLoading : false) ||
-        !resolvedId ||
-        (!effectiveWorkspaceId && !document) ||
-        (!browserOffline && crossScopeAccess === "pending") ||
-        (!document && loading) ||
-        (document != null && contentHydratedForId !== document.id) ||
-        (!isEditingTemplate &&
-          crossScopeAccess === "allowed" &&
-          document != null &&
-          session.userId &&
-          !collabDocReady &&
-          ydoc == null),
+    loading: shellRevealed ? false : blockingLoad,
     error: isEditingTemplate ? templateError : error,
     content,
     contentPlain,
@@ -1253,6 +1322,7 @@ export function useEditorSession() {
     collabSynced,
     collabNeedsInitialSeed,
     onCollabBootstrapped: handleCollabBootstrapped,
+    onDocumentImageInserted: handleDocumentImageInserted,
     collabActive,
     collaborationUser,
     offlineConflictBlocks,

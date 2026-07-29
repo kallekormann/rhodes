@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminObjectStorage } from "@rhodes/db/object-storage";
 import { DOCUMENT_IMAGES_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
+import { canWriteDocumentImage } from "@/lib/documents/image-access";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -77,9 +78,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const { data: allowed } = await supabase.rpc("is_workspace_member", {
-    ws_id: document.workspace_id,
-  });
+  const allowed = await canWriteDocumentImage(supabase, id);
 
   if (!allowed) {
     return withSecurityHeaders(

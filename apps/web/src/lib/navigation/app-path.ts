@@ -31,6 +31,11 @@ export function pushAppHistory(path: string): void {
   window.history.pushState(null, "", toAppUrl(path));
 }
 
+/** Synchronous URL update — survives HMR/remount before Next router finishes. */
+export function replaceAppHistory(path: string): void {
+  window.history.replaceState(null, "", toAppUrl(path));
+}
+
 export function buildEditorPath(docId?: string, templateId?: string): string {
   const base = viewToPath.editor;
   if (templateId) {

@@ -13,6 +13,7 @@ import Suggestion, { type SuggestionProps } from "@tiptap/suggestion";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { ySyncPluginKey } from "y-prosemirror";
+import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Y from "yjs";
 import type { SupabaseYjsProvider } from "@/lib/collaboration/supabase-yjs-provider";
@@ -75,11 +76,53 @@ import {
   insertParagraphAfterBlock,
 } from "@/lib/documents/editor-commands";
 import {
+  uploadDocumentImage,
+  DocumentImageUploadError,
+} from "@/lib/documents/upload-document-image";
+import {
   clampActiveIndex,
   computeSlashMenuPosition,
   computeSlashPlacement,
 } from "@/lib/documents/menu-position";
 import "./TipTapEditor.css";
+
+function findImagePosByUploadId(editor: Editor, uploadId: string): number | null {
+  let found: number | null = null;
+  editor.state.doc.descendants((node, pos) => {
+    if (found != null) return false;
+    if (node.type.name === "image" && node.attrs.uploadId === uploadId) {
+      found = pos;
+      return false;
+    }
+  });
+  return found;
+}
+
+function updateImageByUploadId(
+  editor: Editor,
+  uploadId: string,
+  attrs: Record<string, unknown>,
+): boolean {
+  const pos = findImagePosByUploadId(editor, uploadId);
+  if (pos == null) return false;
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node) return false;
+  editor.view.dispatch(
+    editor.state.tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      ...attrs,
+    }),
+  );
+  return true;
+}
+
+function removeImageByUploadId(editor: Editor, uploadId: string): void {
+  const pos = findImagePosByUploadId(editor, uploadId);
+  if (pos == null) return;
+  const node = editor.state.doc.nodeAt(pos);
+  if (!node) return;
+  editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
+}
 
 type TipTapEditorProps = {
   content: Record<string, unknown>;
@@ -97,6 +140,8 @@ type TipTapEditorProps = {
   collabNeedsInitialSeed?: boolean;
   /** Called after the one-time JSON→Y.Doc seed completes (for immediate server persist). */
   onCollabBootstrapped?: () => void;
+  /** Called after an inline image is inserted so Yjs can flush before navigation. */
+  onDocumentImageInserted?: () => void;
   lockedBlockId?: string | null;
   lockedBlockIndex?: number | null;
   lockedSelectionFrom?: number | null;
@@ -228,6 +273,7 @@ export function TipTapEditor({
   collabSynced = false,
   collabNeedsInitialSeed = true,
   onCollabBootstrapped,
+  onDocumentImageInserted,
   lockedBlockId = null,
   lockedBlockIndex = null,
   lockedSelectionFrom = null,
@@ -265,6 +311,8 @@ export function TipTapEditor({
   const collabSaveReadyRef = useRef(!collabMode);
   const onCollabBootstrappedRef = useRef(onCollabBootstrapped);
   onCollabBootstrappedRef.current = onCollabBootstrapped;
+  const onDocumentImageInsertedRef = useRef(onDocumentImageInserted);
+  onDocumentImageInsertedRef.current = onDocumentImageInserted;
   const contentSnapshotRef = useRef(content);
   const collabNeedsInitialSeedRef = useRef(collabNeedsInitialSeed);
   collabNeedsInitialSeedRef.current = collabNeedsInitialSeed;
@@ -397,29 +445,15 @@ export function TipTapEditor({
   const uploadImage = useCallback(
     async (file: File) => {
       const editor = editorRef.current;
-      if (!editor || !documentId) return;
+      if (!editor || !documentId || !workspaceId) return;
 
-      const body = new FormData();
-      body.append("file", file);
-      const response = await fetch(`/app/api/documents/${documentId}/images`, {
-        method: "POST",
-        body,
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok || typeof data.path !== "string") {
-        pendingImageInsertPosRef.current = null;
-        console.error(
-          "Image upload failed:",
-          typeof data.error === "string" ? data.error : response.statusText,
-        );
-        return;
-      }
-
-      const storagePath = data.path as string;
       const insertPos =
         pendingImageInsertPosRef.current ?? editor.state.selection.from;
       pendingImageInsertPosRef.current = null;
+
+      const uploadId = crypto.randomUUID();
+      const blobUrl = URL.createObjectURL(file);
+      let lastProgress = -1;
 
       editor
         .chain()
@@ -427,15 +461,72 @@ export function TipTapEditor({
         .insertContentAt(insertPos, {
           type: "image",
           attrs: {
-            src: imageServeUrl(storagePath),
-            storagePath,
+            src: blobUrl,
             alt: file.name,
+            uploading: true,
+            uploadId,
+            uploadProgress: 0,
           },
         })
         .run();
       insertParagraphAfterBlock(editor);
+
+      try {
+        const { path: storagePath } = await uploadDocumentImage({
+          workspaceId,
+          documentId,
+          file,
+          onProgress: ({ percent }) => {
+            if (percent === lastProgress) return;
+            lastProgress = percent;
+            updateImageByUploadId(editor, uploadId, {
+              uploadProgress: percent,
+            });
+          },
+        });
+
+        const updated = updateImageByUploadId(editor, uploadId, {
+          src: imageServeUrl(storagePath),
+          storagePath,
+          uploading: false,
+          uploadId: null,
+          uploadProgress: null,
+        });
+
+        if (!updated) {
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(insertPos, {
+              type: "image",
+              attrs: {
+                src: imageServeUrl(storagePath),
+                storagePath,
+                alt: file.name,
+              },
+            })
+            .run();
+        }
+
+        window.requestAnimationFrame(() => {
+          onDocumentImageInsertedRef.current?.();
+        });
+      } catch (error) {
+        removeImageByUploadId(editor, uploadId);
+        const message =
+          error instanceof DocumentImageUploadError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "Upload failed";
+        console.error("Image upload failed:", message);
+      } finally {
+        window.requestAnimationFrame(() => {
+          URL.revokeObjectURL(blobUrl);
+        });
+      }
     },
-    [documentId],
+    [documentId, workspaceId],
   );
 
   const requestTableModal = useCallback(() => {
@@ -616,7 +707,6 @@ export function TipTapEditor({
     clearSlashExitTimer,
     closeSlashMenu,
     collabCursorMode,
-    collabDocReady,
     collabMode,
     collabProvider,
     collaborationUser,
@@ -676,7 +766,7 @@ export function TipTapEditor({
             >;
             onUpdateRef.current(instance.getJSON(), instance.getText());
           }
-          if (ydoc && !ydocHasBody) {
+          if (ydoc && ydocHasCollaborationBody(ydoc)) {
             ydoc.getMap("rhodes").set("seeded", true);
             onCollabBootstrappedRef.current?.();
           }
@@ -740,6 +830,22 @@ export function TipTapEditor({
           return;
         }
         contentSnapshotRef.current = nextJson;
+
+        // Remote Yjs updates already persist in the CRDT — skip the Postgres
+        // projection / outbox path so the sync indicator doesn't flicker.
+        if (collabMode && currentYdoc) {
+          const isYjsOrigin = Boolean(
+            (
+              transaction.getMeta(ySyncPluginKey) as
+                | { isChangeOrigin?: boolean }
+                | undefined
+            )?.isChangeOrigin,
+          );
+          if (isYjsOrigin) {
+            return;
+          }
+        }
+
         onUpdateRef.current(nextJson, instance.getText());
       },
       onBlur: ({ editor: instance }) => {

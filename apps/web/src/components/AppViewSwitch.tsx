@@ -43,9 +43,11 @@ export function AppViewSwitch({ children }: { children: ReactNode }) {
     return renderAppView(view);
   }
 
-  if (view !== routeView) {
-    return renderAppView(view);
+  // Prefer the Next route when it matches — avoids mounting the wrong view
+  // after navigation when AppContext view state is briefly stale.
+  if (view === routeView) {
+    return <>{children}</>;
   }
 
-  return <>{children}</>;
+  return renderAppView(view);
 }

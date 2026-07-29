@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, ArchiveRestore, Search, Share2, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import type { DocumentFilter } from "@/lib/documents/schemas";
 import {
@@ -69,6 +69,11 @@ export function DocumentsView() {
     id: string;
     title: string;
   } | null>(null);
+  const [clientReady, setClientReady] = useState(false);
+
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
 
   const {
     documents,
@@ -93,6 +98,13 @@ export function DocumentsView() {
     () => pickOverviewTemplates(overviewTemplates).map(templateRecordToUi),
     [overviewTemplates],
   );
+
+  const showOverviewTemplatesLoader =
+    clientReady &&
+    overviewTemplatesLoading &&
+    overviewTemplateCards.length === 0;
+
+  const showDocumentsLoader = clientReady && loading && documents.length === 0;
 
   const filtered = useMemo(
     () =>
@@ -167,7 +179,7 @@ export function DocumentsView() {
               title="Templates"
               action={{ label: "More templates", onClick: () => setView("templates") }}
             />
-            {overviewTemplatesLoading && overviewTemplateCards.length === 0 ? (
+            {showOverviewTemplatesLoader ? (
               <LoaderState
                 label="Loading templates…"
                 size="s"
@@ -260,7 +272,7 @@ export function DocumentsView() {
               </div>
             </div>
 
-            {loading && documents.length === 0 ? (
+            {showDocumentsLoader ? (
               <LoaderState
                 label="Loading documents…"
                 size="s"

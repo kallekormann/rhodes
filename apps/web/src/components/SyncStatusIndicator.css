@@ -13,6 +13,10 @@
   color: var(--color-text-secondary);
 }
 
+.sync-status--saved {
+  color: var(--color-text-secondary);
+}
+
 .sync-status--conflict {
   color: var(--color-danger, #b42318);
 }

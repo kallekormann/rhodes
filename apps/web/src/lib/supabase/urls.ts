@@ -10,3 +10,16 @@ export function getServerSupabaseUrl(): string {
 export function getBrowserSupabaseUrl(): string {
   return process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? "";
 }
+
+/** Rewrite a server-side Supabase URL so the browser can reach it (Docker / proxy). */
+export function toBrowserSupabaseUrl(serverUrl: string): string {
+  const serverBase = getServerSupabaseUrl().replace(/\/$/, "");
+  const browserBase = getBrowserSupabaseUrl().replace(/\/$/, "");
+  if (!serverBase || !browserBase || serverBase === browserBase) {
+    return serverUrl;
+  }
+  if (serverUrl.startsWith(`${serverBase}/`) || serverUrl === serverBase) {
+    return browserBase + serverUrl.slice(serverBase.length);
+  }
+  return serverUrl;
+}
