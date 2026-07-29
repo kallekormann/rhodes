@@ -41,7 +41,7 @@ import {
   writeDefaultScopeId,
 } from "@/lib/workspaces/scope";
 import { getSettingsReturnPath, rememberLastAppPath } from "@/lib/settings-return";
-import type { SettingsMode } from "@/lib/settings-url";
+import { readBrowserSettingsUrlState, type SettingsMode } from "@/lib/settings-url";
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
@@ -218,13 +218,7 @@ function ScopeList({
   );
 }
 
-export function SettingsView({
-  initialMode = "user",
-  initialSection = null,
-}: {
-  initialMode?: SettingsMode;
-  initialSection?: string | null;
-} = {}) {
+export function SettingsView() {
   const router = useRouter();
   const {
     session,
@@ -243,29 +237,31 @@ export function SettingsView({
     showToast,
     refreshScopes,
   } = useApp();
-  const mode: SettingsMode = initialMode;
+  const [mode, setMode] = useState<SettingsMode>("user");
   const visibleScopeSections = scopeSectionsFor(activeScope, organizations);
   const visibleSections =
     mode === "user" ? USER_SECTIONS : visibleScopeSections;
-  const [section, setSection] = useState<SettingsSection>(() =>
-    defaultSectionForMode(mode, activeScope, organizations),
-  );
+  const [section, setSection] = useState<SettingsSection>("Profile");
 
   useEffect(() => {
-    const requested = initialSection;
-    const fallback = defaultSectionForMode(mode, activeScope, organizations);
-    if (mode === "user" && requested && isUserSection(requested)) {
-      setSection(requested);
+    const { mode: urlMode, section: urlSection } = readBrowserSettingsUrlState();
+    const fallback = defaultSectionForMode(urlMode, activeScope, organizations);
+    setMode(urlMode);
+    if (urlMode === "user" && urlSection && isUserSection(urlSection)) {
+      setSection(urlSection);
       return;
     }
-    if (mode === "scope" && requested && isScopeSection(requested)) {
-      if (visibleScopeSections.includes(requested)) {
-        setSection(requested);
-        return;
-      }
+    if (
+      urlMode === "scope" &&
+      urlSection &&
+      isScopeSection(urlSection) &&
+      scopeSectionsFor(activeScope, organizations).includes(urlSection)
+    ) {
+      setSection(urlSection);
+      return;
     }
     setSection(fallback);
-  }, [activeScope, initialSection, mode, organizations, visibleScopeSections]);
+  }, [activeScope, organizations]);
 
   const navigateSection = (nextSection: SettingsSection) => {
     setSection(nextSection);
@@ -279,6 +275,7 @@ export function SettingsView({
 
   const navigateMode = (nextMode: SettingsMode) => {
     const nextSection = defaultSectionForMode(nextMode, activeScope, organizations);
+    setMode(nextMode);
     setSection(nextSection);
     const params = new URLSearchParams();
     params.set("mode", nextMode);
