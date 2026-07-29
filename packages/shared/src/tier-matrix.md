@@ -16,7 +16,7 @@ Human-readable source of truth for subscription tiers. Code limits live in [`tie
 | Limit | free | basic | pro | team |
 |-------|------|-------|-----|------|
 | Personal scopes | 1 | 5 | Unlimited | Unlimited |
-| Team scopes | 0 | 0 | 3 | Unlimited |
+| Team scopes | 1 | 2 | 3 | Unlimited |
 | Library storage | 100 MB | 1 GB | 5 GB | 50 GB |
 | Max file size | 2 MB | 5 MB | 10 MB | 30 MB |
 | Allowed file types | txt, md, docx | + pdf, docx, epub | + pdf, docx, ppt, epub | + pdf, docx, ppt, epub |
@@ -47,7 +47,8 @@ When the full catalog exists, each additional view may also have its own `minTie
 | Feature key | free | basic | pro | team |
 |-------------|------|-------|-----|------|
 | `personal_scopes.create` | 1 max | 5 max | Unlimited | Unlimited |
-| `team_scopes.create` | No | No | Yes | Yes |
+| `team_scopes.create` | Yes (1) | Yes (2) | Yes (3) | Yes |
+| `org.create` | No | No | Yes | Yes |
 | `library.upload` | Yes | Yes | Yes | Yes |
 | `templates.create` | No | Yes | Yes | Yes |
 | `properties.manage` | No | Yes | Yes | Yes |

@@ -4,6 +4,7 @@ export type BillingTier = "free" | "basic" | "pro" | "team";
 export type TierFeature =
   | "personal_scopes.create"
   | "team_scopes.create"
+  | "org.create"
   | "library.upload"
   | "library.max_file_mb"
   | "library.allowed_file_types"
@@ -37,7 +38,7 @@ export type TierLimits = {
 export const TIER_LIMITS: Record<BillingTier, TierLimits> = {
   free: {
     personalScopes: 1,
-    teamScopes: 0,
+    teamScopes: 1,
     libraryStorageMb: 100,
     libraryMaxFileMb: 2,
     libraryAllowedFileTypes: ["txt", "md", "docx"],
@@ -49,7 +50,7 @@ export const TIER_LIMITS: Record<BillingTier, TierLimits> = {
   },
   basic: {
     personalScopes: 5,
-    teamScopes: 0,
+    teamScopes: 2,
     libraryStorageMb: 1_024,
     libraryMaxFileMb: 5,
     libraryAllowedFileTypes: ["txt", "md", "docx", "pdf", "epub"],
@@ -130,6 +131,8 @@ export function tierAllowsFeature(tier: BillingTier, feature: TierFeature): bool
       return TIER_LIMITS[tier].personalScopes > TIER_LIMITS.free.personalScopes;
     case "team_scopes.create":
       return TIER_LIMITS[tier].teamScopes > 0;
+    case "org.create":
+      return tier === "pro" || tier === "team";
     case "library.upload":
       return true;
     case "templates.create":
