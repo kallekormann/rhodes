@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
+import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
 import { isDocumentId } from "@/lib/documents/ids";
 import { documentHasUnsentWork } from "@/lib/offline/document-unsent-work";
 import { bodyRichness } from "@/lib/offline/document-body";
@@ -216,17 +217,22 @@ export function useDocument(
     }
 
     try {
-      const fetchOptions: RequestInit = {};
-      if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
-        fetchOptions.signal = AbortSignal.timeout(8_000);
-      }
-      const response = await fetch(
-        `/app/api/documents/${documentId}`,
-        fetchOptions,
-      );
-      const data = await response.json().catch(() => ({}));
+      const signal =
+        typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+          ? AbortSignal.timeout(8_000)
+          : undefined;
+      const result = await fetchDocumentMetadata(documentId, {
+        ifNoneMatchUpdatedAt: serverUpdatedAtRef.current,
+        signal,
+      });
 
-      if (!response.ok) {
+      if (result.kind === "not_modified") {
+        if (isStale()) return;
+        setLoading(false);
+        return;
+      }
+
+      if (result.kind === "error") {
         if (cached) {
           setDocument(recordFromOffline(cached));
           serverUpdatedAtRef.current =
@@ -235,19 +241,15 @@ export function useDocument(
           setLoading(false);
           return;
         }
-        const message =
-          typeof data.error === "string"
-            ? data.error
-            : "Failed to load document";
         if (!options?.silent) {
-          setError(message);
+          setError("Failed to load document");
           setDocument(null);
         }
         setLoading(false);
         return;
       }
 
-      const remote = data.document as DocumentRecord;
+      const remote = result.document;
 
       let freshCached = cached;
       try {

@@ -32,22 +32,22 @@ Use self-hosted Supabase Storage as the production object-store path **today in 
 - `createAdminObjectStorage()` / `createSessionObjectStorage()` — default `RHODES_STORAGE_BACKEND=supabase`
 - Wired: library upload/serve/delete, document images, avatars, worker download
 
-### 28.3 — VPS S3 backend — planned
+### 28.3 — VPS S3 backend — **done**
 
-- `docker-compose.s3.yml` or Storage API env for S3-compatible endpoint
-- Document in [docs/27-library-file-storage-vps.md](../docs/27-library-file-storage-vps.md)
-- BYO bucket contract for enterprise (O-019)
+- [`docker/docker-compose.s3.yml`](../docker/docker-compose.s3.yml) — MinIO + `STORAGE_BACKEND: s3` on existing Supabase Storage service (app unchanged)
+- [`scripts/dev-up-s3.sh`](../scripts/dev-up-s3.sh) — optional local rehearsal
+- VPS: same Storage API; point `GLOBAL_S3_ENDPOINT` at Hetzner/R2 ([docs/27-library-file-storage-vps.md](../docs/27-library-file-storage-vps.md))
 
 ### 28.4 — Quota reconciliation — planned
 
 - Compare `storage.objects` size sum vs `library_sources.metadata.byte_size`
 - Admin/reporting RPC; optional upload-time HEAD verify
 
-### 28.5 — API bandwidth hardening — planned
+### 28.5 — API bandwidth hardening — **done**
 
-- Documents list offset pagination
-- ETag / `If-None-Match` on document metadata GET
-- Explicit `fields=` projection for view APIs (prep M6)
+- Documents list `offset` pagination (`listDocumentsQuerySchema` + `.range()`)
+- `ETag` / `If-None-Match` on `GET /api/documents/[id]`; client polls via `fetchDocumentMetadata`
+- Explicit `fields=` projection for view APIs (prep M6) — backlog
 
 ### 28.6 — Ops — planned
 

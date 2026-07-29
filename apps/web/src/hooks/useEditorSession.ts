@@ -29,6 +29,7 @@ import {
   type StoredDocumentComment,
 } from "@/lib/documents/comments";
 import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
+import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
 import { isDocumentId } from "@/lib/documents/ids";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
 import { writeLastDocumentId } from "@/lib/documents/last-document";
@@ -1276,13 +1277,18 @@ export function useEditorSession() {
 
   const reloadRemoteDocument = useCallback(async () => {
     if (!document?.id) return null;
-    const response = await fetch(`/app/api/documents/${document.id}`);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return null;
-    const latest = data.document as DocumentRecord;
-    await applyRemoteDocument(latest);
-    return latest;
-  }, [applyRemoteDocument, document?.id]);
+    const result = await fetchDocumentMetadata(document.id, {
+      ifNoneMatchUpdatedAt: document.updated_at,
+    });
+    if (result.kind === "not_modified") {
+      return document;
+    }
+    if (result.kind === "error") {
+      return null;
+    }
+    await applyRemoteDocument(result.document);
+    return result.document;
+  }, [applyRemoteDocument, document]);
 
   return {
     document: document as DocumentRecord | null,

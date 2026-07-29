@@ -35,6 +35,7 @@ export const listDocumentsQuerySchema = z.object({
   /** Title search (Cmd+K / discovery). */
   q: z.string().trim().min(1).max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
+  offset: z.coerce.number().int().min(0).max(10_000).optional(),
   /** Pull cursor — documents with updated_at strictly after this ISO timestamp. */
   since: z.string().min(1).optional(),
   /** When false (default), list rows omit document body fields. Pass include_body=true to opt in. */

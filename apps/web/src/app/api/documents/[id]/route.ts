@@ -16,6 +16,10 @@ import {
   enqueueDocumentMetadataExtraction,
 } from "@/lib/documents/queue";
 import { updateDocumentSchema } from "@/lib/documents/schemas";
+import {
+  documentMetadataEtag,
+  ifNoneMatchSatisfied,
+} from "@/lib/documents/document-etag";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -23,7 +27,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const DOCUMENT_FIELDS =
   "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const supabase = await createClient();
   const {
@@ -54,7 +58,30 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  return withSecurityHeaders(NextResponse.json({ document: data }));
+  const etag = documentMetadataEtag(String(data.updated_at ?? ""));
+  if (ifNoneMatchSatisfied(request.headers.get("if-none-match"), etag)) {
+    return withSecurityHeaders(
+      new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: etag,
+          "Cache-Control": "private, no-cache",
+        },
+      }),
+    );
+  }
+
+  return withSecurityHeaders(
+    NextResponse.json(
+      { document: data },
+      {
+        headers: {
+          ETag: etag,
+          "Cache-Control": "private, no-cache",
+        },
+      },
+    ),
+  );
 }
 
 export async function PATCH(request: Request, context: RouteContext) {

@@ -9,6 +9,7 @@ import {
   pickLatestOtherActivitySince,
   type DocumentRemoteNotice,
 } from "@/lib/documents/remote-document-notice";
+import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
 import { ensureRealtimeAuth } from "@/lib/supabase/ensure-realtime-auth";
 
 type RemoteDocumentUpdate = {
@@ -68,15 +69,13 @@ export function useDocumentRealtime({
     if (!documentId) return null;
     if (typeof navigator !== "undefined" && !navigator.onLine) return null;
 
-    try {
-      const response = await fetch(`/app/api/documents/${documentId}`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) return null;
-      return (data.document as DocumentRecord) ?? null;
-    } catch {
-      // Offline / network blip — never throw into React.
+    const result = await fetchDocumentMetadata(documentId, {
+      ifNoneMatchUpdatedAt: lastAppliedUpdatedAtRef.current,
+    });
+    if (result.kind === "not_modified" || result.kind === "error") {
       return null;
     }
+    return result.document;
   }, [documentId]);
 
   const applyRemote = useCallback(

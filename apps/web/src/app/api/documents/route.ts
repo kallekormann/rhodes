@@ -39,6 +39,7 @@ export async function GET(request: Request) {
     filter: searchParams.get("filter") ?? "recent",
     q: searchParams.get("q") ?? undefined,
     limit: searchParams.get("limit") ?? undefined,
+    offset: searchParams.get("offset") ?? undefined,
     since: searchParams.get("since") ?? undefined,
     include_body: searchParams.get("include_body") ?? undefined,
   });
@@ -179,10 +180,13 @@ export async function GET(request: Request) {
     query = query.gt("updated_at", parsed.data.since);
   }
 
-  if (parsed.data.limit) {
-    query = query.limit(parsed.data.limit);
-  } else if (parsed.data.filter === "recent") {
-    query = query.limit(50);
+  const pageLimit =
+    parsed.data.limit ?? (parsed.data.filter === "recent" ? 50 : undefined);
+  const pageOffset = parsed.data.offset ?? 0;
+  if (pageLimit != null) {
+    query = query.range(pageOffset, pageOffset + pageLimit - 1);
+  } else if (pageOffset > 0) {
+    query = query.range(pageOffset, pageOffset + 49);
   }
 
   if (parsed.data.filter === "favorites") {
