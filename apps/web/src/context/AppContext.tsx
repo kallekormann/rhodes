@@ -82,6 +82,9 @@ export type AppSession = {
   userEmail: string;
   displayName: string;
   avatarUrl: string | null;
+  personalOnboardingCompletedAt: string | null;
+  orgUpgradeOnboardingPending: boolean;
+  orgUpgradeOnboardingCompletedAt: string | null;
 };
 
 type AppContextValue = {
