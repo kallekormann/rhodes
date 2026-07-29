@@ -1,7 +1,7 @@
 # Technical debt register
 
 **Status:** living document — add items as we discover them during implementation  
-**Last updated:** July 28, 2026  
+**Last updated:** July 29, 2026  
 **Owner:** fill in during active milestones; review when closing a milestone or before VPS (M13)
 
 > **Purpose:** One place to track known bugs, debug cruft, and deferred quality work discovered while executing the roadmap. Items here are **intentionally not fixed immediately** when fixing them would collide with in-flight work (e.g. M1b crypto) or when several related issues should be addressed together after a foundational change lands.
@@ -37,6 +37,9 @@
 | [TD-004](#td-004-temp-offline-client-error-log) | Offline QA / debug | Low | in progress | Remove before **M13** | Temporary dev file log (`logs/client-errors.log`) + `__rhodesErrors()` |
 | [TD-005](#td-005-unbounded-indexeddb-document-cache) | Client IDB lifecycle | High | done | [27](implementation_plan/27-client-cache-lifecycle.md) (M1c) | LRU cap, metadata-only pull, quota UI |
 | [TD-006](#td-006-offline-debug-banner) | Dev UX | Low | open | Remove before **M13** | `OfflineDebugBanner` — opt-in via `__rhodesShowDebugBanner()` |
+| [TD-007](#td-007-offline-online-conflict-ui-regression) | Offline conflict UI | High | open | [09.2](implementation_plan/09.2-offline-conflict-quality.md) or hotfix | Conflict review UI no longer appears on offline → online reconnect |
+| [TD-008](#td-008-properties-editor-type-specific-ui) | Properties / Studio | Medium | open | Properties Studio / M6 views | Property types need distinct editors (e.g. Options → dropdown, not chips) |
+| [TD-009](#td-009-document-sharing-model-and-ux) | Sharing / ACL | High | open | **M2.5b** + **M2.6** | Team-only share gate, private-scope sharing, visibility vs discoverability |
 
 *(Add new rows at the bottom; keep IDs stable.)*
 
@@ -215,6 +218,121 @@ Must not ship to end users. Remove component and styles in M13 pre-launch cleanu
 
 ---
 
+## TD-007 — Offline → online conflict UI regression
+
+**Status:** open  
+**Severity:** High — users may silently lose merge control after reconnect  
+**Discovered:** Ad-hoc QA (July 29, 2026)
+
+### Description
+
+The offline → online **conflict review UI** (Keep / Take / review flow) is **not showing up** in scenarios where it previously did. This is a **regression** on top of TD-001 (misclassification when UI *does* show).
+
+### Expected
+
+When offline edits conflict with online changes on reconnect, the conflict review surface should appear so the returner can resolve before continuing.
+
+### Suspected code paths (starting points)
+
+- [useOfflineYjsConflict.ts](apps/web/src/hooks/useOfflineYjsConflict.ts)
+- [yjs-offline-restore.ts](apps/web/src/lib/offline/yjs-offline-restore.ts)
+- [EditorView.tsx](apps/web/src/views/EditorView.tsx) — conflict overlay mount
+- M1b persistence path (`RhodesYjsPersistence`) — restore may skip conflict detection
+
+### Fix after
+
+- **Hotfix** if repro is stable and blocks M1 exit retest.
+- Otherwise batch with [09.2](implementation_plan/09.2-offline-conflict-quality.md) alongside TD-001 / TD-002.
+
+### Notes
+
+- Repro steps TBD — capture: scope, doc id, offline duration, who edited online, whether UI never appears vs appears then dismisses.
+
+---
+
+## TD-008 — Properties editor: type-specific UI
+
+**Status:** open  
+**Severity:** Medium — wrong control affordances confuse authors and break data entry at scale  
+**Discovered:** Ad-hoc QA (July 29, 2026)
+
+### Description
+
+The document **Properties** editor does not yet reflect property **types** in the UI. Controls should match semantic type, not a one-size-fits-all pattern.
+
+### Known gap (example)
+
+| Property type | Current (approx.) | Desired |
+|---------------|-------------------|---------|
+| **Options** (single/multi select) | Clickable chips | **Dropdown** (or select menu) — chips are noisy for long option lists; confirm multi-select pattern in design |
+
+### Product / design needed
+
+- Per-type control map: text, number, date, boolean, options (single vs multi), relation, etc.
+- Align with [implementation_plan/07b-ux-properties-studio.md](implementation_plan/07b-ux-properties-studio.md) and sticker-sheet patterns.
+
+### Fix after
+
+Properties Studio polish or **M6** views/templates work — whichever owns Properties tab UX next.
+
+---
+
+## TD-009 — Document sharing model and UX
+
+**Status:** open  
+**Severity:** High — private-scope sharing blocked; team share discoverability unclear  
+**Discovered:** Ad-hoc QA (July 29, 2026)  
+**Fix after:** **M2.5b** (share-to-team UX) + **M2.6** (guests, invite-by-link, delegate-invite)
+
+### Context
+
+Share today is tied to `document_shares` and workspace membership. M2 product model: documents stay in the author’s scope; share = live grant (see [docs/07-individual-vs-team.md](docs/07-individual-vs-team.md)).
+
+### Sub-issues
+
+#### TD-009a — Who can be invited via Share popover?
+
+**Current pain:** Sharing appears limited to users already in the **same team scope** (or visible membership), which blocks sensible private-scope sharing.
+
+**Options to decide (not mutually exclusive):**
+
+| Option | Behavior |
+|--------|----------|
+| **A — Same team only** | Share popover lists only members of the active team scope. Simple ACL; private docs cannot share to arbitrary emails. |
+| **B — Discoverable by email/name** | User types email or display name; system resolves **if** policy allows (org/scope `external_collaborators`, guest invite, etc.). Required for private → person share. |
+
+**Needed:** Policy gates per scope/org ([docs/30-scope-settings-matrix.md](docs/30-scope-settings-matrix.md)) + SharePopover search API.
+
+#### TD-009b — Visibility vs prior share grants
+
+**Observed / reported:** Users who were shared a document may still **see each other** (or remain visible in share UI) after one party sets their own visibility to **invisible** / hidden.
+
+**Expected (TBD):** Clarify product rule:
+
+- Does “invisible” affect **directory discoverability** only, or **revoke** existing share relationships?
+- Should prior grantees remain on the document’s share list even if they hide themselves from global user search?
+
+**Needed:** Spec visibility flag on `profiles` vs `document_shares` lifecycle; UI copy in Share popover.
+
+#### TD-009c — Private-scope vs team-scope document sharing
+
+**Current pain:** In practice **only team documents** can be shared — consistent with TD-009a/b (membership + visibility), but **contradicts M2** goal: share **from private scope** to people or teams without moving the doc.
+
+**Expected (M2.5b):**
+
+- **Private scope:** Share to users (email) and/or teams via `document_shares`; doc stays in private scope.
+- **Team scope:** Share within policy (team members, linked teams, guests per M2.6).
+
+**Needed:** SharePopover team picker, “Shared with us” list, enforce scope policies on share API — see [implementation_plan/15-scopes-org-teams-settings.md](implementation_plan/15-scopes-org-teams-settings.md) M2.5b.
+
+### Suspected code paths
+
+- [SharePopover.tsx](apps/web/src/components/SharePopover.tsx)
+- Document share API routes + `document_shares` RLS
+- Workspace member listing vs cross-scope collaborator search
+
+---
+
 ## Related documents
 
 - [implementation_plan/09.2-offline-conflict-quality.md](implementation_plan/09.2-offline-conflict-quality.md) — planned fix phase (after M1b)
@@ -222,3 +340,5 @@ Must not ship to end users. Remove component and styles in M13 pre-launch cleanu
 - [implementation_plan/09.1-realtime-transport-hardening.md](implementation_plan/09.1-realtime-transport-hardening.md) — transport UAT that surfaced TD-001 / TD-002
 - [implementation_plan/25-offline-app-shell.md](implementation_plan/25-offline-app-shell.md) — current milestone (M1b)
 - [docs/28-product-roadmap-to-production.md](docs/28-product-roadmap-to-production.md) — sequencing
+- [implementation_plan/15-scopes-org-teams-settings.md](implementation_plan/15-scopes-org-teams-settings.md) — M2.5b sharing UX
+- [implementation_plan/07b-ux-properties-studio.md](implementation_plan/07b-ux-properties-studio.md) — properties type UI
