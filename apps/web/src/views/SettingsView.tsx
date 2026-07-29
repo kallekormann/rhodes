@@ -319,7 +319,9 @@ export function SettingsView() {
     saving: scopePolicySaving,
     savePolicy,
     saveEnabledViews,
-  } = useScopePolicy(activeScope.id);
+  } = useScopePolicy(
+    activeScope.id === "loading" ? null : activeScope.id,
+  );
 
   const canEditScopePolicy =
     activeScope.role === "owner" || activeScope.role === "admin";

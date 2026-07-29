@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ScopePolicy } from "@rhodes/shared/scope-policies";
 
+function isResolvableWorkspaceId(id: string | null | undefined): id is string {
+  return Boolean(id) && id !== "loading";
+}
+
 type ScopePolicyResponse = {
   workspace_id: string;
   is_team_workspace: boolean;
@@ -18,7 +22,7 @@ export function useScopePolicy(workspaceId: string | null) {
   const [saving, setSaving] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!workspaceId) {
+    if (!isResolvableWorkspaceId(workspaceId)) {
       setData(null);
       setError(null);
       return;
@@ -45,7 +49,7 @@ export function useScopePolicy(workspaceId: string | null) {
 
   const savePolicy = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!workspaceId) return null;
+      if (!isResolvableWorkspaceId(workspaceId)) return null;
       setSaving(true);
       setError(null);
       try {
@@ -75,7 +79,7 @@ export function useScopePolicy(workspaceId: string | null) {
 
   const saveEnabledViews = useCallback(
     async (enabledViews: string[]) => {
-      if (!workspaceId) return false;
+      if (!isResolvableWorkspaceId(workspaceId)) return false;
       setSaving(true);
       setError(null);
       try {
