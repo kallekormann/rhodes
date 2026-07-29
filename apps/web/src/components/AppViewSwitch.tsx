@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useApp, type AppView } from "@/context/AppContext";
 import { pathToView } from "@/lib/navigation";
+import { readBrowserSettingsUrlState } from "@/lib/settings-url";
 import { isBrowserOffline } from "@/lib/navigation/app-path";
 import { DocumentsView } from "@/views/DocumentsView";
 import { EditorView } from "@/views/EditorView";
@@ -22,8 +23,12 @@ function renderAppView(view: AppView) {
       return <TemplatesView />;
     case "library":
       return <LibraryView />;
-    case "settings":
-      return <SettingsView />;
+    case "settings": {
+      const { mode, section } = readBrowserSettingsUrlState();
+      return (
+        <SettingsView initialMode={mode} initialSection={section} />
+      );
+    }
     case "sticker-sheet":
       return <StickerSheetView />;
   }

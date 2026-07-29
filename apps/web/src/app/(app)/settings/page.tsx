@@ -1,10 +1,17 @@
-import { Suspense } from "react";
+import { parseSettingsMode } from "@/lib/settings-url";
 import { SettingsView } from "@/views/SettingsView";
 
-export default function SettingsPage() {
+type SettingsPageProps = {
+  searchParams: Promise<{ mode?: string; section?: string }>;
+};
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
+  const params = await searchParams;
+
   return (
-    <Suspense fallback={null}>
-      <SettingsView />
-    </Suspense>
+    <SettingsView
+      initialMode={parseSettingsMode(params.mode)}
+      initialSection={params.section ?? null}
+    />
   );
 }

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
@@ -41,6 +41,7 @@ import {
   writeDefaultScopeId,
 } from "@/lib/workspaces/scope";
 import { getSettingsReturnPath } from "@/lib/settings-return";
+import type { SettingsMode } from "@/lib/settings-url";
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
@@ -68,7 +69,6 @@ const SCOPE_SECTIONS = SCOPE_SECTION_IDS;
 type UserSection = (typeof USER_SECTIONS)[number];
 type ScopeSection = (typeof SCOPE_SECTIONS)[number];
 type SettingsSection = UserSection | ScopeSection;
-type SettingsMode = "user" | "scope";
 
 function scopeSectionsFor(
   activeScope: Scope,
@@ -218,7 +218,13 @@ function ScopeList({
   );
 }
 
-export function SettingsView() {
+export function SettingsView({
+  initialMode = "user",
+  initialSection = null,
+}: {
+  initialMode?: SettingsMode;
+  initialSection?: string | null;
+} = {}) {
   const router = useRouter();
   const {
     session,
@@ -237,9 +243,7 @@ export function SettingsView() {
     showToast,
     refreshScopes,
   } = useApp();
-  const searchParams = useSearchParams();
-  const mode: SettingsMode =
-    searchParams.get("mode") === "scope" ? "scope" : "user";
+  const mode: SettingsMode = initialMode;
   const visibleScopeSections = scopeSectionsFor(activeScope, organizations);
   const visibleSections =
     mode === "user" ? USER_SECTIONS : visibleScopeSections;
@@ -248,7 +252,7 @@ export function SettingsView() {
   );
 
   useEffect(() => {
-    const requested = searchParams.get("section");
+    const requested = initialSection;
     const fallback = defaultSectionForMode(mode, activeScope, organizations);
     if (mode === "user" && requested && isUserSection(requested)) {
       setSection(requested);
@@ -261,7 +265,7 @@ export function SettingsView() {
       }
     }
     setSection(fallback);
-  }, [activeScope, mode, organizations, searchParams, visibleScopeSections]);
+  }, [activeScope, initialSection, mode, organizations, visibleScopeSections]);
 
   const navigateSection = (nextSection: SettingsSection) => {
     setSection(nextSection);
