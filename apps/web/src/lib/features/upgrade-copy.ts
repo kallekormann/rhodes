@@ -4,7 +4,9 @@ const UPGRADE_COPY: Partial<Record<TierFeature, string>> = {
   "templates.create":
     "Template creation is available on paid plans. Upgrade to create custom templates.",
   "team_scopes.create":
-    "Team scopes are available on Pro and Team plans. Upgrade to collaborate with your team.",
+    "You've reached the team scope limit for your plan. Upgrade to add more teams.",
+  "org.create":
+    "Organizations are available on Pro and Team plans. Upgrade to create an organization.",
   "personal_scopes.create":
     "You've reached the personal scope limit for your plan. Upgrade to add more scopes.",
   "properties.manage":

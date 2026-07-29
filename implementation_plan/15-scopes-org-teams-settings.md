@@ -40,11 +40,19 @@ See also: [docs/07-individual-vs-team.md](../docs/07-individual-vs-team.md), [do
 | [docs/30-scope-settings-matrix.md](../docs/30-scope-settings-matrix.md) | done |
 | [docs/07](../docs/07-individual-vs-team.md) | updated |
 
-### M2.1 — Onboarding shell — **next**
+### M2.1 — Onboarding shell — **done**
 
-- Profile flags exist in DB (`00050`); UI not wired yet
-- `OnboardingGate`: personal path, Pro/Team fork, org upgrade wizard (post-purchase)
-- Tier-gated registration fork
+| Item | Status |
+|------|--------|
+| `OnboardingGate` in `AppShell` | done |
+| Personal onboarding (display name) | done |
+| Pro/Team tier fork (Just me / Set up org) | done |
+| Org setup (`POST /api/organizations`) | done |
+| Org upgrade onboarding (blocking shell) | done (attach teams deferred) |
+| `PATCH /api/profile/onboarding` | done |
+| Profile flags wired in `(app)/layout` | done |
+
+**Deferred:** team migration on org upgrade (options B/C), full `ScopeSetupWizard` modes (M2.5)
 
 ### M2.2 — Data model — **done**
 

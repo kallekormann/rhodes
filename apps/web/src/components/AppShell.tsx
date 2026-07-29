@@ -2,7 +2,7 @@
 
 import "@/lib/dev/client-error-log-init";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AppProvider,
@@ -16,9 +16,11 @@ import { CmdKModal } from "@/components/CmdKModal";
 import { GlobalAskPanel } from "@/components/GlobalAskPanel";
 import { LibraryUploadHost } from "@/components/LibraryUploadHost";
 import { OfflineDebugBanner } from "@/components/OfflineDebugBanner";
+import { OnboardingGate } from "@/components/onboarding/OnboardingGate";
 import { useOfflineQuotaToast } from "@/hooks/useOfflineQuotaToast";
 import { ToastContainer } from "@/components/Toast";
 import { AppViewSwitch } from "@/components/AppViewSwitch";
+import type { OnboardingProfile } from "@/lib/profile/onboarding";
 
 function AppShellContent({ children }: { children: ReactNode }) {
   const { view, toasts, dismissToast, session } = useApp();
@@ -55,13 +57,21 @@ export function AppShell({
   session: AppSession;
   children: ReactNode;
 }) {
+  const [onboarding, setOnboarding] = useState<OnboardingProfile>({
+    personalOnboardingCompletedAt: session.personalOnboardingCompletedAt,
+    orgUpgradeOnboardingPending: session.orgUpgradeOnboardingPending,
+    orgUpgradeOnboardingCompletedAt: session.orgUpgradeOnboardingCompletedAt,
+  });
+
   return (
     <AppProvider session={session}>
       <Suspense fallback={null}>
         <AppPathMemory />
       </Suspense>
       <AppErrorBoundary>
-        <AppShellContent>{children}</AppShellContent>
+        <OnboardingGate onboarding={onboarding} onOnboardingChange={setOnboarding}>
+          <AppShellContent>{children}</AppShellContent>
+        </OnboardingGate>
       </AppErrorBoundary>
     </AppProvider>
   );
