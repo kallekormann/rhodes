@@ -15,6 +15,7 @@ import { NavLink } from "@/components/NavLink";
 import { OfflineGate } from "@/components/OfflineGate";
 import { RadioGroup } from "@/components/Radio";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { OrgPolicySettings } from "@/components/settings/OrgPolicySettings";
 import { ScopeSettingsPlaceholder } from "@/components/settings/ScopeSettingsPlaceholder";
 import { ScopeSharingSettings } from "@/components/settings/ScopeSharingSettings";
