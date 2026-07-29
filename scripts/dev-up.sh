@@ -29,4 +29,6 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   echo "         cd docker && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d storage imgproxy --force-recreate"
 fi
 echo ""
+echo "Optional S3 blob backend (VPS rehearsal): ./scripts/dev-up-s3.sh"
+echo ""
 echo "Optional host worker (if not using Compose worker): ./scripts/dev-worker.sh"
