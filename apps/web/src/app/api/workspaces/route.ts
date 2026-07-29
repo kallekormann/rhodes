@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
   assertCanCreateWorkspace,
+  requireTierFeature,
   resolveServerTier,
 } from "@/lib/features/server-gates";
 import { createClient } from "@/lib/supabase/server";
@@ -49,6 +50,45 @@ export async function POST(request: Request) {
     );
   }
 
+  if (parsed.data.org_id) {
+    if (!parsed.data.is_team_workspace) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Only team scopes can belong to an organization" },
+          { status: 400 },
+        ),
+      );
+    }
+
+    const orgCheck = requireTierFeature(tier, "org.create");
+    if (!orgCheck.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: orgCheck.message }, { status: 403 }),
+      );
+    }
+
+    const { data: orgMembership, error: orgError } = await supabase
+      .from("organization_members")
+      .select("role")
+      .eq("org_id", parsed.data.org_id)
+      .maybeSingle();
+
+    if (orgError || !orgMembership) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: "Organization not found" }, { status: 404 }),
+      );
+    }
+
+    if (orgMembership.role !== "owner" && orgMembership.role !== "admin") {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Only org owners and admins can create org teams" },
+          { status: 403 },
+        ),
+      );
+    }
+  }
+
   const viewsValidation = validateAdditionalScopeViewSelection(
     tier,
     parsed.data.enabled_views ?? [],
@@ -88,15 +128,27 @@ export async function POST(request: Request) {
   }
 
   const enabledViews = parsed.data.enabled_views ?? [];
+  const workspaceUpdates: {
+    enabled_views?: string[];
+    org_id?: string;
+  } = {};
+
   if (enabledViews.length > 0) {
-    const { error: viewsError } = await supabase
+    workspaceUpdates.enabled_views = enabledViews;
+  }
+  if (parsed.data.org_id) {
+    workspaceUpdates.org_id = parsed.data.org_id;
+  }
+
+  if (Object.keys(workspaceUpdates).length > 0) {
+    const { error: updateError } = await supabase
       .from("workspaces")
-      .update({ enabled_views: enabledViews })
+      .update(workspaceUpdates)
       .eq("id", workspaceId);
 
-    if (viewsError) {
+    if (updateError) {
       return withSecurityHeaders(
-        NextResponse.json({ error: viewsError.message }, { status: 400 }),
+        NextResponse.json({ error: updateError.message }, { status: 400 }),
       );
     }
   }
@@ -108,6 +160,7 @@ export async function POST(request: Request) {
         name: workspace.name,
         type: workspace.is_team_workspace ? "team" : "private",
         role: "owner",
+        org_id: parsed.data.org_id ?? null,
         enabled_views: enabledViews,
       },
     }),

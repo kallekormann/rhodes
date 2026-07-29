@@ -17,6 +17,7 @@ import {
   canCreateTeamSpace,
   type Scope,
 } from "@/data/scopes";
+import type { Organization } from "@/data/organizations";
 import { useCreateDocument } from "@/hooks/useCreateDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { TemplateRecord } from "@/hooks/useTemplates";
@@ -123,13 +124,18 @@ type AppContextValue = {
   toggleFavorite: (id: string) => void;
   activeScope: Scope;
   scopes: Scope[];
+  organizations: Organization[];
   scopesLoading: boolean;
   workspaceId: string | null;
   ensureWorkspace: () => Promise<Scope | null>;
   refreshScopes: () => Promise<void>;
   setActiveScope: (scopeId: string) => void;
   createPersonalSpace: (name: string, enabledViews?: string[]) => Promise<void>;
-  createTeamSpace: (name: string, enabledViews?: string[]) => Promise<void>;
+  createTeamSpace: (
+    name: string,
+    enabledViews?: string[],
+    orgId?: string | null,
+  ) => Promise<void>;
   updateDisplayName: (name: string) => void;
   updateAvatarUrl: (avatarUrl: string | null) => void;
   canCreatePersonalSpace: boolean;
@@ -157,6 +163,7 @@ const FALLBACK_SCOPE: Scope = {
   name: "Private",
   type: "private",
   role: "owner",
+  orgId: null,
   createdAt: new Date(0).toISOString(),
   enabledViewsCount: 0,
 };
@@ -223,6 +230,7 @@ export function AppProvider({
 
   const {
     scopes,
+    organizations,
     activeScopeId,
     loading: scopesLoading,
     error: scopesError,
@@ -449,7 +457,12 @@ export function AppProvider({
   }, [session.userId, refreshScopes, setActiveScopeId, showToast]);
 
   const createScope = useCallback(
-    async (name: string, isTeam: boolean, enabledViews: string[] = []) => {
+    async (
+      name: string,
+      isTeam: boolean,
+      enabledViews: string[] = [],
+      orgId?: string | null,
+    ) => {
       try {
         const response = await fetch("/app/api/workspaces", {
           method: "POST",
@@ -458,6 +471,7 @@ export function AppProvider({
             name,
             is_team_workspace: isTeam,
             enabled_views: enabledViews,
+            ...(orgId ? { org_id: orgId } : {}),
           }),
         });
 
@@ -491,7 +505,8 @@ export function AppProvider({
   );
 
   const createTeamSpace = useCallback(
-    (name: string, enabledViews: string[] = []) => createScope(name, true, enabledViews),
+    (name: string, enabledViews: string[] = [], orgId?: string | null) =>
+      createScope(name, true, enabledViews, orgId),
     [createScope],
   );
 
@@ -699,6 +714,7 @@ export function AppProvider({
       toggleFavorite,
       activeScope,
       scopes,
+      organizations,
       scopesLoading,
       workspaceId,
       ensureWorkspace,
@@ -748,6 +764,7 @@ export function AppProvider({
       toggleFavorite,
       activeScope,
       scopes,
+      organizations,
       scopesLoading,
       workspaceId,
       ensureWorkspace,

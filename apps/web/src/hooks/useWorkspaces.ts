@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Organization, OrganizationRole } from "@/data/organizations";
 import type { Scope } from "@/data/scopes";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -21,12 +22,22 @@ type WorkspaceRow = {
   id: string;
   name: string;
   is_team_workspace: boolean;
+  org_id: string | null;
   created_at: string;
   enabled_views?: string[] | null;
 };
 
+type OrgMembershipRow = {
+  role: string;
+  organizations:
+    | { id: string; name: string }
+    | { id: string; name: string }[]
+    | null;
+};
+
 type UseWorkspacesResult = {
   scopes: Scope[];
+  organizations: Organization[];
   activeScopeId: string | null;
   loading: boolean;
   error: string | null;
@@ -50,6 +61,37 @@ function roleRank(role: string): number {
   if (role === "member") return 2;
   if (role === "viewer") return 1;
   return 0;
+}
+
+function orgMembershipToOrganization(row: OrgMembershipRow): Organization | null {
+  const org = Array.isArray(row.organizations)
+    ? row.organizations[0]
+    : row.organizations;
+  if (!org) return null;
+
+  const role = row.role as OrganizationRole;
+  if (role !== "owner" && role !== "admin" && role !== "member") {
+    return null;
+  }
+
+  return { id: org.id, name: org.name, role };
+}
+
+async function loadOrganizations(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Organization[]> {
+  const { data, error } = await supabase
+    .from("organization_members")
+    .select("role, organizations(id, name)");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? [])
+    .map((row) => orgMembershipToOrganization(row as OrgMembershipRow))
+    .filter((org): org is Organization => org !== null)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function mergeMemberships(
@@ -117,6 +159,7 @@ function applyResolvedScopes(
 
 export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const [scopes, setScopes] = useState<Scope[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [activeScopeId, setActiveScopeIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,10 +168,13 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const loadScopes = useCallback(async (allowBootstrap: boolean) => {
     const supabase = createClient();
 
-    const load = async (): Promise<Scope[]> => {
-      const { data: memberships, error: membershipError } = await supabase
-        .from("workspace_members")
-        .select("workspace_id, role");
+    const load = async (): Promise<{ scopes: Scope[]; organizations: Organization[] }> => {
+      const [membershipResult, organizations] = await Promise.all([
+        supabase.from("workspace_members").select("workspace_id, role"),
+        loadOrganizations(supabase).catch(() => [] as Organization[]),
+      ]);
+
+      const { data: memberships, error: membershipError } = membershipResult;
 
       if (membershipError) {
         throw new Error(membershipError.message);
@@ -150,25 +196,28 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       }
 
       if (rows.length === 0) {
-        return [];
+        return { scopes: [], organizations };
       }
 
       const workspaceIds = [...new Set(rows.map((row) => row.workspace_id))];
       const { data: workspaces, error: workspaceError } = await supabase
         .from("workspaces")
-        .select("id, name, is_team_workspace, created_at, enabled_views")
+        .select("id, name, is_team_workspace, org_id, created_at, enabled_views")
         .in("id", workspaceIds);
 
       if (workspaceError) {
         throw new Error(workspaceError.message);
       }
 
-      return mergeMemberships(rows, workspaces ?? []);
+      return {
+        scopes: mergeMemberships(rows, (workspaces ?? []) as WorkspaceRow[]),
+        organizations,
+      };
     };
 
     return Promise.race([
       load(),
-      new Promise<Scope[]>((_, reject) => {
+      new Promise<{ scopes: Scope[]; organizations: Organization[] }>((_, reject) => {
         window.setTimeout(
           () => reject(new Error("Scope fetch timed out")),
           SCOPE_FETCH_TIMEOUT_MS,
@@ -180,6 +229,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const refresh = useCallback(async () => {
     if (!userId) {
       setScopes([]);
+      setOrganizations([]);
       setActiveScopeIdState(null);
       setLoading(false);
       setError(null);
@@ -210,10 +260,12 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     setError(null);
 
     try {
-      const nextScopes = await loadScopes(true);
+      const { scopes: nextScopes, organizations: nextOrganizations } =
+        await loadScopes(true);
       if (generation !== refreshGeneration.current) return;
 
       setScopes(nextScopes);
+      setOrganizations(nextOrganizations);
 
       const storedId = readActiveWorkspaceId();
       const defaultId = readDefaultScopeId();
@@ -272,17 +324,21 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
     setError(null);
 
     try {
-      let nextScopes = await loadScopes(true);
+      let { scopes: nextScopes, organizations: nextOrganizations } =
+        await loadScopes(true);
 
       if (nextScopes.length === 0) {
         const bootstrapped = await bootstrapWorkspace();
         if (!bootstrapped) {
           throw new Error("Couldn't create your private scope");
         }
-        nextScopes = await loadScopes(false);
+        const reloaded = await loadScopes(false);
+        nextScopes = reloaded.scopes;
+        nextOrganizations = reloaded.organizations;
       }
 
       setScopes(nextScopes);
+      setOrganizations(nextOrganizations);
 
       const storedId = readActiveWorkspaceId();
       const defaultId = readDefaultScopeId();
@@ -342,6 +398,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
 
   return {
     scopes,
+    organizations,
     activeScopeId,
     loading,
     error,

@@ -1,18 +1,54 @@
 import type { ReactNode } from "react";
+import type { Organization } from "@/data/organizations";
 import type { Scope } from "@/data/scopes";
+import type { OrgPickerGroup } from "@/lib/workspaces/scope-picker";
 import { ScopeMenu } from "./ScopeMenu";
 import { ScopeTrigger } from "./ScopeTrigger";
 import "./ScopeSwitcherShowcase.css";
 
 const demoPersonal: Scope[] = [
-  { id: "demo-private", name: "Private", type: "private", role: "owner", createdAt: "2020-01-01T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-book", name: "Book Draft", type: "private", role: "owner", createdAt: "2020-01-02T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-research", name: "Research", type: "private", role: "owner", createdAt: "2020-01-03T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-private", name: "Private", type: "private", role: "owner", orgId: null, createdAt: "2020-01-01T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-book", name: "Book Draft", type: "private", role: "owner", orgId: null, createdAt: "2020-01-02T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-research", name: "Research", type: "private", role: "owner", orgId: null, createdAt: "2020-01-03T00:00:00.000Z", enabledViewsCount: 0 },
 ];
 
-const demoTeam: Scope[] = [
-  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", createdAt: "2020-01-04T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-product", name: "Product", type: "team", role: "member", createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0 },
+const demoStandaloneTeams: Scope[] = [
+  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", orgId: null, createdAt: "2020-01-04T00:00:00.000Z", enabledViewsCount: 0 },
+];
+
+const demoOrg: Organization = {
+  id: "demo-org",
+  name: "Acme Studio",
+  role: "owner",
+};
+
+const demoOrgTeams: Scope[] = [
+  { id: "demo-org-product", name: "Product", type: "team", role: "admin", orgId: demoOrg.id, createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-org-marketing", name: "Marketing", type: "team", role: "member", orgId: demoOrg.id, createdAt: "2020-01-06T00:00:00.000Z", enabledViewsCount: 0 },
+];
+
+const demoSoloOrg: Organization = {
+  id: "demo-solo-org",
+  name: "Solo Pro LLC",
+  role: "owner",
+};
+
+const demoSoloOrgTeam: Scope = {
+  id: "demo-solo-team",
+  name: "Main",
+  type: "team",
+  role: "owner",
+  orgId: demoSoloOrg.id,
+  createdAt: "2020-01-07T00:00:00.000Z",
+  enabledViewsCount: 0,
+};
+
+const multiOrgGroups: OrgPickerGroup[] = [
+  { org: demoOrg, teams: demoOrgTeams, collapsed: false },
+];
+
+const soloOrgGroups: OrgPickerGroup[] = [
+  { org: demoSoloOrg, teams: [demoSoloOrgTeam], collapsed: true },
 ];
 
 type ShowcaseItem = {
@@ -23,64 +59,67 @@ type ShowcaseItem = {
 export function ScopeSwitcherShowcase() {
   const items: ShowcaseItem[] = [
     {
-      label: "Trigger — personal, closed",
+      label: "Trigger — personal",
       render: () => <ScopeTrigger scope={demoPersonal[0]} />,
     },
     {
-      label: "Trigger — team, closed",
-      render: () => <ScopeTrigger scope={demoTeam[0]} />,
+      label: "Trigger — standalone team",
+      render: () => <ScopeTrigger scope={demoStandaloneTeams[0]} />,
     },
     {
-      label: "Trigger — personal, open",
-      render: () => <ScopeTrigger scope={demoPersonal[0]} open />,
-    },
-    {
-      label: "Trigger — team, open",
-      render: () => <ScopeTrigger scope={demoTeam[0]} open />,
-    },
-    {
-      label: "Menu — personal active",
+      label: "Trigger — solo-pro org (collapsed)",
       render: () => (
-        <ScopeMenu
-          inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
-          activeScopeId="demo-private"
+        <ScopeTrigger
+          scope={demoSoloOrgTeam}
+          organizations={[demoSoloOrg]}
+          partition={{
+            personalPrivateScopes: demoPersonal,
+            personalTeamScopes: demoStandaloneTeams,
+            orgGroups: soloOrgGroups,
+          }}
         />
       ),
     },
     {
-      label: "Menu — team active",
+      label: "Menu — personal + standalone teams",
       render: () => (
         <ScopeMenu
           inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
-          activeScopeId="demo-growth"
-        />
-      ),
-    },
-    {
-      label: "Menu — book draft active",
-      render: () => (
-        <ScopeMenu
-          inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
-          activeScopeId="demo-book"
-        />
-      ),
-    },
-    {
-      label: "Menu — can create both",
-      render: () => (
-        <ScopeMenu
-          inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
+          personalPrivateScopes={demoPersonal}
+          personalTeamScopes={demoStandaloneTeams}
+          orgGroups={[]}
           activeScopeId="demo-private"
           canCreatePersonalSpace
           canCreateTeamSpace
+        />
+      ),
+    },
+    {
+      label: "Menu — with organization teams",
+      render: () => (
+        <ScopeMenu
+          inline
+          personalPrivateScopes={demoPersonal}
+          personalTeamScopes={demoStandaloneTeams}
+          orgGroups={multiOrgGroups}
+          activeScopeId="demo-org-product"
+          canCreatePersonalSpace
+          canCreateTeamSpace
+          canCreateOrgTeam={() => true}
+        />
+      ),
+    },
+    {
+      label: "Menu — solo-pro org (one team)",
+      render: () => (
+        <ScopeMenu
+          inline
+          personalPrivateScopes={demoPersonal}
+          personalTeamScopes={[]}
+          orgGroups={soloOrgGroups}
+          activeScopeId="demo-solo-team"
+          canCreatePersonalSpace
+          canCreateTeamSpace={false}
         />
       ),
     },
@@ -89,35 +128,12 @@ export function ScopeSwitcherShowcase() {
       render: () => (
         <ScopeMenu
           inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
+          personalPrivateScopes={demoPersonal}
+          personalTeamScopes={demoStandaloneTeams}
+          orgGroups={[]}
           activeScopeId="demo-research"
           canCreatePersonalSpace={false}
           canCreateTeamSpace
-        />
-      ),
-    },
-    {
-      label: "Menu — team plan required",
-      render: () => (
-        <ScopeMenu
-          inline
-          personalScopes={demoPersonal}
-          teamScopes={demoTeam}
-          activeScopeId="demo-private"
-          canCreatePersonalSpace
-          canCreateTeamSpace={false}
-        />
-      ),
-    },
-    {
-      label: "Menu — no team spaces",
-      render: () => (
-        <ScopeMenu
-          inline
-          personalScopes={[demoPersonal[0]]}
-          teamScopes={[]}
-          activeScopeId="demo-private"
         />
       ),
     },
@@ -126,8 +142,9 @@ export function ScopeSwitcherShowcase() {
       render: () => (
         <ScopeMenu
           inline
-          personalScopes={[demoPersonal[0]]}
-          teamScopes={[]}
+          personalPrivateScopes={[demoPersonal[0]]}
+          personalTeamScopes={[]}
+          orgGroups={[]}
           activeScopeId="demo-private"
           canCreatePersonalSpace
           canCreateTeamSpace={false}

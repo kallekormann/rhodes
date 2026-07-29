@@ -7,6 +7,8 @@ export type Scope = {
   name: string;
   type: ScopeType;
   role: ScopeRole;
+  /** NULL = personal world; set = org-affiliated team scope */
+  orgId: string | null;
   createdAt: string;
   enabledViewsCount: number;
 };
@@ -17,6 +19,7 @@ export const initialScopes: Scope[] = [
     name: "Private",
     type: "private",
     role: "owner",
+    orgId: null,
     createdAt: "2020-01-01T00:00:00.000Z",
     enabledViewsCount: 0,
   },
@@ -25,6 +28,7 @@ export const initialScopes: Scope[] = [
     name: "Book Draft",
     type: "private",
     role: "owner",
+    orgId: null,
     createdAt: "2020-01-02T00:00:00.000Z",
     enabledViewsCount: 0,
   },
@@ -33,6 +37,7 @@ export const initialScopes: Scope[] = [
     name: "Research",
     type: "private",
     role: "owner",
+    orgId: null,
     createdAt: "2020-01-03T00:00:00.000Z",
     enabledViewsCount: 0,
   },
@@ -41,6 +46,7 @@ export const initialScopes: Scope[] = [
     name: "Growth Engine",
     type: "team",
     role: "admin",
+    orgId: null,
     createdAt: "2020-01-04T00:00:00.000Z",
     enabledViewsCount: 0,
   },
@@ -49,6 +55,7 @@ export const initialScopes: Scope[] = [
     name: "Product",
     type: "team",
     role: "member",
+    orgId: null,
     createdAt: "2020-01-05T00:00:00.000Z",
     enabledViewsCount: 0,
   },
@@ -88,7 +95,8 @@ export function getScopeLabel(scope: Scope): string {
   return scope.name;
 }
 
-export function getScopeMetaLabel(scope: Scope): string {
+export function getScopeMetaLabel(scope: Scope, orgName?: string | null): string {
   if (scope.type === "private") return `Personal · ${scope.name}`;
+  if (scope.orgId && orgName) return `${orgName} · Team`;
   return `Team · ${scope.name}`;
 }

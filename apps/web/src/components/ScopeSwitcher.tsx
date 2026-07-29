@@ -1,21 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { type Scope } from "@/data/scopes";
+import type { Organization } from "@/data/organizations";
+import { canManageOrgTeams } from "@/data/organizations";
 import { useApp } from "@/context/AppContext";
+import { partitionScopesForPicker } from "@/lib/workspaces/scope-picker";
 import { ScopeMenu } from "./ScopeMenu";
 import { ScopeTrigger } from "./ScopeTrigger";
 import { ScopeCreateWizard } from "./ScopeCreateWizard";
 import "./ScopeSwitcher.css";
 
-type CreateKind = "personal" | "team" | null;
+type CreateKind = "personal" | "team" | "org-team" | null;
 
 export function ScopeSwitcher() {
   const {
     activeScope,
     scopes,
+    organizations,
     session,
+    featureGates,
     setActiveScope,
     createPersonalSpace,
     createTeamSpace,
@@ -25,10 +30,13 @@ export function ScopeSwitcher() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [createKind, setCreateKind] = useState<CreateKind>(null);
+  const [createOrgTarget, setCreateOrgTarget] = useState<Organization | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const personalScopes = scopes.filter((s) => s.type === "private");
-  const teamScopes = scopes.filter((s) => s.type === "team");
+  const partition = useMemo(
+    () => partitionScopesForPicker(scopes, organizations),
+    [scopes, organizations],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -53,42 +61,60 @@ export function ScopeSwitcher() {
     setOpen(false);
   };
 
-  const openCreate = (kind: CreateKind) => {
+  const openCreate = (kind: CreateKind, org?: Organization) => {
     setOpen(false);
     setCreateKind(kind);
+    setCreateOrgTarget(org ?? null);
   };
 
   const handleCreate = (input: { name: string; enabledViews: string[] }) => {
     if (createKind === "personal") createPersonalSpace(input.name, input.enabledViews);
     if (createKind === "team") createTeamSpace(input.name, input.enabledViews);
+    if (createKind === "org-team") {
+      createTeamSpace(input.name, input.enabledViews, createOrgTarget?.id ?? null);
+    }
     setCreateKind(null);
+    setCreateOrgTarget(null);
   };
+
+  const canCreateOrgTeam = (org: Organization) =>
+    featureGates.can("org.create") && canManageOrgTeams(org);
 
   return (
     <>
       <div className="scope-switcher" ref={rootRef}>
         <ScopeTrigger
           scope={activeScope}
+          organizations={organizations}
+          partition={partition}
           open={open}
           onClick={() => setOpen((v) => !v)}
         />
 
         {open && (
           <ScopeMenu
-            personalScopes={personalScopes}
-            teamScopes={teamScopes}
+            personalPrivateScopes={partition.personalPrivateScopes}
+            personalTeamScopes={partition.personalTeamScopes}
+            orgGroups={partition.orgGroups}
             activeScopeId={activeScope.id}
             userLabel={session.displayName}
             userId={session.userId}
             userAvatarUrl={session.avatarUrl}
             canCreatePersonalSpace={canCreatePersonalSpace}
             canCreateTeamSpace={canCreateTeamSpace}
+            canCreateOrgTeam={canCreateOrgTeam}
             onSelect={selectScope}
             onCreatePersonal={() => openCreate("personal")}
             onCreateTeam={() => openCreate("team")}
+            onCreateOrgTeam={(org) => openCreate("org-team", org)}
             onManage={() => {
               setOpen(false);
-              const section = activeScope.type === "team" ? "Team" : "Scopes";
+              let section = "Scopes";
+              if (activeScope.orgId) {
+                section = "Organization";
+              } else if (activeScope.type === "team") {
+                section = "Team";
+              }
               router.push(`/settings?mode=scope&section=${section}`);
             }}
           />
@@ -102,9 +128,12 @@ export function ScopeSwitcher() {
         onSubmit={handleCreate}
       />
       <ScopeCreateWizard
-        open={createKind === "team"}
+        open={createKind === "team" || createKind === "org-team"}
         kind="team"
-        onClose={() => setCreateKind(null)}
+        onClose={() => {
+          setCreateKind(null);
+          setCreateOrgTarget(null);
+        }}
         onSubmit={handleCreate}
       />
     </>
