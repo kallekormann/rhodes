@@ -4,6 +4,7 @@ import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
   ensureWorkspaceScopePolicy,
   getWorkspaceForPolicy,
+  readWorkspaceScopePolicy,
   updateWorkspaceScopePolicy,
 } from "@/lib/scope-policies/server";
 import { createClient } from "@/lib/supabase/server";
