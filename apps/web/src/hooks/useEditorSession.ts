@@ -121,17 +121,18 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
  * RhodesYjsPersistence retains offline body edits in rhodes-db; the next online edit (or
  * reconnect flush) will catch the projection back up.
  */
-const COLLAB_PROJECTION_DEBOUNCE_MS = 15_000;
+const COLLAB_PROJECTION_DEBOUNCE_MS = 60_000;
 
 async function persistContentProjection(
   documentId: string,
   content: Record<string, unknown>,
   contentPlain: string,
+  onSynced?: (updatedAt: string) => void,
 ): Promise<void> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return;
   if (shouldDeferDocumentPush()) return;
   try {
-    await fetch(`/app/api/documents/${documentId}`, {
+    const response = await fetch(`/app/api/documents/${documentId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -140,6 +141,13 @@ async function persistContentProjection(
         force: true,
       }),
     });
+    if (!response.ok) return;
+    const data = await response.json().catch(() => ({}));
+    const updatedAt = (data.document as { updated_at?: string } | undefined)
+      ?.updated_at;
+    if (typeof updatedAt === "string") {
+      onSynced?.(updatedAt);
+    }
   } catch {
     /* best-effort — next edit or reconnect retries */
   }
@@ -213,6 +221,7 @@ export function useEditorSession() {
     (content: Record<string, unknown>, content_plain: string) => void
   > | null>(null);
   const collabDocReadyRef = useRef(false);
+  const markSyncedRef = useRef<(updatedAt: string) => void>(() => {});
   const debouncedSaveTitleRef = useRef<DebouncedCallback<
     (title: string) => void
   > | null>(null);
@@ -316,33 +325,6 @@ export function useEditorSession() {
     };
   }, [browserOffline, canWriteActiveScope, document?.id, document?.workspace_id, effectiveWorkspaceId, isEditingTemplate, scopes, shareContextVersion]);
 
-  useLayoutEffect(() => {
-    if (isEditingTemplate || !document?.id) return;
-    if (contentHydratedForId === document.id) return;
-
-    const raw =
-      (document.content as Record<string, unknown> | null) ??
-      EMPTY_DOCUMENT_CONTENT;
-    const normalized = normalizeDocumentImageContent(raw);
-    const docId = document.id;
-
-    setEditorContent(normalized);
-    latestContentRef.current = normalized;
-    setContentPlain(document.content_plain?.trim() ?? "");
-    setContentHydratedForId(docId);
-    hydratedDocumentIdRef.current = docId;
-    setContentSyncToken((token) => token + 1);
-    setComments(parseDocumentComments(document.metadata));
-    prefetchDocumentImages(normalized);
-  }, [
-    contentHydratedForId,
-    document?.content,
-    document?.content_plain,
-    document?.id,
-    document?.metadata,
-    isEditingTemplate,
-  ]);
-
   const collabActiveRef = useRef(false);
   const editorForConflictRef = useRef<Editor | null>(null);
   const flushBodyToCacheRef = useRef<() => void>(() => {});
@@ -361,6 +343,7 @@ export function useEditorSession() {
     catchupComplete: collabCatchupComplete,
     docReady: collabDocReady,
     collabActive,
+    peersPresent: collabPeersPresent,
     collaborationUser,
     needsInitialSeed: collabNeedsInitialSeed,
     flushPersist: flushCollabPersist,
@@ -373,6 +356,50 @@ export function useEditorSession() {
   ydocForSnapshotRef.current = ydoc;
   collabActiveRef.current = collabActive;
   collabDocReadyRef.current = collabDocReady;
+
+  useLayoutEffect(() => {
+    if (isEditingTemplate || !document?.id) return;
+    if (contentHydratedForId === document.id) return;
+
+    const yjsOwnsBody =
+      Boolean(session.userId) && crossScopeAccess !== "denied";
+
+    if (yjsOwnsBody && !collabDocReady) {
+      return;
+    }
+
+    if (yjsOwnsBody && collabDocReady) {
+      setComments(parseDocumentComments(document.metadata));
+      setContentHydratedForId(document.id);
+      hydratedDocumentIdRef.current = document.id;
+      return;
+    }
+
+    const raw =
+      (document.content as Record<string, unknown> | null) ??
+      EMPTY_DOCUMENT_CONTENT;
+    const normalized = normalizeDocumentImageContent(raw);
+    const docId = document.id;
+
+    setEditorContent(normalized);
+    latestContentRef.current = normalized;
+    setContentPlain(document.content_plain?.trim() ?? "");
+    setContentHydratedForId(docId);
+    hydratedDocumentIdRef.current = docId;
+    setContentSyncToken((token) => token + 1);
+    setComments(parseDocumentComments(document.metadata));
+    prefetchDocumentImages(normalized);
+  }, [
+    collabDocReady,
+    contentHydratedForId,
+    crossScopeAccess,
+    document?.content,
+    document?.content_plain,
+    document?.id,
+    document?.metadata,
+    isEditingTemplate,
+    session.userId,
+  ]);
 
   useEffect(() => {
     setCollabBootstrappedForId(null);
@@ -410,6 +437,7 @@ export function useEditorSession() {
     window.setTimeout(() => {
       flushCollabPersist();
       void flushRhodesYjsPersistence(documentId);
+      debouncedSaveCollabProjectionRef.current?.flush();
     }, 300);
   }, [document?.id, flushCollabPersist]);
 
@@ -445,9 +473,9 @@ export function useEditorSession() {
       setDocumentId(remote.id);
       setComments(parseDocumentComments(remote.metadata));
 
-      // Yjs owns the body once live — never let a stale Postgres projection
-      // (which can lag behind the CRDT) clobber the live editor content.
-      if (collabActiveRef.current) return;
+      // Yjs owns the body once the local CRDT is ready — never let a stale Postgres
+      // projection (or our own projection PATCH echo) clobber the live editor.
+      if (collabActiveRef.current || collabDocReadyRef.current) return;
 
       const raw =
         (remote.content as Record<string, unknown> | null) ??
@@ -486,10 +514,14 @@ export function useEditorSession() {
   } = useDocumentRealtime({
     documentId: isEditingTemplate ? null : (document?.id ?? null),
     enabled:
-      !isEditingTemplate && crossScopeAccess === "allowed" && !browserOffline,
+      !isEditingTemplate &&
+      crossScopeAccess === "allowed" &&
+      !browserOffline &&
+      (!collabDocReady || collabActive),
     isDirty,
     onRemoteUpdate: applyRemoteDocument,
   });
+  markSyncedRef.current = markSynced;
 
   const { awayNotice, dismissAwayNotice } = useDocumentAwayNotice(
     isEditingTemplate ? null : (document?.id ?? null),
@@ -521,12 +553,13 @@ export function useEditorSession() {
     selectionFrom: cursorSelection?.from ?? null,
     selectionTo: cursorSelection?.to ?? null,
     selectionRef: cursorSelectionRef,
-    // Legacy presence overlay until Yjs CollaborationCursor is live.
+    // Legacy cursor overlay — not needed while solo on Yjs (session presence handles gating).
     enabled:
       !isEditingTemplate &&
       crossScopeAccess === "allowed" &&
       online &&
-      !collabCursorMode,
+      !collabCursorMode &&
+      !collabDocReady,
   });
 
   const onEditorSelectionChange = useCallback((from: number, to: number) => {
@@ -743,6 +776,7 @@ export function useEditorSession() {
         documentId,
         stripInFlightDocumentImages(content),
         content_plain,
+        (updatedAt) => markSyncedRef.current(updatedAt),
       );
     },
     COLLAB_PROJECTION_DEBOUNCE_MS,
@@ -789,6 +823,9 @@ export function useEditorSession() {
         }
         typingIdleTimerRef.current = setTimeout(() => {
           setIsTyping(false);
+          if (collabDocReadyRef.current) {
+            debouncedSaveCollabProjectionRef.current?.flush();
+          }
         }, 3_500);
       }
       if (isEditingTemplate && templateRecord) {
@@ -801,48 +838,56 @@ export function useEditorSession() {
             ),
             content_plain,
           });
-        } else if (collabDocReadyRef.current) {
-          debouncedSaveCollabProjection(nextContent, content_plain);
-        } else {
+        } else if (!collabDocReadyRef.current) {
           debouncedSaveContent(nextContent, content_plain);
         }
       }
     },
-    [
-      debouncedSaveCollabProjection,
-      debouncedSaveContent,
-      debouncedSaveTemplateContent,
-      isEditingTemplate,
-      templateRecord,
-    ],
+    [debouncedSaveContent, debouncedSaveTemplateContent, isEditingTemplate, templateRecord],
   );
 
   debouncedSaveContentRef.current = debouncedSaveContent;
   debouncedSaveCollabProjectionRef.current = debouncedSaveCollabProjection;
 
-  // Flush the projection once back online so search/RAG doesn't lag too far
-  // behind an offline editing session, even without a further keystroke.
-  useEffect(() => {
-    if (!online || isEditingTemplate || !document?.id) return;
+  const flushCollabProjection = useCallback(() => {
+    const documentId = resolvedIdRef.current;
+    if (!documentId || !collabDocReadyRef.current) return;
     const plain = contentPlainRef.current.trim();
     if (plain.length === 0) return;
-    if (collabDocReady) {
-      void persistContentProjection(
-        document.id,
-        normalizeDocumentImageContent(latestContentRef.current),
-        contentPlainRef.current,
-      );
-      return;
-    }
-    void persistDocumentRef.current({
-      content: normalizeDocumentImageContent(latestContentRef.current),
-      content_plain: contentPlainRef.current,
-    });
-  }, [collabDocReady, online, isEditingTemplate, document?.id]);
+    void persistContentProjection(
+      documentId,
+      normalizeDocumentImageContent(latestContentRef.current),
+      plain,
+      (updatedAt) => markSyncedRef.current(updatedAt),
+    );
+  }, []);
+
+  const prevOnlineRef = useRef(online);
+  useEffect(() => {
+    const reconnected = !prevOnlineRef.current && online;
+    prevOnlineRef.current = online;
+    if (!reconnected || isEditingTemplate || !document?.id) return;
+    flushCollabProjection();
+  }, [document?.id, flushCollabProjection, isEditingTemplate, online]);
+
+  useEffect(() => {
+    const domDocument = window.document;
+    const onHide = () => flushCollabProjection();
+    window.addEventListener("pagehide", onHide);
+    const onVisibility = () => {
+      if (domDocument.visibilityState === "hidden") onHide();
+    };
+    domDocument.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      domDocument.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [flushCollabProjection]);
 
   // Flush pending debounced saves before background sync runs on reconnect.
   useLayoutEffect(() => {
     const flushLatestBodyToCache = () => {
+      if (collabDocReadyRef.current) return;
       const documentId = resolvedIdRef.current;
       if (!documentId || isEditingTemplate) return;
 
@@ -868,18 +913,22 @@ export function useEditorSession() {
     };
     flushBodyToCacheRef.current = flushLatestBodyToCache;
     const flushPendingSave = () => {
-      debouncedSaveContentRef.current?.flush();
+      if (!collabDocReadyRef.current) {
+        debouncedSaveContentRef.current?.flush();
+        flushLatestBodyToCache();
+      }
       debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
       debouncedSaveCommentsRef.current?.flush();
-      flushLatestBodyToCache();
     };
     const handleOfflineTransition = () => {
       debouncedSaveCommentsRef.current?.flush();
-      debouncedSaveContentRef.current?.flush();
+      if (!collabDocReadyRef.current) {
+        debouncedSaveContentRef.current?.flush();
+        flushLatestBodyToCache();
+      }
       debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
-      flushLatestBodyToCache();
     };
     const unregisterFlush = registerEditorSaveFlush(flushPendingSave);
     window.addEventListener("online", flushPendingSave, { capture: true });
@@ -890,11 +939,13 @@ export function useEditorSession() {
       window.removeEventListener("offline", handleOfflineTransition, {
         capture: true,
       });
-      debouncedSaveContentRef.current?.flush();
+      debouncedSaveCommentsRef.current?.flush();
+      if (!collabDocReadyRef.current) {
+        debouncedSaveContentRef.current?.flush();
+        flushLatestBodyToCache();
+      }
       debouncedSaveCollabProjectionRef.current?.flush();
       debouncedSaveTitleRef.current?.flush();
-      debouncedSaveCommentsRef.current?.flush();
-      flushLatestBodyToCache();
     };
   }, [isEditingTemplate]);
 
@@ -1324,6 +1375,7 @@ export function useEditorSession() {
     onCollabBootstrapped: handleCollabBootstrapped,
     onDocumentImageInserted: handleDocumentImageInserted,
     collabActive,
+    collabPeersPresent,
     collaborationUser,
     offlineConflictBlocks,
     offlineConflictClusters,

@@ -22,6 +22,7 @@ import {
 import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { seedYjsFromProjectionIfNeeded } from "@/lib/offline/seed-yjs-from-projection";
 import { avatarHueForUser } from "@/lib/profile/avatar";
+import { DocumentSessionPresence } from "@/lib/collaboration/document-session-presence";
 
 export type CollaborationUser = {
   userId: string;
@@ -202,7 +203,8 @@ function applyServerState(doc: Y.Doc, state: Uint8Array): void {
  * - The doc + IndexedDB persistence stay mounted while offline, so offline
  *   edits go straight into the CRDT and merge automatically on reconnect —
  *   no separate offline-merge system needed.
- * - The realtime broadcast provider connects lazily once online.
+ * - The realtime broadcast provider connects only when another user has the
+ *   document open (see DocumentSessionPresence).
  * - The merged CRDT state is durably persisted to Postgres (document_yjs_state).
  * - The body is seeded from Postgres JSON at most once ever per document —
  *   detected via a flag stored inside the Y.Doc itself, never re-applied after.
@@ -224,6 +226,8 @@ export function useYjsCollaboration(params: {
   /** True once the Y.Doc is usable for editing (local/offline included). */
   docReady: boolean;
   collabActive: boolean;
+  /** True when another user currently has this document open. */
+  peersPresent: boolean;
   collaborationUser: CollaborationUser | null;
   /** True only when this Y.Doc has never been seeded (no local/server CRDT history). */
   needsInitialSeed: boolean;
@@ -238,11 +242,13 @@ export function useYjsCollaboration(params: {
   const [catchupComplete, setCatchupComplete] = useState(false);
   const [localReady, setLocalReady] = useState(false);
   const [needsInitialSeed, setNeedsInitialSeed] = useState(false);
+  const [peersPresent, setPeersPresent] = useState(false);
 
   const onDisconnectedRef = useRef(onDisconnected);
   onDisconnectedRef.current = onDisconnected;
   const providerRef = useRef<SupabaseYjsProvider | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
+  const sessionPresenceRef = useRef<DocumentSessionPresence | null>(null);
   const forceAuthRef = useRef(false);
 
   useEffect(() => {
@@ -261,6 +267,8 @@ export function useYjsCollaboration(params: {
     if (!collabEnabled || !documentId) {
       providerRef.current?.destroy();
       providerRef.current = null;
+      sessionPresenceRef.current?.stop();
+      sessionPresenceRef.current = null;
       setProvider(null);
       setYdoc(null);
       setAwareness(null);
@@ -268,6 +276,7 @@ export function useYjsCollaboration(params: {
       setCatchupComplete(false);
       setLocalReady(false);
       setNeedsInitialSeed(false);
+      setPeersPresent(false);
       return;
     }
 
@@ -278,8 +287,54 @@ export function useYjsCollaboration(params: {
     let serverPullTimer: number | null = null;
     let skipNextSyncedServerPull = false;
 
+    const flushSoloServerState = () => {
+      if (cancelled || providerRef.current || !docRef.current) return;
+      void persistState(
+        documentId,
+        Y.encodeStateAsUpdate(docRef.current),
+        userId,
+      );
+    };
+
+    const destroyProvider = () => {
+      const current = providerRef.current as
+        | (SupabaseYjsProvider & {
+            _unsub?: () => void;
+            _unsubCatchup?: () => void;
+            _unsubAwareness?: () => void;
+          })
+        | null;
+      if (!current) return;
+
+      const currentDoc = docRef.current;
+      if (currentDoc) {
+        void persistState(
+          documentId,
+          Y.encodeStateAsUpdate(currentDoc),
+          userId,
+        );
+      }
+
+      current._unsub?.();
+      current._unsubCatchup?.();
+      current._unsubAwareness?.();
+      current.destroy();
+      providerRef.current = null;
+
+      if (serverPullTimer != null) {
+        window.clearInterval(serverPullTimer);
+        serverPullTimer = null;
+      }
+
+      setProvider(null);
+      setAwareness(null);
+      setSynced(false);
+      setCatchupComplete(false);
+    };
+
     const createProvider = async (attempt = 0): Promise<void> => {
       if (cancelled || providerRef.current) return;
+      if (!sessionPresenceRef.current?.hasPeers) return;
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
 
       const supabase = createClient();
@@ -375,6 +430,16 @@ export function useYjsCollaboration(params: {
         return;
       }
 
+      if (!sessionPresenceRef.current?.hasPeers) {
+        unsub();
+        unsubCatchup();
+        (
+          nextProvider as SupabaseYjsProvider & { _unsubAwareness?: () => void }
+        )._unsubAwareness?.();
+        nextProvider.destroy();
+        return;
+      }
+
       providerRef.current = nextProvider;
       setProvider(nextProvider);
       setAwareness(nextProvider.awareness);
@@ -416,14 +481,6 @@ export function useYjsCollaboration(params: {
       const isOffline =
         typeof navigator !== "undefined" && !navigator.onLine;
 
-      const serverPrefetch = isOffline
-        ? Promise.resolve<PersistedYjsState>({
-            state: null,
-            seq: 0,
-            updatedAt: null,
-          })
-        : fetchPersistedStateWithTimeout(documentId);
-
       idbPersistence = new RhodesYjsPersistence(documentId, doc, userId);
 
       await idbPersistence.whenSynced;
@@ -432,8 +489,9 @@ export function useYjsCollaboration(params: {
       await clearStaleOfflineSnapshots(documentId);
       if (cancelled) return;
 
-      if (!isOffline) {
-        const server = await serverPrefetch;
+      // Solo: local IDB is enough on open — skip GET /yjs until a peer joins.
+      if (!isOffline && !ydocHasCollaborationBody(doc)) {
+        const server = await fetchPersistedStateWithTimeout(documentId);
         if (cancelled) return;
         if (server.state && server.state.length > 0) {
           applyServerState(doc, server.state);
@@ -456,42 +514,64 @@ export function useYjsCollaboration(params: {
       setLocalReady(true);
       setYdoc(doc);
 
-      // Realtime provider connects in the background — editing uses the local Y.Doc.
-      void createProvider();
+      const sessionPresence = new DocumentSessionPresence({
+        documentId,
+        userId,
+        displayName: displayNameRef.current,
+        onPeersPresentChange: (present) => {
+          if (cancelled) return;
+          setPeersPresent(present);
+          if (present) {
+            void createProvider();
+            return;
+          }
+          destroyProvider();
+        },
+      });
+      sessionPresenceRef.current = sessionPresence;
+      void sessionPresence.start();
     })();
 
     const onOnlineRetry = () => {
-      if (!providerRef.current) {
+      if (
+        !providerRef.current &&
+        sessionPresenceRef.current?.hasPeers &&
+        typeof navigator !== "undefined" &&
+        navigator.onLine
+      ) {
         void createProvider();
       }
     };
     window.addEventListener("online", onOnlineRetry);
+    window.addEventListener("pagehide", flushSoloServerState);
+    const onVisibilityHidden = () => {
+      if (window.document.visibilityState === "hidden") {
+        flushSoloServerState();
+      }
+    };
+    window.document.addEventListener("visibilitychange", onVisibilityHidden);
 
-    // Retry provider creation while online if the first attempt failed.
     const providerRetryTimer = window.setInterval(() => {
       if (cancelled || providerRef.current) return;
+      if (!sessionPresenceRef.current?.hasPeers) return;
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       void createProvider();
     }, PROVIDER_RETRY_BASE_MS * 2);
 
     return () => {
       cancelled = true;
+      flushSoloServerState();
       if (serverPullTimer != null) {
         window.clearInterval(serverPullTimer);
         serverPullTimer = null;
       }
       window.clearInterval(providerRetryTimer);
       window.removeEventListener("online", onOnlineRetry);
-      const current = providerRef.current as
-        | (SupabaseYjsProvider & { _unsub?: () => void; _unsubCatchup?: () => void })
-        | null;
-      current?._unsub?.();
-      current?._unsubCatchup?.();
-      (
-        current as SupabaseYjsProvider & { _unsubAwareness?: () => void }
-      )?._unsubAwareness?.();
-      current?.destroy();
-      providerRef.current = null;
+      window.removeEventListener("pagehide", flushSoloServerState);
+      window.document.removeEventListener("visibilitychange", onVisibilityHidden);
+      sessionPresenceRef.current?.stop();
+      sessionPresenceRef.current = null;
+      destroyProvider();
       idbPersistence?.destroy();
       doc.destroy();
       docRef.current = null;
@@ -502,8 +582,13 @@ export function useYjsCollaboration(params: {
       setCatchupComplete(false);
       setLocalReady(false);
       setNeedsInitialSeed(false);
+      setPeersPresent(false);
     };
   }, [collabEnabled, documentId, userId]);
+
+  useEffect(() => {
+    sessionPresenceRef.current?.setDisplayName(displayName);
+  }, [displayName]);
 
   useEffect(() => {
     const provider = providerRef.current;
@@ -526,7 +611,7 @@ export function useYjsCollaboration(params: {
   }, [displayName, userId]);
 
   const flushPersist = useMemo(() => {
-    return () => {
+    return (options?: { server?: boolean }) => {
       const doc = docRef.current;
       const currentProvider = providerRef.current;
       if (!doc || !documentId) return;
@@ -534,9 +619,18 @@ export function useYjsCollaboration(params: {
         currentProvider.flushPersist();
         return;
       }
-      void persistState(documentId, Y.encodeStateAsUpdate(doc), userId);
+      void persistLocalYjsState(
+        documentId,
+        Y.encodeStateAsUpdate(doc),
+        userId,
+      ).catch((error) => {
+        console.error(`[yjs] local flush failed for ${documentId}:`, error);
+      });
+      if (options?.server) {
+        void persistState(documentId, Y.encodeStateAsUpdate(doc), userId);
+      }
     };
-  }, [documentId]);
+  }, [documentId, userId]);
 
   return {
     ydoc,
@@ -546,6 +640,7 @@ export function useYjsCollaboration(params: {
     catchupComplete,
     docReady: localReady || synced,
     collabActive: collabEnabled && synced && ydoc != null && provider != null,
+    peersPresent,
     collaborationUser,
     needsInitialSeed,
     flushPersist,
