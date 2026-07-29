@@ -9,6 +9,10 @@ import {
   LLM_QUEUE,
 } from "@rhodes/shared/constants";
 import { libraryFailureMetadata } from "@rhodes/shared/library-failure";
+import {
+  isStorageApiError,
+  logWorkerStorageAlert,
+} from "@rhodes/shared/storage-alert";
 import { connection } from "./connection";
 import { processEmbedDocumentJob } from "./jobs/embed-document";
 import { processEmbedJob } from "./jobs/embed";
@@ -86,6 +90,10 @@ for (const worker of [
       job?.data && typeof job.data === "object" && "sourceId" in job.data
         ? String((job.data as { sourceId: string }).sourceId)
         : null;
+
+    if (isStorageApiError(error)) {
+      logWorkerStorageAlert("download", { worker: worker.name, jobId: job?.id, sourceId }, error);
+    }
 
     if (
       !sourceId ||

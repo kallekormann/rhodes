@@ -49,12 +49,19 @@ async function loadEnvFile() {
 }
 
 async function preflight() {
+  const supabaseUrl = process.env.SUPABASE_URL ?? "http://localhost:8000";
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SERVICE_ROLE_KEY;
   const checks = [
-    ["Kong", `${process.env.SUPABASE_URL ?? "http://localhost:8000"}/auth/v1/health`],
+    ["Kong", `${supabaseUrl}/auth/v1/health`],
     ["Redis", null],
     ["Ollama", `${process.env.OLLAMA_HOST}/api/tags`],
     ["Tika", `${process.env.TIKA_URL}/tika`],
   ];
+
+  if (process.env.ANON_KEY && serviceRoleKey) {
+    checks.splice(1, 0, ["Supabase Storage", `${supabaseUrl}/storage/v1/bucket`]);
+  }
 
   for (const [name, url] of checks) {
     if (name === "Redis") {
@@ -76,10 +83,16 @@ async function preflight() {
       headers:
         name === "Kong" && process.env.ANON_KEY
           ? { apikey: process.env.ANON_KEY }
-          : undefined,
+          : name === "Supabase Storage" && process.env.ANON_KEY && serviceRoleKey
+            ? {
+                apikey: process.env.ANON_KEY,
+                Authorization: `Bearer ${serviceRoleKey}`,
+              }
+            : undefined,
     });
     const ok =
-      response.ok || (name === "Kong" && (response.status === 200 || response.status === 401));
+      response.ok ||
+      (name === "Kong" && (response.status === 200 || response.status === 401));
     if (!ok) throw new Error(`${name} unhealthy: ${response.status}`);
     console.log(`✓ ${name}`);
   }

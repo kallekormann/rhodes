@@ -110,7 +110,18 @@ export function classifyLibraryFailure(raw: unknown): ClassifiedLibraryFailure {
   if (
     lower.includes("could not download") ||
     lower.includes("file bytes missing") ||
-    (lower.includes("not found") && lower.includes("storage"))
+    lower.includes("librarystoragedownloaderror") ||
+    (lower.includes("not found") &&
+      (lower.includes("storage") || lower.includes("object")))
+  ) {
+    return { code: "file_missing", message: REASON_BY_CODE.file_missing };
+  }
+
+  if (
+    lower.includes("storage api") ||
+    lower.includes("storage service") ||
+    lower.includes("bucket not found") ||
+    lower.includes("storage backend")
   ) {
     return { code: "file_missing", message: REASON_BY_CODE.file_missing };
   }

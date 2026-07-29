@@ -1,6 +1,6 @@
 # Phase 28 — Production storage architecture (M1d)
 
-**Status:** in progress (slice 1 shipped)  
+**Status:** in progress (28.4–28.7 shipped; M1d exit pending VPS choice doc)  
 **Milestone:** M1d  
 **Depends on:** M1c (client cache lifecycle)  
 **Blocks:** M2 scale, M3 realtime, VPS deploy (O-019)
@@ -38,10 +38,12 @@ Use self-hosted Supabase Storage as the production object-store path **today in 
 - [`scripts/dev-up-s3.sh`](../scripts/dev-up-s3.sh) — optional local rehearsal
 - VPS: same Storage API; point `GLOBAL_S3_ENDPOINT` at Hetzner/R2 ([docs/27-library-file-storage-vps.md](../docs/27-library-file-storage-vps.md))
 
-### 28.4 — Quota reconciliation — planned
+### 28.4 — Quota reconciliation — **done**
 
-- Compare `storage.objects` size sum vs `library_sources.metadata.byte_size`
-- Admin/reporting RPC; optional upload-time HEAD verify
+- `library_storage_reconciliation` / `library_source_storage_drift` RPCs (`00049`)
+- Account library quota exposes `storage_bytes` + `drift_bytes`
+- Upload-time `verify_library_storage_object` after Storage put
+- Ops: `pnpm storage:reconcile`
 
 ### 28.5 — API bandwidth hardening — **done**
 
@@ -49,10 +51,14 @@ Use self-hosted Supabase Storage as the production object-store path **today in 
 - `ETag` / `If-None-Match` on `GET /api/documents/[id]`; client polls via `fetchDocumentMetadata`
 - Explicit `fields=` projection for view APIs (prep M6) — backlog
 
-### 28.6 — Ops — planned
+### 28.6 — Ops — **done**
 
-- Storage smoke test in dev-up / `pnpm qa:library`
-- Alert on Storage API errors in worker ingest
+- Supabase Storage bucket list in `scripts/health-check.sh` (dev-up)
+- Storage preflight in `pnpm qa:library`
+
+### 28.7 — Worker storage alerts — **done**
+
+- `[rhodes:storage-alert]` structured logs on Storage API failures in worker ingest/download
 
 ---
 

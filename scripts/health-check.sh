@@ -23,6 +23,10 @@ ANON_KEY="$(read_env ANON_KEY)"
 if [[ -z "$ANON_KEY" ]]; then
   ANON_KEY="$(read_env SUPABASE_ANON_KEY)"
 fi
+SERVICE_ROLE_KEY="$(read_env SERVICE_ROLE_KEY)"
+if [[ -z "$SERVICE_ROLE_KEY" ]]; then
+  SERVICE_ROLE_KEY="$(read_env SUPABASE_SERVICE_ROLE_KEY)"
+fi
 OLLAMA_HOST="$(read_env OLLAMA_HOST http://localhost:11434)"
 # Host-side health checks cannot reach the in-compose hostname `ollama`.
 if [[ "$OLLAMA_HOST" == *"ollama:"* ]]; then
@@ -51,6 +55,12 @@ if [[ -z "$ANON_KEY" ]]; then
   echo "Warning: ANON_KEY not set; skipping Supabase REST check"
 else
   wait_for "Supabase REST" "code=\$(curl -s -o /dev/null -w '%{http_code}' -H 'apikey: ${ANON_KEY}' -H 'Authorization: Bearer ${ANON_KEY}' '${SUPABASE_URL}/rest/v1/'); [[ \"\$code\" == 200 || \"\$code\" == 401 || \"\$code\" == 403 ]]"
+fi
+
+if [[ -n "$ANON_KEY" && -n "$SERVICE_ROLE_KEY" ]]; then
+  wait_for "Supabase Storage" "code=\$(curl -s -o /dev/null -w '%{http_code}' -H 'apikey: ${ANON_KEY}' -H 'Authorization: Bearer ${SERVICE_ROLE_KEY}' '${SUPABASE_URL}/storage/v1/bucket'); [[ \"\$code\" == 200 ]]"
+elif [[ -n "$ANON_KEY" ]]; then
+  echo "Warning: SERVICE_ROLE_KEY not set; skipping Supabase Storage check"
 fi
 
 if [[ -z "$ANON_KEY" ]]; then

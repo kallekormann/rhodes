@@ -13,6 +13,7 @@
     "./chunk-metadata": "./src/chunk-metadata.ts",
     "./citation-location": "./src/citation-location.ts",
     "./library-failure": "./src/library-failure.ts",
+    "./storage-alert": "./src/storage-alert.ts",
     "./storage-env": "./src/storage-env.ts",
     "./storage-adapter": "./src/storage-adapter.ts",
     "./paths": "./src/paths.ts"

@@ -4,6 +4,7 @@ import { LIBRARY_BUCKET } from "@rhodes/shared/constants";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { assertLibraryUploadAllowed } from "@/lib/library/account-quota";
 import { enqueueLibraryIngest } from "@/lib/library/queue";
+import { verifyLibraryStorageObject } from "@/lib/library/storage-reconciliation";
 import {
   isLibraryFileAllowed,
   LIBRARY_MAX_UPLOAD_BYTES,
@@ -98,6 +99,27 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Upload failed";
     return withSecurityHeaders(
       NextResponse.json({ error: message }, { status: 400 }),
+    );
+  }
+
+  try {
+    const verified = await verifyLibraryStorageObject(filePath, file.size);
+    if (!verified) {
+      await storage.remove(LIBRARY_BUCKET, [filePath]).catch(() => {});
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Upload verification failed — storage object missing or size mismatch" },
+          { status: 500 },
+        ),
+      );
+    }
+  } catch {
+    await storage.remove(LIBRARY_BUCKET, [filePath]).catch(() => {});
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: "Upload verification failed" },
+        { status: 500 },
+      ),
     );
   }
 

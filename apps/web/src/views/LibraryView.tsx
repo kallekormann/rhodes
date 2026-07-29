@@ -99,8 +99,18 @@ export function LibraryView() {
     fileName: string;
   } | null>(null);
   const [searchDraft, setSearchDraft] = useState("");
+  const [clientReady, setClientReady] = useState(false);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const replaceTargetRef = useRef<{ id: string; fileName: string } | null>(null);
+
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
+
+  const showLoading = clientReady && loading && sources.length === 0;
+  const showEmpty =
+    clientReady && !loading && sources.length === 0 && !error;
+  const dropZoneDisabled = !clientReady || !workspaceId;
 
   useEffect(() => {
     setSearchDraft(query.q);
@@ -242,7 +252,7 @@ export function LibraryView() {
           {canUpload ? (
             <DropZone
               className="library-view__drop"
-              disabled={!workspaceId}
+              disabled={dropZoneDisabled}
               uploading={uploading}
               onFilesSelected={(files) => void handleFilesSelected(files)}
             />
@@ -300,13 +310,13 @@ export function LibraryView() {
             }}
           />
 
-          {loading && sources.length === 0 && (
+          {showLoading && (
             <p className="caption library-view__empty">Loading sources…</p>
           )}
 
           {error && <p className="caption library-view__error">{error}</p>}
 
-          {!loading && sources.length === 0 && !error && (
+          {showEmpty && (
             <p className="caption library-view__empty">
               {query.q || query.fileType !== "all" || query.from || query.to
                 ? "No sources match these filters."

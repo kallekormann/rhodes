@@ -80,12 +80,21 @@ Docker stack already runs Auth, REST, Realtime, **Storage** (file backend by def
 - Documents list `offset` pagination on `GET /api/documents`
 - `ETag` / `If-None-Match` on `GET /api/documents/[id]`; editor polls send conditional requests
 
+**Slice 5 (28.4)** — quota reconciliation:
+
+- RPCs compare `library_sources.metadata.byte_size` vs `storage.objects` (`00049`)
+- Account quota API includes `storage_bytes` and `drift_bytes`
+- Upload verifies Storage object size after put; ops: `pnpm storage:reconcile`
+
+**Slice 6 (28.6–28.7)** — ops:
+
+- `health-check.sh` waits for Supabase Storage API; `qa:library` preflight includes Storage
+- Worker emits `[rhodes:storage-alert]` JSON logs on Storage download/API failures
+
 ## Remaining work (Phase 28)
 
 | Slice | Topic |
 |-------|--------|
-| 28.4 | Quota reconciliation (Storage bytes vs `library_sources.metadata.byte_size`) |
-| 28.6 | Storage healthcheck in `scripts/dev-up.sh` |
-| 28.7 | Alert on Storage API errors in worker ingest |
+| — | Phase 28 feature work complete; VPS backend choice remains before M13 (O-019) |
 
 M3 (realtime metadata), M7 (RAG ACLs), M8 (tier enforcement) build on this foundation.

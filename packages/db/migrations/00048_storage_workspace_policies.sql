@@ -5,6 +5,22 @@ drop policy if exists "Workspace members can upload library files" on storage.ob
 drop policy if exists "Workspace members can read library files" on storage.objects;
 drop policy if exists "Workspace members can upload document images" on storage.objects;
 drop policy if exists "Workspace members can read document images" on storage.objects;
+drop policy if exists "Library files: workspace members insert" on storage.objects;
+drop policy if exists "Library files: workspace members select" on storage.objects;
+drop policy if exists "Library files: workspace members update" on storage.objects;
+drop policy if exists "Library files: workspace members delete" on storage.objects;
+drop policy if exists "Document images: workspace members insert" on storage.objects;
+drop policy if exists "Document images: workspace members select" on storage.objects;
+drop policy if exists "Document images: workspace members update" on storage.objects;
+drop policy if exists "Document images: workspace members delete" on storage.objects;
+drop policy if exists "Library files: workspace members insert" on storage.objects;
+drop policy if exists "Library files: workspace members select" on storage.objects;
+drop policy if exists "Library files: workspace members update" on storage.objects;
+drop policy if exists "Library files: workspace members delete" on storage.objects;
+drop policy if exists "Document images: workspace members insert" on storage.objects;
+drop policy if exists "Document images: workspace members select" on storage.objects;
+drop policy if exists "Document images: workspace members update" on storage.objects;
+drop policy if exists "Document images: workspace members delete" on storage.objects;
 
 create or replace function public.storage_object_workspace_id(object_name text)
 returns uuid

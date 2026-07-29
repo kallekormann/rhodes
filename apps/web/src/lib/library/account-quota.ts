@@ -6,6 +6,7 @@ import {
 } from "@rhodes/shared/tiers";
 import { createAdminClient } from "@rhodes/db";
 import { resolveServerTier } from "@/lib/features/server-gates";
+import { getWorkspaceStorageReconciliation } from "@/lib/library/storage-reconciliation";
 
 export type LibraryQuotaBreakdownItem = {
   workspace_id: string;
@@ -20,6 +21,10 @@ export type AccountLibraryQuota = {
   tier: BillingTier;
   owned_workspace_count: number;
   breakdown: LibraryQuotaBreakdownItem[];
+  /** Sum of storage.objects bytes for owned workspaces (28.4 reconciliation). */
+  storage_bytes: number;
+  /** storage_bytes − used_bytes; non-zero indicates metadata vs blob drift. */
+  drift_bytes: number;
 };
 
 function byteSizeFromMetadata(metadata: unknown): number {
@@ -105,6 +110,20 @@ export async function getAccountLibraryQuota(
 
   const used_bytes = breakdown.reduce((sum, row) => sum + row.used_bytes, 0);
 
+  let storage_bytes = used_bytes;
+  let drift_bytes = 0;
+  if (workspaceIds.length > 0) {
+    try {
+      const reconciliation = await getWorkspaceStorageReconciliation();
+      const idSet = new Set(workspaceIds);
+      const ownedRows = reconciliation.filter((row) => idSet.has(row.workspace_id));
+      storage_bytes = ownedRows.reduce((sum, row) => sum + row.storage_bytes, 0);
+      drift_bytes = storage_bytes - used_bytes;
+    } catch {
+      // Reconciliation RPC unavailable before migration — fall back to metadata totals.
+    }
+  }
+
   return {
     used_bytes,
     limit_bytes: libraryStorageLimitBytes(tier),
@@ -112,6 +131,8 @@ export async function getAccountLibraryQuota(
     tier,
     owned_workspace_count: owned.length,
     breakdown,
+    storage_bytes,
+    drift_bytes,
   };
 }
 
