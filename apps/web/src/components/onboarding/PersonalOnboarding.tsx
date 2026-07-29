@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { AuthField } from "@/components/auth/AuthField";
 import { Button } from "@/components/Button";
-import { Input } from "@/components/Input";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 
 type PersonalOnboardingProps = {
@@ -18,7 +18,8 @@ export function PersonalOnboarding({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     const trimmed = displayName.trim();
     if (!trimmed) {
       setError("Enter your name to continue.");
@@ -40,19 +41,21 @@ export function PersonalOnboarding({
       title="Welcome to Rhodes"
       lead="Your private scope is ready. Confirm how you'd like to appear to collaborators."
     >
-      <Input
-        value={displayName}
-        onChange={setDisplayName}
-        hint="Display name"
-        placeholder="Your name"
-        autoFocus
-      />
-      {error ? <p className="onboarding-error">{error}</p> : null}
-      <div className="onboarding-actions">
-        <Button variant="primary" disabled={loading} onClick={() => void handleSubmit()}>
-          {loading ? "Saving…" : "Get started"}
+      <form className="auth-form onboarding-form" onSubmit={(event) => void handleSubmit(event)}>
+        <AuthField
+          label="Display name"
+          name="display_name"
+          value={displayName}
+          onChange={setDisplayName}
+          placeholder="Your name"
+          autoComplete="name"
+          autoFocus
+          error={error ?? undefined}
+        />
+        <Button type="submit" loading={loading}>
+          Get started
         </Button>
-      </div>
+      </form>
     </OnboardingScreen>
   );
 }

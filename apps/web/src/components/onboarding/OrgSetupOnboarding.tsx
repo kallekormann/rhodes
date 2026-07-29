@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { AuthField } from "@/components/auth/AuthField";
 import { Button } from "@/components/Button";
-import { Input } from "@/components/Input";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 
 type OrgSetupOnboardingProps = {
@@ -15,7 +15,8 @@ export function OrgSetupOnboarding({ onComplete, onSkip }: OrgSetupOnboardingPro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     const trimmed = orgName.trim();
     if (!trimmed) {
       setError("Enter an organization name.");
@@ -37,22 +38,25 @@ export function OrgSetupOnboarding({ onComplete, onSkip }: OrgSetupOnboardingPro
       title="Create your organization"
       lead="Name your company or workspace group. You can attach teams and policies in Settings."
     >
-      <Input
-        value={orgName}
-        onChange={setOrgName}
-        hint="Organization name"
-        placeholder="e.g. Acme Research"
-        autoFocus
-      />
-      {error ? <p className="onboarding-error">{error}</p> : null}
-      <div className="onboarding-actions onboarding-actions--row">
-        <Button variant="ghost" disabled={loading} onClick={onSkip}>
-          Skip for now
-        </Button>
-        <Button variant="primary" disabled={loading} onClick={() => void handleSubmit()}>
-          {loading ? "Creating…" : "Create organization"}
-        </Button>
-      </div>
+      <form className="auth-form onboarding-form" onSubmit={(event) => void handleSubmit(event)}>
+        <AuthField
+          label="Organization name"
+          name="org_name"
+          value={orgName}
+          onChange={setOrgName}
+          placeholder="e.g. Acme Research"
+          autoFocus
+          error={error ?? undefined}
+        />
+        <div className="onboarding-footer">
+          <Button type="button" variant="ghost" disabled={loading} onClick={onSkip}>
+            Skip for now
+          </Button>
+          <Button type="submit" loading={loading}>
+            Create organization
+          </Button>
+        </div>
+      </form>
     </OnboardingScreen>
   );
 }
