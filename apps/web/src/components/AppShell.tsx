@@ -2,7 +2,7 @@
 
 import "@/lib/dev/client-error-log-init";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   AppProvider,
@@ -65,9 +65,7 @@ export function AppShell({
 
   return (
     <AppProvider session={session}>
-      <Suspense fallback={null}>
-        <AppPathMemory />
-      </Suspense>
+      <AppPathMemory />
       <AppErrorBoundary>
         <OnboardingGate onboarding={onboarding} onOnboardingChange={setOnboarding}>
           <AppShellContent>{children}</AppShellContent>

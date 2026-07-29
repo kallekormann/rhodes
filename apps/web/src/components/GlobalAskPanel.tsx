@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { PanelRightClose } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { AskPanel } from "@/components/AskPanel";
@@ -14,6 +15,7 @@ import "./GlobalAskPanel.css";
  * ~50vw fixed overlay — does not squeeze page content. Editor keeps docked RightPanel.
  */
 export function GlobalAskPanel() {
+  const [mounted, setMounted] = useState(false);
   const {
     view,
     panelOpen,
@@ -24,7 +26,15 @@ export function GlobalAskPanel() {
   } = useApp();
   const { online } = useOnlineStatus(workspaceId);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const visible = view !== "editor" && panelOpen && panelTab === "ask";
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <>

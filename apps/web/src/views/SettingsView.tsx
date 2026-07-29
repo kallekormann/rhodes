@@ -40,7 +40,7 @@ import {
   readDefaultScopeId,
   writeDefaultScopeId,
 } from "@/lib/workspaces/scope";
-import { getSettingsReturnPath } from "@/lib/settings-return";
+import { getSettingsReturnPath, rememberLastAppPath } from "@/lib/settings-return";
 import type { SettingsMode } from "@/lib/settings-url";
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
@@ -272,7 +272,9 @@ export function SettingsView({
     const params = new URLSearchParams();
     params.set("mode", mode);
     params.set("section", nextSection);
-    router.replace(`/settings?${params.toString()}`);
+    const href = `/settings?${params.toString()}`;
+    rememberLastAppPath(href);
+    router.replace(href);
   };
 
   const navigateMode = (nextMode: SettingsMode) => {
@@ -281,7 +283,9 @@ export function SettingsView({
     const params = new URLSearchParams();
     params.set("mode", nextMode);
     params.set("section", nextSection);
-    router.replace(`/settings?${params.toString()}`);
+    const href = `/settings?${params.toString()}`;
+    rememberLastAppPath(href);
+    router.replace(href);
   };
 
   const scopePolicyWorkspaceId =
