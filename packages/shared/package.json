@@ -10,6 +10,7 @@
     "./team-roles": "./src/team-roles.ts",
     "./features": "./src/features.ts",
     "./scope-views": "./src/scope-views.ts",
+    "./scope-policies": "./src/scope-policies.ts",
     "./chunk-metadata": "./src/chunk-metadata.ts",
     "./citation-location": "./src/citation-location.ts",
     "./library-failure": "./src/library-failure.ts",

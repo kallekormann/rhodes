@@ -77,9 +77,12 @@ Migrations: `00050_organizations_and_scope_policies.sql`, `00051_organization_in
 - Solo-pro-as-org UX (collapsed single-team org)
 - `org_id` on scope model; org team create via workspace API
 
-### M2.4 — Settings catalog — **pending**
+### M2.4 — Settings catalog — **in progress**
 
 - Sharing, views, templates, collaborators per scope/org
+- `GET/PATCH /api/workspaces/[id]/policy`, `GET/PATCH /api/organizations/[id]/policy`
+- Settings nav: Sharing, Views, Templates, Collaborators, Organization (org admins)
+- Policy types in `@rhodes/shared/scope-policies`; enforcement stubs until M2.5b/M7
 
 ### M2.5 — ScopeSetupWizard — **pending**
 

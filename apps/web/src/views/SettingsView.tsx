@@ -15,6 +15,12 @@ import { NavLink } from "@/components/NavLink";
 import { OfflineGate } from "@/components/OfflineGate";
 import { RadioGroup } from "@/components/Radio";
 import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
+import { OrgPolicySettings } from "@/components/settings/OrgPolicySettings";
+import { ScopeSettingsPlaceholder } from "@/components/settings/ScopeSettingsPlaceholder";
+import { ScopeSharingSettings } from "@/components/settings/ScopeSharingSettings";
+import { ScopeViewsSettings } from "@/components/settings/ScopeViewsSettings";
+import { useScopePolicy } from "@/hooks/useScopePolicy";
+import { canManageOrgTeams, type Organization } from "@/data/organizations";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
 import { ProfileAvatarField } from "@/components/settings/ProfileAvatarField";
 import { LibraryStorageQuota } from "@/components/settings/LibraryStorageQuota";
@@ -37,6 +43,16 @@ import { getSettingsReturnPath } from "@/lib/settings-return";
 import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
+const SCOPE_SECTION_IDS = [
+  "Scopes",
+  "Sharing",
+  "Views",
+  "Templates",
+  "Team",
+  "Collaborators",
+  "Organization",
+] as const;
+
 const USER_SECTIONS = [
   "Profile",
   "Security",
@@ -46,27 +62,47 @@ const USER_SECTIONS = [
   "Privacy",
 ] as const;
 
-const SCOPE_SECTIONS = ["Scopes", "Team"] as const;
+const SCOPE_SECTIONS = SCOPE_SECTION_IDS;
 
 type UserSection = (typeof USER_SECTIONS)[number];
 type ScopeSection = (typeof SCOPE_SECTIONS)[number];
 type SettingsSection = UserSection | ScopeSection;
 type SettingsMode = "user" | "scope";
 
+function scopeSectionsFor(
+  activeScope: Scope,
+  organizations: Organization[],
+): ScopeSection[] {
+  const sections: ScopeSection[] = ["Scopes", "Sharing", "Views", "Templates"];
+  if (activeScope.type === "team") {
+    sections.push("Team", "Collaborators");
+  }
+  if (activeScope.orgId) {
+    const org = organizations.find((o) => o.id === activeScope.orgId);
+    if (org && canManageOrgTeams(org)) {
+      sections.push("Organization");
+    }
+  }
+  return sections;
+}
+
 function isUserSection(section: string): section is UserSection {
   return (USER_SECTIONS as readonly string[]).includes(section);
 }
 
 function isScopeSection(section: string): section is ScopeSection {
-  return (SCOPE_SECTIONS as readonly string[]).includes(section);
+  return (SCOPE_SECTION_IDS as readonly string[]).includes(section);
 }
 
 function defaultSectionForMode(
   mode: SettingsMode,
-  activeScopeType: Scope["type"],
+  activeScope: Scope,
+  organizations: Organization[],
 ): SettingsSection {
   if (mode === "user") return "Profile";
-  return activeScopeType === "team" ? "Team" : "Scopes";
+  const visible = scopeSectionsFor(activeScope, organizations);
+  if (activeScope.type === "team" && visible.includes("Team")) return "Team";
+  return "Scopes";
 }
 type CreateKind = "personal" | "team" | null;
 
@@ -188,6 +224,7 @@ export function SettingsView() {
     themeMode,
     setThemeMode,
     scopes,
+    organizations,
     activeScope,
     setActiveScope,
     createPersonalSpace,
@@ -202,25 +239,28 @@ export function SettingsView() {
   const searchParams = useSearchParams();
   const mode: SettingsMode =
     searchParams.get("mode") === "scope" ? "scope" : "user";
+  const visibleScopeSections = scopeSectionsFor(activeScope, organizations);
   const visibleSections =
-    mode === "user" ? USER_SECTIONS : SCOPE_SECTIONS;
+    mode === "user" ? USER_SECTIONS : visibleScopeSections;
   const [section, setSection] = useState<SettingsSection>(() =>
-    defaultSectionForMode(mode, activeScope.type),
+    defaultSectionForMode(mode, activeScope, organizations),
   );
 
   useEffect(() => {
     const requested = searchParams.get("section");
-    const fallback = defaultSectionForMode(mode, activeScope.type);
+    const fallback = defaultSectionForMode(mode, activeScope, organizations);
     if (mode === "user" && requested && isUserSection(requested)) {
       setSection(requested);
       return;
     }
     if (mode === "scope" && requested && isScopeSection(requested)) {
-      setSection(requested);
-      return;
+      if (visibleScopeSections.includes(requested)) {
+        setSection(requested);
+        return;
+      }
     }
     setSection(fallback);
-  }, [activeScope.type, mode, searchParams]);
+  }, [activeScope, mode, organizations, searchParams, visibleScopeSections]);
 
   const navigateSection = (nextSection: SettingsSection) => {
     setSection(nextSection);
@@ -271,6 +311,22 @@ export function SettingsView() {
     removePendingInviteLocal,
     updateMemberRoleLocal,
   } = useWorkspaceMembers(teamScopeId);
+
+  const {
+    data: scopePolicyData,
+    loading: scopePolicyLoading,
+    error: scopePolicyError,
+    saving: scopePolicySaving,
+    savePolicy,
+    saveEnabledViews,
+  } = useScopePolicy(activeScope.id);
+
+  const canEditScopePolicy =
+    activeScope.role === "owner" || activeScope.role === "admin";
+
+  const activeOrg: Organization | null = activeScope.orgId
+    ? (organizations.find((o) => o.id === activeScope.orgId) ?? null)
+    : null;
 
   const effectiveTeamRole = useMemo(() => {
     if (activeScope.type !== "team") return undefined;
@@ -846,6 +902,75 @@ export function SettingsView() {
                 onRename={openRenameScope}
                 onDelete={setDeleteTarget}
                 emptyLabel="No team scopes yet."
+              />
+            </div>
+          )}
+
+          {section === "Sharing" && (
+            <div className="settings-section">
+              {scopePolicyLoading ? (
+                <p className="caption settings-section__empty">Loading sharing policy…</p>
+              ) : scopePolicyError ? (
+                <p className="caption settings-section__empty">{scopePolicyError}</p>
+              ) : scopePolicyData ? (
+                <ScopeSharingSettings
+                  isTeam={scopePolicyData.is_team_workspace}
+                  policy={scopePolicyData.policy}
+                  canEdit={canEditScopePolicy}
+                  saving={scopePolicySaving}
+                  onSave={(patch) => void savePolicy(patch)}
+                />
+              ) : null}
+            </div>
+          )}
+
+          {section === "Views" && (
+            <div className="settings-section">
+              {scopePolicyLoading ? (
+                <p className="caption settings-section__empty">Loading views…</p>
+              ) : scopePolicyError ? (
+                <p className="caption settings-section__empty">{scopePolicyError}</p>
+              ) : scopePolicyData ? (
+                <ScopeViewsSettings
+                  enabledViews={scopePolicyData.enabled_views}
+                  canEdit={canEditScopePolicy}
+                  saving={scopePolicySaving}
+                  onSave={(views) => {
+                    void saveEnabledViews(views).then((ok) => {
+                      if (ok) showToast("Views updated", "success");
+                    });
+                  }}
+                />
+              ) : null}
+            </div>
+          )}
+
+          {section === "Templates" && (
+            <div className="settings-section">
+              <ScopeSettingsPlaceholder
+                title="Templates"
+                description="Bundle templates with scope views at creation time. Edit defaults and auto-selected templates per view in M2.5."
+                milestone="M2.5 ScopeSetupWizard"
+              />
+            </div>
+          )}
+
+          {section === "Collaborators" && (
+            <div className="settings-section">
+              <ScopeSettingsPlaceholder
+                title="Collaborators"
+                description="Guest and external collaborator access on this scope. Invite-by-link and delegate-invite rules ship in M2.6."
+                milestone="M2.6 guests & invite-by-link"
+              />
+            </div>
+          )}
+
+          {section === "Organization" && activeOrg && (
+            <div className="settings-section">
+              <OrgPolicySettings
+                orgId={activeOrg.id}
+                orgName={activeOrg.name}
+                canEdit={canManageOrgTeams(activeOrg)}
               />
             </div>
           )}
