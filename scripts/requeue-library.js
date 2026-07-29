@@ -84,6 +84,50 @@ async function main() {
   await clearOrphanedActiveJobs(embedQueue);
   await clearOrphanedActiveJobs(summarizeQueue);
 
+  const { rows: stuckSummarize } = await client.query(`
+    select id, workspace_id, metadata
+    from library_sources
+    where embedding_status = 'ready'
+      and summary is null
+      and metadata->>'pipeline_stage' = 'analyzing'
+    order by created_at asc
+  `);
+
+  let summarizeRequeued = 0;
+  for (const row of stuckSummarize) {
+    const metadata =
+      row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+    const excerpt =
+      typeof metadata.extracted_text_excerpt === "string"
+        ? metadata.extracted_text_excerpt
+        : "";
+    if (!excerpt.trim()) {
+      await client.query(
+        `update library_sources
+         set metadata = jsonb_set(coalesce(metadata, '{}'::jsonb), '{pipeline_stage}', '"ready"')
+         where id = $1`,
+        [row.id],
+      );
+      console.log("marked ready (no excerpt)", row.id);
+      continue;
+    }
+
+    await addOrReplaceJob(
+      summarizeQueue,
+      "summarize-source",
+      { sourceId: row.id, workspaceId: row.workspace_id, excerpt },
+      `summarize-${row.id}`,
+      {
+        removeOnComplete: 100,
+        removeOnFail: 50,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 15_000 },
+      },
+    );
+    console.log("re-queued summarize", row.id);
+    summarizeRequeued += 1;
+  }
+
   const { rows } = await client.query(`
     select id, workspace_id, file_path, file_type, embedding_status, metadata
     from library_sources
@@ -91,8 +135,8 @@ async function main() {
     order by created_at asc
   `);
 
-  if (rows.length === 0) {
-    console.log("No pending, failed, or stuck processing sources.");
+  if (rows.length === 0 && summarizeRequeued === 0) {
+    console.log("No pending, failed, stuck processing, or stuck summarize sources.");
     await ingestQueue.close();
     await embedQueue.close();
     await summarizeQueue.close();
@@ -169,7 +213,7 @@ async function main() {
   await embedQueue.close();
   await summarizeQueue.close();
   await client.end();
-  console.log(`Re-queued ${requeued} source(s). Watch the worker terminal.`);
+  console.log(`Re-queued ${requeued} ingest/embed source(s), ${summarizeRequeued} summarize job(s). Watch the worker terminal.`);
 }
 
 main().catch((error) => {

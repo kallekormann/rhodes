@@ -63,11 +63,8 @@ export function librarySourceStatusToPill(input: {
     return { variant: "error", label: "Failed" };
   }
 
-  // Trust embedding_status=ready over a stale pipeline_stage (e.g. indexing).
+  // Embeddings complete — source is searchable even while summary generates.
   if (input.embedding_status === "ready") {
-    if (stage === "analyzing") {
-      return { variant: "progress", label: "Analyzing…" };
-    }
     return { variant: "success", label: "Ready" };
   }
 
@@ -106,7 +103,7 @@ export function librarySourceIsInFlight(input: {
   }
 
   if (input.embedding_status === "ready") {
-    return readPipelineStage(input.metadata) === "analyzing";
+    return false;
   }
 
   return false;

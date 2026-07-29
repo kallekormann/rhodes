@@ -97,13 +97,26 @@ for (const worker of [
 
     if (
       !sourceId ||
-      (worker.name !== LIBRARY_INGEST_QUEUE && worker.name !== LIBRARY_EMBED_QUEUE)
+      (worker.name !== LIBRARY_INGEST_QUEUE &&
+        worker.name !== LIBRARY_EMBED_QUEUE &&
+        worker.name !== LIBRARY_SUMMARIZE_QUEUE)
     ) {
       return;
     }
 
     try {
       const admin = createAdminClient();
+      if (worker.name === LIBRARY_SUMMARIZE_QUEUE) {
+        // Search still works without a summary — don't leave sources stuck on "analyzing".
+        await setLibraryPipelineStage(
+          admin,
+          sourceId,
+          LIBRARY_PIPELINE_STAGE.READY,
+          libraryFailureMetadata(error),
+        );
+        return;
+      }
+
       await admin
         .from("library_sources")
         .update({ embedding_status: "failed" })
