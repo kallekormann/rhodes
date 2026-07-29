@@ -9,9 +9,9 @@ import {
   maxAdditionalScopeViewsForTier,
 } from "@rhodes/shared/scope-views";
 import { buildFeatureGates } from "@/lib/features/gates";
-import "./ScopeSettingsPanels.css";
 
 type ScopeViewsSettingsProps = {
+  scopeName: string;
   enabledViews: string[];
   canEdit: boolean;
   saving: boolean;
@@ -27,6 +27,7 @@ const essentialLabels: Record<string, string> = {
 };
 
 export function ScopeViewsSettings({
+  scopeName,
   enabledViews,
   canEdit,
   saving,
@@ -47,62 +48,58 @@ export function ScopeViewsSettings({
   };
 
   return (
-    <div className="scope-settings-panel">
-      <GroupLabel>Views</GroupLabel>
-      <p className="caption scope-settings-panel__intro">
-        Essential views are always enabled. Additional views unlock when their
-        surfaces ship (M6).
+    <>
+      {!canEdit ? (
+        <p className="caption settings-field__hint">
+          You can view enabled views for {scopeName}. Only scope admins can change them.
+        </p>
+      ) : null}
+
+      <GroupLabel>Built-in views</GroupLabel>
+      <p className="caption settings-field__hint">
+        These views are always available in every scope.
+      </p>
+      <ul className="settings-scope-views__essential">
+        {ESSENTIAL_SCOPE_VIEW_IDS.map((id) => (
+          <li key={id}>{essentialLabels[id] ?? id}</li>
+        ))}
+      </ul>
+
+      <GroupLabel>Additional views</GroupLabel>
+      <p className="caption settings-field__hint">
+        Optional surfaces for {scopeName}. Your plan allows {maxAdditional} additional
+        {maxAdditional === 1 ? " view" : " views"}.
       </p>
 
-      <div className="scope-settings-field">
-        <p className="scope-settings-field__label">Always on</p>
-        <ul className="scope-settings-essential-list">
-          {ESSENTIAL_SCOPE_VIEW_IDS.map((id) => (
-            <li key={id}>{essentialLabels[id] ?? id}</li>
-          ))}
-        </ul>
+      <div className="settings-scope-views__list">
+        {ADDITIONAL_SCOPE_VIEW_CATALOG.map((view) => {
+          const allowed = additionalScopeViewAllowedForTier(view, tier);
+          const checked = selectedAdditional.includes(view.id);
+          const disabled =
+            !canEdit ||
+            !allowed ||
+            view.status === "coming_soon" ||
+            (!checked && selectedAdditional.length >= maxAdditional);
+
+          return (
+            <div key={view.id} className="settings-scope-views__row">
+              <Toggle
+                label={view.label}
+                checked={checked}
+                disabled={disabled}
+                onChange={(e) => toggleView(view.id, e.target.checked)}
+              />
+              <p className="caption settings-field__hint">
+                {view.description}
+                {view.status === "coming_soon" ? " · Coming soon" : ""}
+                {!allowed && view.minTier ? ` · Requires ${view.minTier}` : ""}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="scope-settings-field">
-        <p className="scope-settings-field__label">
-          Additional views ({selectedAdditional.length} / {maxAdditional})
-        </p>
-        {!canEdit ? (
-          <p className="caption scope-settings-field__hint">
-            Only scope admins can change views.
-          </p>
-        ) : null}
-        <div className="scope-settings-view-list">
-          {ADDITIONAL_SCOPE_VIEW_CATALOG.map((view) => {
-            const allowed = additionalScopeViewAllowedForTier(view, tier);
-            const checked = selectedAdditional.includes(view.id);
-            const disabled =
-              !canEdit ||
-              !allowed ||
-              view.status === "coming_soon" ||
-              (!checked && selectedAdditional.length >= maxAdditional);
-
-            return (
-              <div key={view.id} className="scope-settings-view-row">
-                <Toggle
-                  label={view.label}
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={(e) => toggleView(view.id, e.target.checked)}
-                />
-                <p className="caption scope-settings-field__hint">
-                  {view.description}
-                  {view.status === "coming_soon" ? " · Coming soon" : ""}
-                  {!allowed && view.minTier ? ` · Requires ${view.minTier}` : ""}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-        {saving ? (
-          <p className="caption scope-settings-field__hint">Saving…</p>
-        ) : null}
-      </div>
-    </div>
+      {saving ? <p className="caption settings-field__hint">Saving…</p> : null}
+    </>
   );
 }

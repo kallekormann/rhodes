@@ -1,14 +1,15 @@
 "use client";
 
+import { Divider } from "@/components/Divider";
 import { RadioGroup } from "@/components/Radio";
 import { GroupLabel } from "@/components/SectionHeader";
 import type {
   PrivateScopePolicy,
   TeamScopePolicy,
 } from "@rhodes/shared/scope-policies";
-import "./ScopeSettingsPanels.css";
 
 type ScopeSharingSettingsProps = {
+  scopeName: string;
   isTeam: boolean;
   policy: PrivateScopePolicy | TeamScopePolicy;
   canEdit: boolean;
@@ -16,38 +17,90 @@ type ScopeSharingSettingsProps = {
   onSave: (patch: Record<string, unknown>) => void;
 };
 
+const privateExternalOptions = [
+  { value: "disabled", label: "Nobody outside this scope" },
+  { value: "guests_only", label: "Guests only" },
+  { value: "members_allowed", label: "Guests and members" },
+] as const;
+
+const privateOutboundOptions = [
+  { value: "none", label: "Not allowed" },
+  { value: "documents", label: "Documents" },
+  { value: "documents_and_library", label: "Documents and library" },
+] as const;
+
+const privateInviteOptions = [
+  { value: "false", label: "Admins only" },
+  { value: "same_scope_only", label: "People in this scope" },
+  { value: "org_members_only", label: "Organization members" },
+  { value: "anyone_with_link", label: "Anyone with an invite link" },
+] as const;
+
+const teamOrgSharingOptions = [
+  { value: "team_only", label: "This team only" },
+  { value: "all_org_teams", label: "All teams in the organization" },
+  { value: "selected_org_teams", label: "Selected teams" },
+  { value: "org_wide", label: "Organization catalog" },
+] as const;
+
+const teamExternalOptions = [
+  { value: "disabled", label: "Nobody outside the organization" },
+  { value: "org_members_only", label: "Organization members" },
+  { value: "guests_allowed", label: "Guests allowed" },
+] as const;
+
+const teamOutboundOptions = [
+  { value: "none", label: "Not allowed" },
+  { value: "team_only", label: "This team only" },
+  { value: "selected_teams", label: "Selected teams" },
+  { value: "org_wide", label: "Organization-wide" },
+  { value: "private_scopes", label: "Member private scopes" },
+] as const;
+
+const teamInboundOptions = [
+  { value: "none", label: "Nothing from outside" },
+  { value: "org_teams_only", label: "Other organization teams" },
+  { value: "linked_private", label: "Linked private scopes" },
+  { value: "any_member_private", label: "Any member private scope" },
+] as const;
+
+const teamInviteOptions = [
+  { value: "false", label: "Admins only" },
+  { value: "team_members_only", label: "Team members" },
+  { value: "org_members_only", label: "Organization members" },
+  { value: "external_with_approval", label: "External guests with approval" },
+] as const;
+
 function PrivateSharingForm({
   policy,
   canEdit,
-  saving,
   onSave,
 }: {
   policy: PrivateScopePolicy;
   canEdit: boolean;
-  saving: boolean;
   onSave: (patch: Record<string, unknown>) => void;
 }) {
   return (
     <>
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">External collaborators</legend>
-        <p className="caption scope-settings-field__hint">
-          Who may be invited to this private scope as a guest.
+      <GroupLabel>Guests & collaborators</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Who can be invited</legend>
+        <p className="caption settings-field__hint">
+          People outside this personal scope who can be added as guests or members.
         </p>
         <RadioGroup
           name="private-external-collaborators"
           value={policy.external_collaborators}
           onChange={(value) => onSave({ external_collaborators: value })}
-          options={[
-            { value: "disabled", label: "Disabled" },
-            { value: "guests_only", label: "Guests only" },
-            { value: "members_allowed", label: "Members allowed" },
-          ]}
+          options={privateExternalOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Default collaborator role</legend>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Default role for new collaborators</legend>
         <RadioGroup
           name="private-default-role"
           value={policy.default_collaborator_role}
@@ -59,41 +112,41 @@ function PrivateSharingForm({
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Share documents to teams</legend>
-        <p className="caption scope-settings-field__hint">
-          Outbound sharing from this private scope (M2.5b enforces on share API).
+      <Divider className="settings-section__divider" />
+
+      <GroupLabel>Sharing to teams</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Share content from this scope</legend>
+        <p className="caption settings-field__hint">
+          Whether documents or library files from this personal scope can be shared into team
+          scopes.
         </p>
         <RadioGroup
           name="private-content-outbound"
           value={policy.content_sharing_outbound}
           onChange={(value) => onSave({ content_sharing_outbound: value })}
-          options={[
-            { value: "none", label: "None" },
-            { value: "documents", label: "Documents only" },
-            { value: "documents_and_library", label: "Documents and library" },
-          ]}
+          options={privateOutboundOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Who can invite others</legend>
+      <Divider className="settings-section__divider" />
+
+      <GroupLabel>Invitations</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Who can invite others</legend>
         <RadioGroup
           name="private-can-invite"
           value={policy.collaborator_can_invite}
           onChange={(value) => onSave({ collaborator_can_invite: value })}
-          options={[
-            { value: "false", label: "Nobody" },
-            { value: "same_scope_only", label: "Same scope only" },
-            { value: "org_members_only", label: "Org members only" },
-            { value: "anyone_with_link", label: "Anyone with link" },
-          ]}
+          options={privateInviteOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
-
-      {canEdit && saving ? (
-        <p className="caption scope-settings-field__hint">Saving…</p>
-      ) : null}
     </>
   );
 }
@@ -101,115 +154,110 @@ function PrivateSharingForm({
 function TeamSharingForm({
   policy,
   canEdit,
-  saving,
   onSave,
 }: {
   policy: TeamScopePolicy;
   canEdit: boolean;
-  saving: boolean;
   onSave: (patch: Record<string, unknown>) => void;
 }) {
   return (
     <>
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Org-wide sharing</legend>
-        <p className="caption scope-settings-field__hint">
-          How this team scope relates to other teams in the organization.
+      <GroupLabel>Organization visibility</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Who can see this team</legend>
+        <p className="caption settings-field__hint">
+          How this team scope appears to other teams in your organization.
         </p>
         <RadioGroup
           name="team-org-sharing"
           value={policy.org_sharing}
           onChange={(value) => onSave({ org_sharing: value })}
-          options={[
-            { value: "team_only", label: "This team only" },
-            { value: "all_org_teams", label: "All org teams" },
-            { value: "selected_org_teams", label: "Selected org teams" },
-            { value: "org_wide", label: "Org-wide catalog" },
-          ]}
+          options={teamOrgSharingOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">External collaborators</legend>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">External collaborators</legend>
         <RadioGroup
           name="team-external-collaborators"
           value={policy.external_collaborators}
           onChange={(value) => onSave({ external_collaborators: value })}
-          options={[
-            { value: "disabled", label: "Disabled" },
-            { value: "org_members_only", label: "Org members only" },
-            { value: "guests_allowed", label: "Guests allowed" },
-          ]}
+          options={teamExternalOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Share documents outward</legend>
+      <Divider className="settings-section__divider" />
+
+      <GroupLabel>Content sharing</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Share content out of this team</legend>
         <RadioGroup
           name="team-content-outbound"
           value={policy.content_sharing_outbound}
           onChange={(value) => onSave({ content_sharing_outbound: value })}
-          options={[
-            { value: "none", label: "None" },
-            { value: "team_only", label: "This team only" },
-            { value: "selected_teams", label: "Selected teams" },
-            { value: "org_wide", label: "Org-wide" },
-            { value: "private_scopes", label: "Member private scopes" },
-          ]}
+          options={teamOutboundOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Accept shares from</legend>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Accept content into this team</legend>
+        <p className="caption settings-field__hint">
+          Where shared documents and library files may come from.
+        </p>
         <RadioGroup
           name="team-content-inbound"
           value={policy.content_sharing_inbound}
           onChange={(value) => onSave({ content_sharing_inbound: value })}
-          options={[
-            { value: "none", label: "None" },
-            { value: "org_teams_only", label: "Org teams only" },
-            { value: "linked_private", label: "Linked private scopes" },
-            { value: "any_member_private", label: "Any member private scope" },
-          ]}
+          options={teamInboundOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Default member role</legend>
+      <Divider className="settings-section__divider" />
+
+      <GroupLabel>Members & invitations</GroupLabel>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Default role for new members</legend>
         <RadioGroup
           name="team-default-member"
           value={policy.default_member_role}
           onChange={(value) => onSave({ default_member_role: value })}
           options={[
-            { value: "member", label: "Member" },
-            { value: "viewer", label: "Viewer" },
+            { value: "member", label: "Can edit" },
+            { value: "viewer", label: "Can view" },
           ]}
         />
       </fieldset>
 
-      <fieldset className="scope-settings-field" disabled={!canEdit}>
-        <legend className="scope-settings-field__label">Who can invite others</legend>
+      <fieldset className="settings-field" disabled={!canEdit}>
+        <legend className="settings-field__label">Who can invite others</legend>
         <RadioGroup
           name="team-can-invite"
           value={policy.collaborator_can_invite}
           onChange={(value) => onSave({ collaborator_can_invite: value })}
-          options={[
-            { value: "false", label: "Nobody" },
-            { value: "team_members_only", label: "Team members only" },
-            { value: "org_members_only", label: "Org members only" },
-            { value: "external_with_approval", label: "External with approval" },
-          ]}
+          options={teamInviteOptions.map((o) => ({
+            value: o.value,
+            label: o.label,
+          }))}
         />
       </fieldset>
-
-      {canEdit && saving ? (
-        <p className="caption scope-settings-field__hint">Saving…</p>
-      ) : null}
     </>
   );
 }
 
 export function ScopeSharingSettings({
+  scopeName,
   isTeam,
   policy,
   canEdit,
@@ -217,32 +265,30 @@ export function ScopeSharingSettings({
   onSave,
 }: ScopeSharingSettingsProps) {
   return (
-    <div className="scope-settings-panel">
-      <GroupLabel>Sharing policy</GroupLabel>
-      <p className="caption scope-settings-panel__intro">
-        Controls who can collaborate and how documents leave this scope. Full
-        enforcement on share APIs lands in M2.5b; library/RAG bounds in M7.
-      </p>
+    <>
       {!canEdit ? (
-        <p className="caption scope-settings-panel__intro">
-          Only scope admins can change sharing policy.
+        <p className="caption settings-field__hint">
+          You can view sharing rules for {scopeName}. Only scope admins can change them.
         </p>
       ) : null}
+
       {isTeam ? (
         <TeamSharingForm
           policy={policy as TeamScopePolicy}
           canEdit={canEdit}
-          saving={saving}
           onSave={onSave}
         />
       ) : (
         <PrivateSharingForm
           policy={policy as PrivateScopePolicy}
           canEdit={canEdit}
-          saving={saving}
           onSave={onSave}
         />
       )}
-    </div>
+
+      {canEdit && saving ? (
+        <p className="caption settings-field__hint">Saving…</p>
+      ) : null}
+    </>
   );
 }

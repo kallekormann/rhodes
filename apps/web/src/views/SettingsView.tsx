@@ -14,7 +14,7 @@ import { Modal } from "@/components/Modal";
 import { NavLink } from "@/components/NavLink";
 import { OfflineGate } from "@/components/OfflineGate";
 import { RadioGroup } from "@/components/Radio";
-import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { OrgPolicySettings } from "@/components/settings/OrgPolicySettings";
 import { ScopeSettingsPlaceholder } from "@/components/settings/ScopeSettingsPlaceholder";
 import { ScopeSharingSettings } from "@/components/settings/ScopeSharingSettings";
@@ -269,6 +269,20 @@ export function SettingsView() {
     params.set("section", nextSection);
     router.replace(`/settings?${params.toString()}`);
   };
+
+  const navigateMode = (nextMode: SettingsMode) => {
+    const nextSection = defaultSectionForMode(nextMode, activeScope, organizations);
+    setSection(nextSection);
+    const params = new URLSearchParams();
+    params.set("mode", nextMode);
+    params.set("section", nextSection);
+    router.replace(`/settings?${params.toString()}`);
+  };
+
+  const scopePolicyWorkspaceId =
+    activeScope.id === "loading" ? null : activeScope.id;
+  const scopePolicyPending =
+    activeScope.id === "loading" || scopePolicyLoading;
   const [createKind, setCreateKind] = useState<CreateKind>(null);
   const [displayName, setDisplayName] = useState(session.displayName);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(session.avatarUrl);
@@ -319,9 +333,7 @@ export function SettingsView() {
     saving: scopePolicySaving,
     savePolicy,
     saveEnabledViews,
-  } = useScopePolicy(
-    activeScope.id === "loading" ? null : activeScope.id,
-  );
+  } = useScopePolicy(scopePolicyWorkspaceId);
 
   const canEditScopePolicy =
     activeScope.role === "owner" || activeScope.role === "admin";
@@ -697,6 +709,21 @@ export function SettingsView() {
 
       <div className="settings-view__layout">
         <nav className="settings-nav">
+          <div className="settings-nav__mode">
+            <SegmentedControl
+              options={[
+                { value: "user", label: "Account" },
+                { value: "scope", label: "Scope" },
+              ]}
+              value={mode}
+              onChange={navigateMode}
+            />
+          </div>
+          {mode === "scope" ? (
+            <p className="settings-nav__scope caption">
+              {activeScope.type === "private" ? "Personal" : "Team"} · {activeScope.name}
+            </p>
+          ) : null}
           {visibleSections.map((item) => (
             <button
               key={item}
@@ -711,7 +738,17 @@ export function SettingsView() {
 
         <div className="settings-view__scroll overlay-scrollbar">
           <div
-            className={`settings-content ${section === "Team" ? "settings-content--wide" : ""}`}
+            className={`settings-content ${
+              mode === "scope" &&
+              (section === "Team" ||
+                section === "Sharing" ||
+                section === "Views" ||
+                section === "Organization")
+                ? "settings-content--wide"
+                : section === "Team"
+                  ? "settings-content--wide"
+                  : ""
+            }`}
           >
           {section === "Profile" && (
             <div className="settings-section">
@@ -854,11 +891,23 @@ export function SettingsView() {
                   Email delivery is configured in Phase 12.
                 </p>
               </fieldset>
+
+              <Divider className="settings-section__divider" />
+
+              <GroupLabel>Current scope</GroupLabel>
+              <p className="caption settings-field__hint">
+                {activeScope.type === "private" ? "Personal" : "Team"} scope ·{" "}
+                {activeScope.name}
+              </p>
+              <Button variant="secondary" onClick={() => navigateMode("scope")}>
+                Manage scope settings
+              </Button>
             </div>
           )}
 
           {section === "Scopes" && (
             <div className="settings-section">
+              <SectionHeader title="Scopes" />
               <p className="caption settings-section__intro">
                 Personal scopes are private to you. Team scopes are shared with members.
               </p>
@@ -910,17 +959,27 @@ export function SettingsView() {
 
           {section === "Sharing" && (
             <div className="settings-section">
-              {scopePolicyLoading ? (
-                <p className="caption settings-section__empty">Loading sharing policy…</p>
+              <SectionHeader title="Sharing" />
+              <p className="caption settings-section__intro">
+                Who can collaborate in this scope and how content can be shared with teams
+                or guests.
+              </p>
+              {scopePolicyPending ? (
+                <p className="caption settings-section__empty">Loading sharing settings…</p>
               ) : scopePolicyError ? (
                 <p className="caption settings-section__empty">{scopePolicyError}</p>
               ) : scopePolicyData ? (
                 <ScopeSharingSettings
+                  scopeName={activeScope.name}
                   isTeam={scopePolicyData.is_team_workspace}
                   policy={scopePolicyData.policy}
                   canEdit={canEditScopePolicy}
                   saving={scopePolicySaving}
-                  onSave={(patch) => void savePolicy(patch)}
+                  onSave={(patch) => {
+                    void savePolicy(patch).then((result) => {
+                      if (result) showToast("Sharing settings saved", "success");
+                    });
+                  }}
                 />
               ) : null}
             </div>
@@ -928,18 +987,26 @@ export function SettingsView() {
 
           {section === "Views" && (
             <div className="settings-section">
-              {scopePolicyLoading ? (
+              <SectionHeader title="Views" />
+              <p className="caption settings-section__intro">
+                Choose which optional surfaces appear in this scope&apos;s navigation.
+              </p>
+              {scopePolicyPending ? (
                 <p className="caption settings-section__empty">Loading views…</p>
               ) : scopePolicyError ? (
                 <p className="caption settings-section__empty">{scopePolicyError}</p>
               ) : scopePolicyData ? (
                 <ScopeViewsSettings
+                  scopeName={activeScope.name}
                   enabledViews={scopePolicyData.enabled_views}
                   canEdit={canEditScopePolicy}
                   saving={scopePolicySaving}
                   onSave={(views) => {
                     void saveEnabledViews(views).then((ok) => {
-                      if (ok) showToast("Views updated", "success");
+                      if (ok) {
+                        showToast("Views updated", "success");
+                        void refreshScopes();
+                      }
                     });
                   }}
                 />
@@ -949,9 +1016,9 @@ export function SettingsView() {
 
           {section === "Templates" && (
             <div className="settings-section">
+              <SectionHeader title="Templates" />
               <ScopeSettingsPlaceholder
-                title="Templates"
-                description="Bundle templates with scope views at creation time. Edit defaults and auto-selected templates per view in M2.5."
+                description="Bundle templates with scope views at creation time. Edit defaults and auto-selected templates per view in a later release."
                 milestone="M2.5 ScopeSetupWizard"
               />
             </div>
@@ -959,9 +1026,9 @@ export function SettingsView() {
 
           {section === "Collaborators" && (
             <div className="settings-section">
+              <SectionHeader title="Collaborators" />
               <ScopeSettingsPlaceholder
-                title="Collaborators"
-                description="Guest and external collaborator access on this scope. Invite-by-link and delegate-invite rules ship in M2.6."
+                description="Guest and external collaborator access on this scope. Invite-by-link and delegate-invite rules ship in a later release."
                 milestone="M2.6 guests & invite-by-link"
               />
             </div>

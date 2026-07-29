@@ -16,44 +16,61 @@ type ScopePolicyResponse = {
 };
 
 export function useScopePolicy(workspaceId: string | null) {
+  const resolvedId = isResolvableWorkspaceId(workspaceId) ? workspaceId : null;
   const [data, setData] = useState<ScopePolicyResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const refresh = useCallback(async () => {
-    if (!isResolvableWorkspaceId(workspaceId)) {
+  useEffect(() => {
+    if (!resolvedId) {
       setData(null);
       setError(null);
+      setLoading(true);
       return;
     }
 
+    let cancelled = false;
     setLoading(true);
     setError(null);
-    try {
-      const response = await fetch(`/app/api/workspaces/${workspaceId}/policy`);
-      const body = (await response.json().catch(() => ({}))) as ScopePolicyResponse & {
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(body.error ?? "Couldn't load scope settings");
+    setData(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`);
+        const body = (await response.json().catch(() => ({}))) as ScopePolicyResponse & {
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(body.error ?? "Couldn't load scope settings");
+        }
+        if (!cancelled) {
+          setData(body);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Couldn't load scope settings");
+          setData(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-      setData(body);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't load scope settings");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedId]);
 
   const savePolicy = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!isResolvableWorkspaceId(workspaceId)) return null;
+      if (!resolvedId) return null;
       setSaving(true);
       setError(null);
       try {
-        const response = await fetch(`/app/api/workspaces/${workspaceId}/policy`, {
+        const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ policy: patch }),
@@ -74,16 +91,16 @@ export function useScopePolicy(workspaceId: string | null) {
         setSaving(false);
       }
     },
-    [workspaceId],
+    [resolvedId],
   );
 
   const saveEnabledViews = useCallback(
     async (enabledViews: string[]) => {
-      if (!isResolvableWorkspaceId(workspaceId)) return false;
+      if (!resolvedId) return false;
       setSaving(true);
       setError(null);
       try {
-        const response = await fetch(`/app/api/workspaces/${workspaceId}/policy`, {
+        const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ enabled_views: enabledViews }),
@@ -104,12 +121,29 @@ export function useScopePolicy(workspaceId: string | null) {
         setSaving(false);
       }
     },
-    [workspaceId],
+    [resolvedId],
   );
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const refresh = useCallback(async () => {
+    if (!resolvedId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`);
+      const body = (await response.json().catch(() => ({}))) as ScopePolicyResponse & {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(body.error ?? "Couldn't load scope settings");
+      }
+      setData(body);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't load scope settings");
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [resolvedId]);
 
   return {
     data,
@@ -119,5 +153,6 @@ export function useScopePolicy(workspaceId: string | null) {
     refresh,
     savePolicy,
     saveEnabledViews,
+    ready: resolvedId !== null && !loading && data !== null,
   };
 }
