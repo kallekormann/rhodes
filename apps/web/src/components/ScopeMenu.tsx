@@ -1,5 +1,14 @@
-import type { ReactNode } from "react";
-import { Building2, Check, Lock, Plus, Settings, User, Users } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  Building2,
+  Check,
+  ChevronRight,
+  Lock,
+  Plus,
+  Settings,
+  User,
+  Users,
+} from "lucide-react";
 import type { Organization } from "@/data/organizations";
 import { canManageOrgTeams } from "@/data/organizations";
 import type { Scope } from "@/data/scopes";
@@ -7,11 +16,11 @@ import { UserAvatar } from "@/components/UserAvatar";
 import type { OrgPickerGroup } from "@/lib/workspaces/scope-picker";
 import "./ScopeSwitcher.css";
 
-import {
-  TEAM_ROLE_LABELS,
-} from "@rhodes/shared/team-roles";
+import { TEAM_ROLE_LABELS } from "@rhodes/shared/team-roles";
 
 const roleLabels = TEAM_ROLE_LABELS;
+
+const PERSONAL_SECTION_ID = "personal";
 
 export type ScopeMenuProps = {
   personalPrivateScopes: Scope[];
@@ -21,6 +30,7 @@ export type ScopeMenuProps = {
   userLabel?: string;
   userAvatarUrl?: string | null;
   userId?: string;
+  menuOpen?: boolean;
   canCreatePersonalSpace?: boolean;
   canCreateTeamSpace?: boolean;
   canCreateOrgTeam?: (org: Organization) => boolean;
@@ -32,6 +42,39 @@ export type ScopeMenuProps = {
   className?: string;
   inline?: boolean;
 };
+
+function orgSectionId(orgId: string) {
+  return `org:${orgId}`;
+}
+
+function buildDefaultExpanded(
+  activeScopeId: string,
+  personalPrivateScopes: Scope[],
+  personalTeamScopes: Scope[],
+  orgGroups: OrgPickerGroup[],
+): Record<string, boolean> {
+  const inPersonal =
+    personalPrivateScopes.some((s) => s.id === activeScopeId) ||
+    personalTeamScopes.some((s) => s.id === activeScopeId);
+
+  const expanded: Record<string, boolean> = {
+    [PERSONAL_SECTION_ID]: inPersonal || orgGroups.length === 0,
+  };
+
+  for (const group of orgGroups) {
+    const activeInOrg = group.teams.some((t) => t.id === activeScopeId);
+    expanded[orgSectionId(group.org.id)] = activeInOrg;
+  }
+
+  if (
+    !inPersonal &&
+    !orgGroups.some((g) => g.teams.some((t) => t.id === activeScopeId))
+  ) {
+    expanded[PERSONAL_SECTION_ID] = true;
+  }
+
+  return expanded;
+}
 
 function ScopeListItem({
   scope,
@@ -70,54 +113,170 @@ function ScopeListItem({
   );
 }
 
-function OrgGroupSection({
+function CollapsibleSection({
+  sectionId,
+  title,
+  icon,
+  hint,
+  expanded,
+  onToggle,
+  children,
+}: {
+  sectionId: string;
+  title: string;
+  icon: ReactNode;
+  hint?: string;
+  expanded: boolean;
+  onToggle: (sectionId: string) => void;
+  children: ReactNode;
+}) {
+  const panelId = `scope-section-${sectionId}`;
+
+  return (
+    <section className="scope-menu__section scope-menu__section--collapsible">
+      <button
+        type="button"
+        className="scope-menu__section-toggle"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={() => onToggle(sectionId)}
+      >
+        <span className="scope-menu__section-toggle-main">
+          <span className="scope-menu__section-toggle-icon" aria-hidden>
+            {icon}
+          </span>
+          <span className="scope-menu__section-toggle-label">{title}</span>
+        </span>
+        <ChevronRight
+          size={16}
+          strokeWidth={1.75}
+          className={`scope-menu__section-chevron ${expanded ? "scope-menu__section-chevron--open" : ""}`}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div id={panelId} className="scope-menu__section-body">
+          {hint ? <p className="scope-menu__hint">{hint}</p> : null}
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function PersonalTeamsSection({
+  personalPrivateScopes,
+  personalTeamScopes,
+  activeScopeId,
+  expanded,
+  onToggle,
+  canCreatePersonalSpace,
+  canCreateTeamSpace,
+  onSelect,
+  onCreatePersonal,
+  onCreateTeam,
+}: {
+  personalPrivateScopes: Scope[];
+  personalTeamScopes: Scope[];
+  activeScopeId: string;
+  expanded: boolean;
+  onToggle: (sectionId: string) => void;
+  canCreatePersonalSpace: boolean;
+  canCreateTeamSpace: boolean;
+  onSelect?: (scope: Scope) => void;
+  onCreatePersonal?: () => void;
+  onCreateTeam?: () => void;
+}) {
+  return (
+    <CollapsibleSection
+      sectionId={PERSONAL_SECTION_ID}
+      title="Private & teams"
+      icon={<User size={14} strokeWidth={1.75} />}
+      hint="Your private scopes and personal teams. Documents can be shared with others."
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <ul className="scope-menu__list">
+        {personalPrivateScopes.map((scope) => (
+          <ScopeListItem
+            key={scope.id}
+            scope={scope}
+            activeScopeId={activeScopeId}
+            icon={<Lock size={16} strokeWidth={1.75} />}
+            meta="Private · only you"
+            onSelect={onSelect}
+          />
+        ))}
+        {personalTeamScopes.map((scope) => (
+          <ScopeListItem
+            key={scope.id}
+            scope={scope}
+            activeScopeId={activeScopeId}
+            icon={<Users size={16} strokeWidth={1.75} className="scope-menu__item-icon--team" />}
+            meta={`Team · ${roleLabels[scope.role]}`}
+            onSelect={onSelect}
+          />
+        ))}
+      </ul>
+      <div className="scope-menu__create-row">
+        {canCreatePersonalSpace ? (
+          <button type="button" className="scope-menu__create" onClick={onCreatePersonal}>
+            <Plus size={16} strokeWidth={1.75} />
+            New private scope
+          </button>
+        ) : (
+          <p className="scope-menu__upgrade caption">
+            Private scope limit reached. Upgrade for more.
+          </p>
+        )}
+        {canCreateTeamSpace ? (
+          <button type="button" className="scope-menu__create" onClick={onCreateTeam}>
+            <Plus size={16} strokeWidth={1.75} />
+            New team
+          </button>
+        ) : canCreatePersonalSpace ? (
+          <p className="scope-menu__upgrade caption">
+            Team limit reached. Upgrade for more.
+          </p>
+        ) : null}
+      </div>
+    </CollapsibleSection>
+  );
+}
+
+function OrgSection({
   group,
   activeScopeId,
+  expanded,
+  onToggle,
   canCreateOrgTeam,
   onSelect,
   onCreateOrgTeam,
 }: {
   group: OrgPickerGroup;
   activeScopeId: string;
+  expanded: boolean;
+  onToggle: (sectionId: string) => void;
   canCreateOrgTeam?: (org: Organization) => boolean;
   onSelect?: (scope: Scope) => void;
   onCreateOrgTeam?: (org: Organization) => void;
 }) {
-  const { org, teams, collapsed } = group;
+  const { org, teams } = group;
   const allowCreate = canCreateOrgTeam?.(org) ?? canManageOrgTeams(org);
-
-  if (collapsed && teams[0]) {
-    const team = teams[0];
-    return (
-      <section className="scope-menu__section">
-        <header className="scope-menu__heading">
-          <Building2 size={14} strokeWidth={1.75} />
-          {org.name}
-        </header>
-        <p className="scope-menu__hint">Organization team scope.</p>
-        <ul className="scope-menu__list">
-          <ScopeListItem
-            scope={team}
-            activeScopeId={activeScopeId}
-            icon={<Users size={16} strokeWidth={1.75} className="scope-menu__item-icon--team" />}
-            meta={`${org.name} · ${roleLabels[team.role]}`}
-            onSelect={onSelect}
-          />
-        </ul>
-      </section>
-    );
-  }
+  const sectionId = orgSectionId(org.id);
 
   return (
-    <section className="scope-menu__section scope-menu__section--org">
-      <header className="scope-menu__heading">
-        <Building2 size={14} strokeWidth={1.75} />
-        {org.name}
-      </header>
-      <p className="scope-menu__hint">Teams under your organization.</p>
+    <CollapsibleSection
+      sectionId={sectionId}
+      title={org.name}
+      icon={<Building2 size={14} strokeWidth={1.75} />}
+      hint="Organization teams — separate from your private world."
+      expanded={expanded}
+      onToggle={onToggle}
+    >
       <ul className="scope-menu__list">
         {teams.length === 0 ? (
-          <li className="scope-menu__empty caption">No org teams yet.</li>
+          <li className="scope-menu__empty caption">No teams in this organization yet.</li>
         ) : (
           teams.map((scope) => (
             <ScopeListItem
@@ -141,7 +300,7 @@ function OrgGroupSection({
           New org team
         </button>
       ) : null}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -153,6 +312,7 @@ export function ScopeMenu({
   userLabel,
   userAvatarUrl = null,
   userId,
+  menuOpen = true,
   canCreatePersonalSpace = true,
   canCreateTeamSpace = true,
   canCreateOrgTeam,
@@ -164,7 +324,34 @@ export function ScopeMenu({
   className = "",
   inline = false,
 }: ScopeMenuProps) {
-  const hasPersonalTeams = personalTeamScopes.length > 0 || canCreateTeamSpace;
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
+    () =>
+      buildDefaultExpanded(
+        activeScopeId,
+        personalPrivateScopes,
+        personalTeamScopes,
+        orgGroups,
+      ),
+  );
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    setExpandedSections(
+      buildDefaultExpanded(
+        activeScopeId,
+        personalPrivateScopes,
+        personalTeamScopes,
+        orgGroups,
+      ),
+    );
+  }, [menuOpen, activeScopeId, personalPrivateScopes, personalTeamScopes, orgGroups]);
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId],
+    }));
+  };
 
   return (
     <div
@@ -172,100 +359,45 @@ export function ScopeMenu({
       role="listbox"
       aria-label="Switch scope"
     >
-      <div className="scope-menu__scroll overlay-scrollbar">
-        <section className="scope-menu__section">
-          <header className="scope-menu__heading">
-            <User size={14} strokeWidth={1.75} />
-            Personal
-          </header>
-          {userLabel ? (
-            <p className="scope-menu__user caption">
-              {userId ? (
-                <UserAvatar
-                  name={userLabel}
-                  userId={userId}
-                  src={userAvatarUrl}
-                  size="sm"
-                  className="scope-menu__user-avatar"
-                />
-              ) : null}
-              <span>{userLabel}</span>
-            </p>
+      {userLabel ? (
+        <header className="scope-menu__profile">
+          {userId ? (
+            <UserAvatar
+              name={userLabel}
+              userId={userId}
+              src={userAvatarUrl}
+              size="sm"
+              className="scope-menu__profile-avatar"
+            />
           ) : null}
-          <p className="scope-menu__hint">
-            Private scopes and standalone teams — separate from any organization.
-          </p>
-          <ul className="scope-menu__list">
-            {personalPrivateScopes.map((scope) => (
-              <ScopeListItem
-                key={scope.id}
-                scope={scope}
-                activeScopeId={activeScopeId}
-                icon={<Lock size={16} strokeWidth={1.75} />}
-                meta="Personal · only you"
-                onSelect={onSelect}
-              />
-            ))}
-          </ul>
-          {canCreatePersonalSpace ? (
-            <button type="button" className="scope-menu__create" onClick={onCreatePersonal}>
-              <Plus size={16} strokeWidth={1.75} />
-              New personal scope
-            </button>
-          ) : (
-            <p className="scope-menu__upgrade caption">
-              Personal scope limit reached. Upgrade for more.
-            </p>
-          )}
-        </section>
+          <span className="scope-menu__profile-name">{userLabel}</span>
+        </header>
+      ) : null}
 
-        {hasPersonalTeams ? (
-          <>
-            <hr className="scope-menu__divider" />
-            <section className="scope-menu__section">
-              <header className="scope-menu__heading">
-                <Users size={14} strokeWidth={1.75} />
-                Standalone teams
-              </header>
-              <p className="scope-menu__hint">Team scopes outside an organization.</p>
-              <ul className="scope-menu__list">
-                {personalTeamScopes.length === 0 ? (
-                  <li className="scope-menu__empty caption">No standalone teams yet.</li>
-                ) : (
-                  personalTeamScopes.map((scope) => (
-                    <ScopeListItem
-                      key={scope.id}
-                      scope={scope}
-                      activeScopeId={activeScopeId}
-                      icon={<Users size={16} strokeWidth={1.75} className="scope-menu__item-icon--team" />}
-                      meta={`Team · ${roleLabels[scope.role]}`}
-                      onSelect={onSelect}
-                    />
-                  ))
-                )}
-              </ul>
-              {canCreateTeamSpace ? (
-                <button type="button" className="scope-menu__create" onClick={onCreateTeam}>
-                  <Plus size={16} strokeWidth={1.75} />
-                  New standalone team
-                </button>
-              ) : (
-                <p className="scope-menu__upgrade caption">
-                  Team scope limit reached. Upgrade for more.
-                </p>
-              )}
-            </section>
-          </>
-        ) : null}
+      <div className="scope-menu__scroll overlay-scrollbar">
+        <PersonalTeamsSection
+          personalPrivateScopes={personalPrivateScopes}
+          personalTeamScopes={personalTeamScopes}
+          activeScopeId={activeScopeId}
+          expanded={expandedSections[PERSONAL_SECTION_ID] ?? true}
+          onToggle={toggleSection}
+          canCreatePersonalSpace={canCreatePersonalSpace}
+          canCreateTeamSpace={canCreateTeamSpace}
+          onSelect={onSelect}
+          onCreatePersonal={onCreatePersonal}
+          onCreateTeam={onCreateTeam}
+        />
 
         {orgGroups.length > 0 ? (
           <>
             <hr className="scope-menu__divider" />
             {orgGroups.map((group) => (
-              <OrgGroupSection
+              <OrgSection
                 key={group.org.id}
                 group={group}
                 activeScopeId={activeScopeId}
+                expanded={expandedSections[orgSectionId(group.org.id)] ?? false}
+                onToggle={toggleSection}
                 canCreateOrgTeam={canCreateOrgTeam}
                 onSelect={onSelect}
                 onCreateOrgTeam={onCreateOrgTeam}

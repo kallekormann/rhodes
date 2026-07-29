@@ -9,46 +9,36 @@ import "./ScopeSwitcherShowcase.css";
 const demoPersonal: Scope[] = [
   { id: "demo-private", name: "Private", type: "private", role: "owner", orgId: null, createdAt: "2020-01-01T00:00:00.000Z", enabledViewsCount: 0 },
   { id: "demo-book", name: "Book Draft", type: "private", role: "owner", orgId: null, createdAt: "2020-01-02T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-research", name: "Research", type: "private", role: "owner", orgId: null, createdAt: "2020-01-03T00:00:00.000Z", enabledViewsCount: 0 },
 ];
 
 const demoStandaloneTeams: Scope[] = [
   { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", orgId: null, createdAt: "2020-01-04T00:00:00.000Z", enabledViewsCount: 0 },
 ];
 
-const demoOrg: Organization = {
-  id: "demo-org",
+const demoOrgA: Organization = {
+  id: "demo-org-a",
   name: "Acme Studio",
   role: "owner",
 };
 
-const demoOrgTeams: Scope[] = [
-  { id: "demo-org-product", name: "Product", type: "team", role: "admin", orgId: demoOrg.id, createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-org-marketing", name: "Marketing", type: "team", role: "member", orgId: demoOrg.id, createdAt: "2020-01-06T00:00:00.000Z", enabledViewsCount: 0 },
+const demoOrgB: Organization = {
+  id: "demo-org-b",
+  name: "Client Corp",
+  role: "member",
+};
+
+const demoOrgATeams: Scope[] = [
+  { id: "demo-org-product", name: "Product", type: "team", role: "admin", orgId: demoOrgA.id, createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-org-marketing", name: "Marketing", type: "team", role: "member", orgId: demoOrgA.id, createdAt: "2020-01-06T00:00:00.000Z", enabledViewsCount: 0 },
 ];
 
-const demoSoloOrg: Organization = {
-  id: "demo-solo-org",
-  name: "Solo Pro LLC",
-  role: "owner",
-};
-
-const demoSoloOrgTeam: Scope = {
-  id: "demo-solo-team",
-  name: "Main",
-  type: "team",
-  role: "owner",
-  orgId: demoSoloOrg.id,
-  createdAt: "2020-01-07T00:00:00.000Z",
-  enabledViewsCount: 0,
-};
+const demoOrgBTeams: Scope[] = [
+  { id: "demo-org-client", name: "Delivery", type: "team", role: "member", orgId: demoOrgB.id, createdAt: "2020-01-08T00:00:00.000Z", enabledViewsCount: 0 },
+];
 
 const multiOrgGroups: OrgPickerGroup[] = [
-  { org: demoOrg, teams: demoOrgTeams, collapsed: false },
-];
-
-const soloOrgGroups: OrgPickerGroup[] = [
-  { org: demoSoloOrg, teams: [demoSoloOrgTeam], collapsed: true },
+  { org: demoOrgA, teams: demoOrgATeams, collapsed: false },
+  { org: demoOrgB, teams: demoOrgBTeams, collapsed: true },
 ];
 
 type ShowcaseItem = {
@@ -59,32 +49,21 @@ type ShowcaseItem = {
 export function ScopeSwitcherShowcase() {
   const items: ShowcaseItem[] = [
     {
-      label: "Trigger — personal",
+      label: "Trigger — private scope",
       render: () => <ScopeTrigger scope={demoPersonal[0]} />,
     },
     {
-      label: "Trigger — standalone team",
+      label: "Trigger — personal team",
       render: () => <ScopeTrigger scope={demoStandaloneTeams[0]} />,
     },
     {
-      label: "Trigger — solo-pro org (collapsed)",
-      render: () => (
-        <ScopeTrigger
-          scope={demoSoloOrgTeam}
-          organizations={[demoSoloOrg]}
-          partition={{
-            personalPrivateScopes: demoPersonal,
-            personalTeamScopes: demoStandaloneTeams,
-            orgGroups: soloOrgGroups,
-          }}
-        />
-      ),
-    },
-    {
-      label: "Menu — personal + standalone teams",
+      label: "Menu — private & teams only",
       render: () => (
         <ScopeMenu
           inline
+          menuOpen
+          userLabel="Alex Morgan"
+          userId="demo-user"
           personalPrivateScopes={demoPersonal}
           personalTeamScopes={demoStandaloneTeams}
           orgGroups={[]}
@@ -95,10 +74,31 @@ export function ScopeSwitcherShowcase() {
       ),
     },
     {
-      label: "Menu — with organization teams",
+      label: "Menu — multi-org (collapsible sections)",
       render: () => (
         <ScopeMenu
           inline
+          menuOpen
+          userLabel="Alex Morgan"
+          userId="demo-user"
+          personalPrivateScopes={demoPersonal}
+          personalTeamScopes={demoStandaloneTeams}
+          orgGroups={multiOrgGroups}
+          activeScopeId="demo-org-client"
+          canCreatePersonalSpace
+          canCreateTeamSpace
+          canCreateOrgTeam={() => true}
+        />
+      ),
+    },
+    {
+      label: "Menu — org team active",
+      render: () => (
+        <ScopeMenu
+          inline
+          menuOpen
+          userLabel="Alex Morgan"
+          userId="demo-user"
           personalPrivateScopes={demoPersonal}
           personalTeamScopes={demoStandaloneTeams}
           orgGroups={multiOrgGroups}
@@ -110,44 +110,18 @@ export function ScopeSwitcherShowcase() {
       ),
     },
     {
-      label: "Menu — solo-pro org (one team)",
+      label: "Menu — private limit reached",
       render: () => (
         <ScopeMenu
           inline
-          personalPrivateScopes={demoPersonal}
-          personalTeamScopes={[]}
-          orgGroups={soloOrgGroups}
-          activeScopeId="demo-solo-team"
-          canCreatePersonalSpace
-          canCreateTeamSpace={false}
-        />
-      ),
-    },
-    {
-      label: "Menu — personal limit reached",
-      render: () => (
-        <ScopeMenu
-          inline
+          menuOpen
+          userLabel="Alex Morgan"
           personalPrivateScopes={demoPersonal}
           personalTeamScopes={demoStandaloneTeams}
           orgGroups={[]}
-          activeScopeId="demo-research"
+          activeScopeId="demo-book"
           canCreatePersonalSpace={false}
           canCreateTeamSpace
-        />
-      ),
-    },
-    {
-      label: "Menu — minimal (1 personal, 0 team)",
-      render: () => (
-        <ScopeMenu
-          inline
-          personalPrivateScopes={[demoPersonal[0]]}
-          personalTeamScopes={[]}
-          orgGroups={[]}
-          activeScopeId="demo-private"
-          canCreatePersonalSpace
-          canCreateTeamSpace={false}
         />
       ),
     },

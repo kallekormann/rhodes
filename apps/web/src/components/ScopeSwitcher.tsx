@@ -97,6 +97,7 @@ export function ScopeSwitcher() {
             personalTeamScopes={partition.personalTeamScopes}
             orgGroups={partition.orgGroups}
             activeScopeId={activeScope.id}
+            menuOpen={open}
             userLabel={session.displayName}
             userId={session.userId}
             userAvatarUrl={session.avatarUrl}
