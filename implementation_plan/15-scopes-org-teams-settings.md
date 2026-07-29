@@ -71,10 +71,11 @@ Migrations: `00050_organizations_and_scope_policies.sql`, `00051_organization_in
 
 **Not in M2.2 (deferred):** `/api/organizations` routes, org creation UI, default policy seeding on workspace create
 
-### M2.3 — Scope picker v2 — **pending**
+### M2.3 — Scope picker v2 — **done**
 
 - Personal world (private + standalone teams) vs Org world (org teams)
-- Solo-pro-as-org UX
+- Solo-pro-as-org UX (collapsed single-team org)
+- `org_id` on scope model; org team create via workspace API
 
 ### M2.4 — Settings catalog — **pending**
 
