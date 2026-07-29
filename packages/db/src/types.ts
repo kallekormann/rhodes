@@ -35,13 +35,104 @@ export interface Database {
           id: string;
           name: string;
           is_team_workspace: boolean | null;
+          org_id: string | null;
+          scope_policy_id: string | null;
           created_at: string;
         };
         Insert: {
           name: string;
           is_team_workspace?: boolean | null;
+          org_id?: string | null;
+          scope_policy_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["workspaces"]["Row"]>;
+      };
+      organizations: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string | null;
+          policy: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          name: string;
+          created_by?: string | null;
+          policy?: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["organizations"]["Row"]>;
+      };
+      organization_members: {
+        Row: {
+          id: string;
+          org_id: string;
+          user_id: string;
+          role: string;
+          created_at: string;
+        };
+        Insert: {
+          org_id: string;
+          user_id: string;
+          role?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["organization_members"]["Row"]>;
+      };
+      scope_policies: {
+        Row: {
+          id: string;
+          workspace_id: string | null;
+          org_id: string | null;
+          policy: Json;
+          version: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          policy?: Json;
+          workspace_id?: string | null;
+          org_id?: string | null;
+          version?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["scope_policies"]["Row"]>;
+      };
+      scope_links: {
+        Row: {
+          id: string;
+          source_workspace_id: string;
+          target_workspace_id: string;
+          link_type: string;
+          permissions: Json;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          source_workspace_id: string;
+          target_workspace_id: string;
+          link_type: string;
+          permissions?: Json;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["scope_links"]["Row"]>;
+      };
+      scope_collaborators: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          role: string;
+          can_invite: boolean;
+          invited_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          workspace_id: string;
+          user_id: string;
+          role?: string;
+          can_invite?: boolean;
+          invited_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["scope_collaborators"]["Row"]>;
       };
       workspace_members: {
         Row: {
@@ -140,6 +231,18 @@ export interface Database {
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
     Functions: {
+      is_org_member: {
+        Args: { target_org_id: string };
+        Returns: boolean;
+      };
+      is_org_admin: {
+        Args: { target_org_id: string };
+        Returns: boolean;
+      };
+      workspace_org_id: {
+        Args: { ws_id: string };
+        Returns: string | null;
+      };
       match_workspace_knowledge: {
         Args: {
           query_embedding: string;

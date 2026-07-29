@@ -312,8 +312,60 @@ async function main() {
       }
     });
 
+    // M2.2: organization isolation
+    const org = await asUser(client, userA, () =>
+      client.query(
+        `insert into organizations (name, created_by)
+         values ('RLS Org', $1)
+         returning id`,
+        [userA],
+      ),
+    );
+    const orgId = org.rows[0]?.id;
+    if (!orgId) throw new Error("RLS failure: user A could not create organization");
+
+    const orgMemberCheck = await asUser(client, userA, () =>
+      client.query(
+        `select count(*)::int as count from organization_members where org_id = $1 and user_id = $2`,
+        [orgId, userA],
+      ),
+    );
+    if (orgMemberCheck.rows[0]?.count !== 1) {
+      throw new Error("RLS failure: org creator was not bootstrapped as owner");
+    }
+
+    await asUser(client, userB, async () => {
+      const denied = await client.query(
+        `select count(*)::int as count from organizations where id = $1`,
+        [orgId],
+      );
+      if (denied.rows[0]?.count !== 0) {
+        throw new Error("RLS failure: user B could read user A organization");
+      }
+    });
+
+    const orgTeam = await asSuperuser(client, () =>
+      client.query(
+        `insert into workspaces (name, is_team_workspace, org_id)
+         values ('Org Team', true, $1)
+         returning id`,
+        [orgId],
+      ),
+    );
+    const orgTeamId = orgTeam.rows[0]?.id;
+
+    await asUser(client, userB, async () => {
+      const denied = await client.query(
+        `select count(*)::int as count from workspaces where id = $1`,
+        [orgTeamId],
+      );
+      if (denied.rows[0]?.count !== 0) {
+        throw new Error("RLS failure: user B could read org team workspace without membership");
+      }
+    });
+
     await client.query("rollback");
-    console.log("RLS Phase 08 tests passed.");
+    console.log("RLS Phase 08 + M2.2 org tests passed.");
   } catch (error) {
     await client.query("rollback");
     throw error;
