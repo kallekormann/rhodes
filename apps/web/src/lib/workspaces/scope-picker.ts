@@ -4,7 +4,7 @@ import type { Scope } from "@/data/scopes";
 export type OrgPickerGroup = {
   org: Organization;
   teams: Scope[];
-  /** Solo-pro-as-org: flatten single-team org in the menu */
+  /** Solo-pro-as-org: use org name in header trigger when org has one team */
   collapsed: boolean;
 };
 
