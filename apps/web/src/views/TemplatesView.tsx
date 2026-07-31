@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import type { Template } from "@/data/templates";
@@ -36,11 +36,19 @@ export function TemplatesView() {
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [clientReady, setClientReady] = useState(false);
+
+  useEffect(() => {
+    setClientReady(true);
+  }, []);
 
   const { templates, loading, error, refresh } = useTemplates(workspaceId, tab);
   const { createDocument } = useDocuments(workspaceId, "recent", session.userId);
 
   const filtered = templates.map(templateRecordToUi);
+  const showLoader = clientReady && loading && filtered.length === 0;
+  const showEmpty =
+    clientReady && !loading && !error && filtered.length === 0;
 
   const handleCreateTemplate = async () => {
     if (!canCreateTemplates) {
@@ -150,7 +158,7 @@ export function TemplatesView() {
             ) : null}
           </div>
 
-          {loading ? (
+          {showLoader ? (
             <LoaderState
               label="Loading templates…"
               size="s"
@@ -158,9 +166,9 @@ export function TemplatesView() {
             />
           ) : error ? (
             <p className="caption templates-view__status">{error}</p>
-          ) : filtered.length === 0 ? (
+          ) : showEmpty ? (
             <p className="caption templates-view__status">No templates found.</p>
-          ) : (
+          ) : filtered.length > 0 ? (
             <ul className="template-list">
               {filtered.map((template) => (
                 <li key={template.id}>
@@ -182,7 +190,7 @@ export function TemplatesView() {
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </div>
       </div>
 

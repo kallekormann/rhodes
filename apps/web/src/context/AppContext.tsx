@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -313,9 +314,9 @@ export function AppProvider({
       }
       replaceAppHistory(path);
       if (mode === "push") {
-        router.push(path);
+        router.push(path, { scroll: false });
       } else {
-        router.replace(path);
+        router.replace(path, { scroll: false });
       }
     },
     [router],
@@ -345,7 +346,7 @@ export function AppProvider({
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mode = readStoredThemeMode();
     setThemeModeState(mode);
     setThemeState(resolveTheme(mode));

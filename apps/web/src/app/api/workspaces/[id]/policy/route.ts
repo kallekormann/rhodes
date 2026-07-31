@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
+  applyScopeComposition,
+  resolveAndValidateComposition,
+  scopeCompositionBodySchema,
+} from "@/lib/scope-composition/apply";
+import {
   ensureWorkspaceScopePolicy,
   getWorkspaceForPolicy,
   readWorkspaceScopePolicy,
@@ -16,6 +21,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const patchPolicySchema = z.object({
   policy: z.record(z.unknown()).optional(),
   enabled_views: z.array(z.string().min(1)).optional(),
+  scope_composition: scopeCompositionBodySchema.optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -54,6 +60,8 @@ export async function GET(_request: Request, context: RouteContext) {
       workspace_id: workspaceId,
       is_team_workspace: workspace.is_team_workspace === true,
       enabled_views: workspace.enabled_views ?? [],
+      bundle_ids: workspace.bundle_ids ?? [],
+      setup_config: workspace.setup_config ?? {},
       policy,
       version: policyRow?.version ?? 0,
       persisted: policyRow !== null,
@@ -106,7 +114,30 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  if (parsed.data.enabled_views) {
+  if (parsed.data.scope_composition) {
+    const tier = resolveServerTier();
+    const resolved = resolveAndValidateComposition(parsed.data.scope_composition, tier);
+    if (!resolved.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: resolved.reason }, { status: 400 }),
+      );
+    }
+
+    const applied = await applyScopeComposition(supabase, {
+      workspaceId,
+      composition: resolved,
+      wizardMode: "settings",
+    });
+    if (!applied.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: applied.message }, { status: 400 }),
+      );
+    }
+
+    workspace.enabled_views = resolved.enabledViews;
+    workspace.bundle_ids = resolved.bundleIds;
+    workspace.setup_config = resolved.setupConfig;
+  } else if (parsed.data.enabled_views) {
     const tier = resolveServerTier();
     const viewsValidation = validateAdditionalScopeViewSelection(
       tier,
@@ -143,6 +174,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       workspace_id: workspaceId,
       is_team_workspace: workspace.is_team_workspace === true,
       enabled_views: refreshed?.enabled_views ?? [],
+      bundle_ids: refreshed?.bundle_ids ?? [],
+      setup_config: refreshed?.setup_config ?? {},
       policy,
     }),
   );

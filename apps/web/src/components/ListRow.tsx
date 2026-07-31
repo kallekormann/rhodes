@@ -29,6 +29,10 @@ export function ListRow({
       <button
         type="button"
         className={`list-row ${active ? "list-row--active" : ""}`}
+        onMouseDown={(event) => {
+          // Prevent focus-scroll when opening a document from the list.
+          event.preventDefault();
+        }}
         onClick={onClick}
       >
         <div className="list-row__main">

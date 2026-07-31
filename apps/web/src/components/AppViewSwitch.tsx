@@ -43,11 +43,17 @@ export function AppViewSwitch({ children }: { children: ReactNode }) {
     return renderAppView(view);
   }
 
-  // Prefer the Next route when it matches — avoids mounting the wrong view
-  // after navigation when AppContext view state is briefly stale.
   if (view === routeView) {
     return <>{children}</>;
   }
 
-  return renderAppView(view);
+  // Leaving the editor: view updates before router.replace — show the target
+  // view immediately so header navigation feels instant.
+  if (view !== "editor" && routeView === "editor") {
+    return renderAppView(view);
+  }
+
+  // Opening the editor: keep the current Next route until /editor is active so
+  // we never mount EditorView twice (switch + page).
+  return <>{children}</>;
 }

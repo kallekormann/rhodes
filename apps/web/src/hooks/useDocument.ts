@@ -143,7 +143,8 @@ export function useDocument(
       return;
     }
 
-    if (!options?.silent) {
+    const alreadyShowingDocument = documentRef.current?.id === documentId;
+    if (!options?.silent && !alreadyShowingDocument) {
       setLoading(true);
     }
     setError(null);

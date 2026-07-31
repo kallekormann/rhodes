@@ -15,6 +15,8 @@ type WorkspaceRow = {
   is_team_workspace: boolean | null;
   scope_policy_id: string | null;
   enabled_views: string[] | null;
+  bundle_ids: string[] | null;
+  setup_config: Record<string, unknown> | null;
 };
 
 type PolicyRow = {
@@ -29,7 +31,7 @@ export async function getWorkspaceForPolicy(
 ): Promise<WorkspaceRow | null> {
   const { data, error } = await supabase
     .from("workspaces")
-    .select("id, is_team_workspace, scope_policy_id, enabled_views")
+    .select("id, is_team_workspace, scope_policy_id, enabled_views, bundle_ids, setup_config")
     .eq("id", workspaceId)
     .maybeSingle();
 

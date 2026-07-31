@@ -20,11 +20,12 @@ import { OnboardingGate } from "@/components/onboarding/OnboardingGate";
 import { useOfflineQuotaToast } from "@/hooks/useOfflineQuotaToast";
 import { ToastContainer } from "@/components/Toast";
 import { AppViewSwitch } from "@/components/AppViewSwitch";
+import { useEditorRouteActive } from "@/hooks/useEditorRouteActive";
 import type { OnboardingProfile } from "@/lib/profile/onboarding";
 
 function AppShellContent({ children }: { children: ReactNode }) {
-  const { view, toasts, dismissToast, session } = useApp();
-  const isEditor = view === "editor";
+  const { toasts, dismissToast, session } = useApp();
+  const isEditor = useEditorRouteActive();
 
   useOfflineQuotaToast();
 

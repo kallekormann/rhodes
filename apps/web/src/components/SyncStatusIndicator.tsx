@@ -63,9 +63,13 @@ export function SyncStatusIndicator({
     }
 
     let cancelled = false;
-    void getDocumentSyncStatus(documentId).then((value) => {
-      if (!cancelled) setRawStatus(value);
-    });
+    void getDocumentSyncStatus(documentId)
+      .then((value) => {
+        if (!cancelled) setRawStatus(value);
+      })
+      .catch(() => {
+        /* vault may still be unlocking on cold load */
+      });
 
     return subscribeSyncEngine((event) => {
       if (event.documentId !== documentId) return;

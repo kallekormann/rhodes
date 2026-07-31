@@ -37,6 +37,9 @@ export interface Database {
           is_team_workspace: boolean | null;
           org_id: string | null;
           scope_policy_id: string | null;
+          enabled_views: string[];
+          bundle_ids: string[];
+          setup_config: Json;
           created_at: string;
         };
         Insert: {
@@ -44,6 +47,9 @@ export interface Database {
           is_team_workspace?: boolean | null;
           org_id?: string | null;
           scope_policy_id?: string | null;
+          enabled_views?: string[];
+          bundle_ids?: string[];
+          setup_config?: Json;
         };
         Update: Partial<Database["public"]["Tables"]["workspaces"]["Row"]>;
       };
@@ -158,6 +164,7 @@ export interface Database {
           description: string | null;
           structure_json: Json;
           metadata: Json | null;
+          slug: string | null;
           is_system: boolean | null;
           is_shared: boolean | null;
           created_at: string;
@@ -168,6 +175,7 @@ export interface Database {
           workspace_id?: string | null;
           description?: string | null;
           metadata?: Json | null;
+          slug?: string | null;
           is_system?: boolean | null;
           is_shared?: boolean | null;
         };
@@ -231,6 +239,14 @@ export interface Database {
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
     Functions: {
+      seed_scope_metadata_fields: {
+        Args: { ws_id: string; fields: Json };
+        Returns: undefined;
+      };
+      create_user_workspace: {
+        Args: { ws_name: string; is_team?: boolean };
+        Returns: string;
+      };
       is_org_member: {
         Args: { target_org_id: string };
         Returns: boolean;

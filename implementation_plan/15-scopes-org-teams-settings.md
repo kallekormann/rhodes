@@ -87,10 +87,21 @@ Migrations: `00050_organizations_and_scope_policies.sql`, `00051_organization_in
 - Settings URL synced client-side after mount (avoids Next.js `AsyncMetadataOutlet` hydration drift)
 - **Deferred:** share API enforcement (M2.5b), Templates wizard (M2.5), Collaborators/guests (M2.6)
 
-### M2.5 — ScopeSetupWizard — **pending**
+### M2.5 — ScopeSetupWizard — **in progress**
 
-- Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`
-- Extends `ScopeCreateWizard.tsx`
+Sub-phases (see plan `m2.5_scopesetupwizard`):
+
+| Sub-phase | Status | Scope |
+|-----------|--------|-------|
+| M2.5.0 Foundation | **done** | `scope-bundles`, `view-template-affinity`, `scope-composition`, DB migration, `applyScopeComposition`, API |
+| M2.5.1 Wizard shell | pending | Composition workspace UI |
+| M2.5.2 Core templates | pending | Refresh Blank, Meeting Notes, Product Spec, Report |
+| M2.5.3 Pilot bundle KB | pending | Knowledge Base & Operations |
+| M2.5.4 Pilot bundle PDX | pending | Product Discovery & UX |
+
+- Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`
+- Bidirectional view↔template inference; multi-bundle; non-limiting composition
+- Extends `ScopeCreateWizard.tsx` → `ScopeSetupWizard.tsx`
 
 ### M2.5b — Cross-scope sharing UX — **pending**
 

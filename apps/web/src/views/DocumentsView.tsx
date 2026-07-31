@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, ArchiveRestore, Search, Share2, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import type { DocumentFilter } from "@/lib/documents/schemas";
 import {
@@ -26,6 +26,7 @@ import {
 import { useDocuments } from "@/hooks/useDocuments";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
+import { cacheDocumentTitle } from "@/lib/editor/editor-shell-session";
 import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
 import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { LoaderState } from "@/components/Loader";
@@ -50,6 +51,7 @@ const ANY_PROPERTY = "__any__";
 export function DocumentsView() {
   const {
     workspaceId,
+    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -69,11 +71,8 @@ export function DocumentsView() {
     id: string;
     title: string;
   } | null>(null);
-  const [clientReady, setClientReady] = useState(false);
 
-  useEffect(() => {
-    setClientReady(true);
-  }, []);
+  const scopesPending = !workspaceId || scopesLoading;
 
   const {
     documents,
@@ -100,11 +99,11 @@ export function DocumentsView() {
   );
 
   const showOverviewTemplatesLoader =
-    clientReady &&
-    overviewTemplatesLoading &&
-    overviewTemplateCards.length === 0;
+    overviewTemplateCards.length === 0 &&
+    (scopesPending || overviewTemplatesLoading);
 
-  const showDocumentsLoader = clientReady && loading && documents.length === 0;
+  const showDocumentsLoader =
+    documents.length === 0 && (scopesPending || loading);
 
   const filtered = useMemo(
     () =>
@@ -393,6 +392,7 @@ export function DocumentsView() {
                               setShareDocId(null);
                               setDocumentId(doc.id);
                               setDocumentTitle(doc.title);
+                              cacheDocumentTitle(doc.id, doc.title);
                               openEditor(doc.id);
                             }}
                           />

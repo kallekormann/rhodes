@@ -6,7 +6,7 @@ import { BlockDragHandle } from "@/components/BlockDragHandle";
 import {
   blockDropPluginKey,
   clearDropDecoration,
-  createBlockDropPlugin,
+  getBlockDropPlugin,
   syncDropDecoration,
 } from "@/lib/documents/block-drop-decoration";
 import {
@@ -96,11 +96,17 @@ export function EditorBlockDragLayer({
   onBlockMovedRef.current = onBlockMoved;
 
   useEffect(() => {
-    const plugin = createBlockDropPlugin();
-    editor.registerPlugin(plugin);
+    const plugin = getBlockDropPlugin();
+    const hasPlugin = editor.state.plugins.some(
+      (entry) => entry.spec.key === blockDropPluginKey,
+    );
+    if (!hasPlugin) {
+      editor.registerPlugin(plugin);
+    }
     removeDropPlaceholder(editor);
 
     return () => {
+      if (editor.isDestroyed) return;
       clearDropDecoration(editor);
       editor.unregisterPlugin(blockDropPluginKey);
       removeDropPlaceholder(editor);

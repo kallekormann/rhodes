@@ -23,6 +23,8 @@ import { RightPanel } from "@/components/RightPanel";
 import { SharePopover } from "@/components/SharePopover";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { useClientHydrated } from "@/hooks/useClientHydrated";
+import { isEditorShellRevealed } from "@/lib/editor/editor-shell-session";
 import { EditorErrorBoundary } from "@/components/EditorErrorBoundary";
 import { useInsights } from "@/hooks/useInsights";
 import { getCommentIdsToRemove } from "@/lib/documents/comments";
@@ -121,6 +123,8 @@ function EditorViewContent() {
     isOffline,
     flushEditorBodySave,
   } = useEditorSession();
+
+  const hydrated = useClientHydrated();
 
   const editorEditable =
     (isTemplateMode || canEditDocument) && !offlineConflictReviewPending;
@@ -342,6 +346,15 @@ function EditorViewContent() {
   const lastScrollTop = useRef(0);
   const scrollFadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [canvasTransitionsEnabled, setCanvasTransitionsEnabled] =
+    useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setCanvasTransitionsEnabled(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (propertiesStage !== "view") {
@@ -385,10 +398,28 @@ function EditorViewContent() {
     "editor-view__canvas",
     "overlay-scrollbar",
     !headerHidden && "editor-view__canvas--header-visible",
+    canvasTransitionsEnabled && "editor-view__canvas--transitions",
     isScrolling && "is-scrolling",
   ]
     .filter(Boolean)
     .join(" ");
+
+  const editorShellSticky =
+    hydrated &&
+    documentId != null &&
+    isEditorShellRevealed(documentId);
+  const collabBodyPending = ydoc != null && !collabDocReady;
+  const bodyReady = !loading && !collabBodyPending;
+  const showInitialBodyLoader = !bodyReady && !editorShellSticky;
+  const hasKnownTitle =
+    documentTitle.trim().length > 0 && documentTitle !== "Untitled Document";
+  const displayTitle = showInitialBodyLoader && !hasKnownTitle ? "" : documentTitle;
+  const titlePlaceholder =
+    isTemplateMode
+      ? "Template name"
+      : showInitialBodyLoader && !hasKnownTitle
+        ? "Loading document…"
+        : "Untitled";
 
   return (
     <div
@@ -400,9 +431,9 @@ function EditorViewContent() {
             <div className="editor-content__gutter" aria-hidden="true" />
             <div className="editor-content__main">
             <EditorTitleField
-              value={documentTitle}
+              value={displayTitle}
               onChange={onTitleChange}
-              placeholder={isTemplateMode ? "Template name" : "Untitled"}
+              placeholder={titlePlaceholder}
               aria-label={isTemplateMode ? "Template name" : "Document title"}
               disabled={loading}
             />
@@ -520,20 +551,7 @@ function EditorViewContent() {
             <div className="editor-content__gutter" aria-hidden="true" />
           </header>
 
-          {loading ? (
-            <div className="editor-content__body">
-              <div className="editor-content__gutter" aria-hidden="true" />
-              <div className="editor-content__main editor-content__main--body">
-                <LoaderState
-                  label="Loading document…"
-                  size="m"
-                  align="start"
-                  className="editor-content__loading"
-                />
-              </div>
-              <div className="editor-content__gutter" aria-hidden="true" />
-            </div>
-          ) : sessionError && !documentId && !isEditingTemplate ? (
+          {sessionError && !documentId && !isEditingTemplate ? (
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
               <div className="editor-content__main editor-content__main--body">
@@ -558,7 +576,17 @@ function EditorViewContent() {
           ) : (
             <div className="editor-content__body">
               <div className="editor-content__gutter" aria-hidden="true" />
-              <div className="editor-content__main editor-content__main--body">
+              <div className="editor-content__main editor-content__main--body editor-content__main--body-host">
+                {showInitialBodyLoader && (
+                  <LoaderState
+                    label="Loading document…"
+                    size="m"
+                    align="start"
+                    className="editor-content__loading-overlay"
+                  />
+                )}
+                {!showInitialBodyLoader && (
+                  <>
                 {awayNotice && (
                   <DocumentAwayNoticeBanner
                     notice={awayNotice}
@@ -637,6 +665,8 @@ function EditorViewContent() {
                   }}
                 />
                 </EditorErrorBoundary>
+                  </>
+                )}
               </div>
               <div className="editor-content__gutter" aria-hidden="true" />
             </div>

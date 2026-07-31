@@ -91,8 +91,9 @@ export function maxAdditionalScopeViewsForTier(tier: BillingTier): number {
 export function additionalScopeViewAllowedForTier(
   view: ScopeViewDefinition,
   tier: BillingTier,
+  requireAvailable = true,
 ): boolean {
-  if (view.status !== "available") return false;
+  if (requireAvailable && view.status !== "available") return false;
   if (!view.minTier) return true;
   return TIER_RANK[tier] >= TIER_RANK[view.minTier];
 }
@@ -100,6 +101,25 @@ export function additionalScopeViewAllowedForTier(
 export function validateAdditionalScopeViewSelection(
   tier: BillingTier,
   selectedIds: string[],
+): { ok: true } | { ok: false; reason: string } {
+  return validateScopeViewSelection(tier, selectedIds, { requireAvailable: true });
+}
+
+/**
+ * Validates views persisted via scope composition (wizard / bundles).
+ * Allows `coming_soon` catalog entries — user intent is stored until M6 surfaces ship.
+ */
+export function validateScopeCompositionViewSelection(
+  tier: BillingTier,
+  selectedIds: string[],
+): { ok: true } | { ok: false; reason: string } {
+  return validateScopeViewSelection(tier, selectedIds, { requireAvailable: false });
+}
+
+function validateScopeViewSelection(
+  tier: BillingTier,
+  selectedIds: string[],
+  options: { requireAvailable: boolean },
 ): { ok: true } | { ok: false; reason: string } {
   const max = maxAdditionalScopeViewsForTier(tier);
   if (selectedIds.length > max) {
@@ -117,7 +137,13 @@ export function validateAdditionalScopeViewSelection(
     if (!definition) {
       return { ok: false, reason: `Unknown scope view: ${id}` };
     }
-    if (!additionalScopeViewAllowedForTier(definition, tier)) {
+    if (options.requireAvailable && definition.status !== "available") {
+      return {
+        ok: false,
+        reason: `"${definition.label}" is not available yet.`,
+      };
+    }
+    if (!additionalScopeViewAllowedForTier(definition, tier, options.requireAvailable)) {
       return { ok: false, reason: `"${definition.label}" requires a higher plan.` };
     }
   }

@@ -5,6 +5,10 @@ import {
   requireTierFeature,
   resolveServerTier,
 } from "@/lib/features/server-gates";
+import {
+  applyScopeComposition,
+  resolveAndValidateComposition,
+} from "@/lib/scope-composition/apply";
 import { createClient } from "@/lib/supabase/server";
 import { createWorkspaceSchema } from "@/lib/workspaces/schemas";
 import { validateAdditionalScopeViewSelection } from "@rhodes/shared/scope-views";
@@ -38,6 +42,28 @@ export async function POST(request: Request) {
   }
 
   const tier = resolveServerTier();
+  const compositionBody = parsed.data.scope_composition;
+  let enabledViews = parsed.data.enabled_views ?? [];
+  let compositionResult = null;
+
+  if (compositionBody) {
+    const resolved = resolveAndValidateComposition(compositionBody, tier);
+    if (!resolved.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: resolved.reason }, { status: 400 }),
+      );
+    }
+    compositionResult = resolved;
+    enabledViews = resolved.enabledViews;
+  } else {
+    const viewsValidation = validateAdditionalScopeViewSelection(tier, enabledViews);
+    if (!viewsValidation.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: viewsValidation.reason }, { status: 400 }),
+      );
+    }
+  }
+
   const scopeGate = await assertCanCreateWorkspace(
     supabase,
     user.id,
@@ -89,16 +115,6 @@ export async function POST(request: Request) {
     }
   }
 
-  const viewsValidation = validateAdditionalScopeViewSelection(
-    tier,
-    parsed.data.enabled_views ?? [],
-  );
-  if (!viewsValidation.ok) {
-    return withSecurityHeaders(
-      NextResponse.json({ error: viewsValidation.reason }, { status: 400 }),
-    );
-  }
-
   const { data: workspaceId, error } = await supabase.rpc("create_user_workspace", {
     ws_name: parsed.data.name,
     is_team: parsed.data.is_team_workspace,
@@ -114,7 +130,7 @@ export async function POST(request: Request) {
 
   const { data: workspace, error: fetchError } = await supabase
     .from("workspaces")
-    .select("id, name, is_team_workspace, enabled_views")
+    .select("id, name, is_team_workspace, enabled_views, bundle_ids, setup_config")
     .eq("id", workspaceId)
     .single();
 
@@ -127,15 +143,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const enabledViews = parsed.data.enabled_views ?? [];
   const workspaceUpdates: {
     enabled_views?: string[];
     org_id?: string;
   } = {};
 
-  if (enabledViews.length > 0) {
+  if (compositionResult) {
+    const applied = await applyScopeComposition(supabase, {
+      workspaceId,
+      composition: compositionResult,
+      wizardMode: "create",
+    });
+    if (!applied.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: applied.message }, { status: 400 }),
+      );
+    }
+  } else if (enabledViews.length > 0) {
     workspaceUpdates.enabled_views = enabledViews;
   }
+
   if (parsed.data.org_id) {
     workspaceUpdates.org_id = parsed.data.org_id;
   }
@@ -153,16 +180,36 @@ export async function POST(request: Request) {
     }
   }
 
+  const { data: refreshed, error: refreshError } = await supabase
+    .from("workspaces")
+    .select("id, name, is_team_workspace, enabled_views, bundle_ids, setup_config")
+    .eq("id", workspaceId)
+    .single();
+
+  if (refreshError || !refreshed) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        { error: refreshError?.message ?? "Scope not found after creation" },
+        { status: 400 },
+      ),
+    );
+  }
+
   return withSecurityHeaders(
     NextResponse.json({
       workspace: {
-        id: workspace.id,
-        name: workspace.name,
-        type: workspace.is_team_workspace ? "team" : "private",
+        id: refreshed.id,
+        name: refreshed.name,
+        type: refreshed.is_team_workspace ? "team" : "private",
         role: "owner",
         org_id: parsed.data.org_id ?? null,
-        enabled_views: enabledViews,
+        enabled_views: refreshed.enabled_views ?? [],
+        bundle_ids: refreshed.bundle_ids ?? [],
+        setup_config: refreshed.setup_config ?? {},
       },
+      ...(compositionResult
+        ? { inferred: compositionResult.inferred }
+        : {}),
     }),
   );
 }

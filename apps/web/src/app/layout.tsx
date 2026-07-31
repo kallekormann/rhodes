@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ClientErrorLogBootstrap } from "@/components/ClientErrorLogBootstrap";
+import { THEME_INIT_SCRIPT } from "@/lib/theme-init-script";
 import "@/styles/global.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>
         <ClientErrorLogBootstrap />
         <ThemeProvider>{children}</ThemeProvider>

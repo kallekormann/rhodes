@@ -3,7 +3,7 @@
  * M1b.1: payload encrypted at rest via docs-vault.
  */
 
-import { decryptDocsJson, encryptDocsJson } from "@/lib/offline/docs-vault";
+import { decryptDocsJson, encryptDocsJson, isDocsVaultUnlocked } from "@/lib/offline/docs-vault";
 import {
   getOfflineDB,
   type OfflineOutboxRecord,
@@ -64,6 +64,7 @@ async function fromStorageRecord(
 }
 
 export async function listOutbox(): Promise<OfflineOutboxRecord[]> {
+  if (!isDocsVaultUnlocked()) return [];
   const db = await getOfflineDB();
   const rows = await db.getAll("outbox");
   const decrypted = await Promise.all(rows.map(fromStorageRecord));
@@ -85,6 +86,7 @@ export async function getOutboxEntry(
 export async function getOutboxForDocument(
   documentId: string,
 ): Promise<OfflineOutboxRecord[]> {
+  if (!isDocsVaultUnlocked()) return [];
   const db = await getOfflineDB();
   const rows = await db.getAllFromIndex("outbox", "by-document", documentId);
   return Promise.all(rows.map(fromStorageRecord));

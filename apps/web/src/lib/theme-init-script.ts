@@ -1,0 +1,2 @@
+/** Inline before paint so the first editor/documents frame respects stored theme. */
+export const THEME_INIT_SCRIPT = `(function(){try{var k='rhodes-theme-mode';var m=localStorage.getItem(k);var t='light';if(m==='dark'){t='dark';}else if(m==='light'){t='light';}else if(window.matchMedia('(prefers-color-scheme: dark)').matches){t='dark';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;

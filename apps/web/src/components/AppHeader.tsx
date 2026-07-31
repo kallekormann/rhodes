@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useClientHydrated } from "@/hooks/useClientHydrated";
 import { useApp, type AppView } from "@/context/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useEditorRouteActive } from "@/hooks/useEditorRouteActive";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { ConnectivityIndicator } from "./ConnectivityIndicator";
 import { IconButton } from "./IconButton";
@@ -162,12 +164,21 @@ export function AppHeader() {
     session,
   } = useApp();
   const router = useRouter();
+  const hydrated = useClientHydrated();
+
+  // SSR always assumes light theme — match that until hydration reads localStorage.
+  const themeToggleIcon = hydrated ? (theme === "light" ? Moon : Sun) : Moon;
+  const themeToggleLabel = hydrated
+    ? theme === "light"
+      ? "Dark mode"
+      : "Light mode"
+    : "Toggle theme";
 
   const openUserSettings = () => {
     router.push("/settings?mode=user");
   };
 
-  const isEditor = view === "editor";
+  const isEditor = useEditorRouteActive();
   const isHidden = isEditor && headerHidden;
   const isDocumentsSection = view === "documents" || view === "templates" || view === "editor";
 
@@ -188,8 +199,8 @@ export function AppHeader() {
     },
     {
       id: "theme",
-      label: theme === "light" ? "Dark mode" : "Light mode",
-      icon: theme === "light" ? Moon : Sun,
+      label: themeToggleLabel,
+      icon: themeToggleIcon,
       onClick: toggleTheme,
     },
     {
@@ -275,7 +286,7 @@ export function AppHeader() {
           </button>
           <ConnectivityIndicator />
           <IconButton
-            icon={theme === "light" ? Moon : Sun}
+            icon={themeToggleIcon}
             label="Toggle theme"
             className="app-header__action--collapsible"
             onClick={toggleTheme}

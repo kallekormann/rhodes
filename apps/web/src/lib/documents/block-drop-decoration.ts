@@ -40,6 +40,16 @@ export function createBlockDropPlugin() {
   });
 }
 
+let blockDropPluginSingleton: Plugin<DecorationSet> | null = null;
+
+/** Singleton — React Strict Mode must register/unregister the same plugin instance. */
+export function getBlockDropPlugin(): Plugin<DecorationSet> {
+  if (!blockDropPluginSingleton) {
+    blockDropPluginSingleton = createBlockDropPlugin();
+  }
+  return blockDropPluginSingleton;
+}
+
 export function getBlockInsertPos(editor: Editor, blockIndex: number): number {
   return getTopLevelBlockInsertPos(editor.state.doc, blockIndex);
 }

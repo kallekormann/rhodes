@@ -13,6 +13,9 @@
   overflow-x: hidden;
   background: var(--color-editor-bg);
   position: relative;
+}
+
+.editor-view__canvas--transitions {
   transition:
     margin-top var(--duration-header) var(--ease-out),
     height var(--duration-header) var(--ease-out);
@@ -95,6 +98,7 @@
   flex-direction: column;
   gap: 6px;
   margin: 0;
+  min-height: 52px;
   font-size: 13px;
   color: var(--color-text-tertiary);
 }
@@ -159,6 +163,18 @@
 
 .editor-content__loading {
   padding-top: var(--space-sm);
+}
+
+.editor-content__main--body-host {
+  position: relative;
+  min-height: 12rem;
+}
+
+.editor-content__loading-overlay {
+  position: absolute;
+  inset: 0;
+  padding-top: var(--space-sm);
+  background: var(--color-editor-bg);
 }
 
 .editor-suspense-fallback {

@@ -1,0 +1,35 @@
+# 31 — Scope bundles catalog
+
+**Status:** scaffold (M2.5.0)
+
+Authoritative bundle definitions live in [`packages/shared/src/scope-bundles.ts`](../packages/shared/src/scope-bundles.ts) (`BUNDLE_CATALOG`). This doc tracks product copy and rollout status.
+
+## Composition model
+
+- **Bundles** — convenience groupings (views + templates + metadata)
+- **View↔template affinity** — [`view-template-affinity.ts`](../packages/shared/src/view-template-affinity.ts)
+- **Resolver** — [`scope-composition.ts`](../packages/shared/src/scope-composition.ts) (`resolveScopeComposition`)
+
+Users can combine multiple bundles, pick views only, pick templates only, or mix freely. The wizard guides; it does not gate.
+
+## Bundle rollout
+
+| ID | Label | Status | Wave |
+|----|-------|--------|------|
+| `knowledge-base-ops` | Knowledge Base & Operations | pending | M2.5.3 |
+| `product-discovery-ux` | Product Discovery & UX | pending | M2.5.4 |
+| `gtm-project-execution` | GTM & Project Execution | pending | M2.5.5 |
+| `product-architecture` | Product Architecture & Decisions | pending | M2.5.6 |
+| `growth-experimentation` | Strategic Growth & Experimentation | pending | M2.5.7 |
+| `content-marketing` | Content & Campaign Marketing | pending | M2.5.8 |
+| `strategy-consulting` | Strategy & Consulting | pending | M2.5.9 |
+| `people-ops` | People Operations & HR | pending | M2.5.10 |
+| `legal-compliance-finance` | Legal, Compliance & Finance | pending | M2.5.11 |
+| `academic-research` | Academic & Scientific Research | pending | M2.5.12 (post-M7) |
+
+Full bundle specs (templates, metadata, view presets) to be transcribed from product brief into `BUNDLE_CATALOG` entries per wave.
+
+## Related
+
+- [29-use-cases-views-templates.md](29-use-cases-views-templates.md)
+- [implementation_plan/15-scopes-org-teams-settings.md](../implementation_plan/15-scopes-org-teams-settings.md)

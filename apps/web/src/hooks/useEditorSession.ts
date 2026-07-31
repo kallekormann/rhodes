@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import {
+  buildEditorPath,
   readDocIdFromBrowserLocation,
   replaceAppHistory,
 } from "@/lib/navigation/app-path";
+import { pathToView } from "@/lib/navigation";
 import { getScopeMetaLabel } from "@/data/scopes";
 import { EMPTY_DOCUMENT_CONTENT } from "@/lib/documents/schemas";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
@@ -32,7 +34,7 @@ import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
 import { isDocumentId } from "@/lib/documents/ids";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
-import { writeLastDocumentId } from "@/lib/documents/last-document";
+import { writeLastDocumentId, readLastDocumentId } from "@/lib/documents/last-document";
 import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
 import {
   pushOutbox,
@@ -46,6 +48,7 @@ import {
   type TemplateMetadata,
 } from "@/lib/templates/metadata";
 import { isTemplateId } from "@/lib/templates/ids";
+import { useClientHydrated } from "@/hooks/useClientHydrated";
 import { useDocument, type DocumentRecord } from "@/hooks/useDocument";
 import { useDocumentRealtime, useDocumentAwayNotice } from "@/hooks/useDocumentRealtime";
 import { useDocumentPresence } from "@/hooks/useDocumentPresence";
@@ -60,6 +63,14 @@ import {
   updateTemplate,
   type TemplateDetail,
 } from "@/hooks/useTemplates";
+import {
+  isCollabBootstrapped,
+  isEditorShellRevealed,
+  markCollabBootstrapped,
+  markEditorShellRevealed,
+  cacheDocumentTitle,
+  readCachedDocumentTitle,
+} from "@/lib/editor/editor-shell-session";
 
 type DebouncedCallback<T extends (...args: never[]) => void> = ((
   ...args: Parameters<T>
@@ -156,6 +167,7 @@ async function persistContentProjection(
 
 export function useEditorSession() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const {
     scopesLoading,
@@ -170,9 +182,21 @@ export function useEditorSession() {
     canWriteActiveScope,
     session,
   } = useApp();
+  const hydrated = useClientHydrated();
   const resolvedWorkspaceId = workspaceId ?? readActiveWorkspaceId();
-  const browserOffline =
-    typeof navigator !== "undefined" && !navigator.onLine;
+  // Match SSR: assume online until mounted, then sync from navigator.
+  const [browserOffline, setBrowserOffline] = useState(false);
+
+  useEffect(() => {
+    const syncOffline = () => setBrowserOffline(!navigator.onLine);
+    syncOffline();
+    window.addEventListener("online", syncOffline);
+    window.addEventListener("offline", syncOffline);
+    return () => {
+      window.removeEventListener("online", syncOffline);
+      window.removeEventListener("offline", syncOffline);
+    };
+  }, []);
 
   const requestedId = searchParams.get("doc");
   const browserDocId = readDocIdFromBrowserLocation();
@@ -190,6 +214,7 @@ export function useEditorSession() {
   );
   const resolvedIdRef = useRef(resolvedId);
   resolvedIdRef.current = resolvedId;
+  const previousResolvedIdRef = useRef(resolvedId);
   const { online } = useOnlineStatus(
     isEditingTemplate ? null : (resolvedWorkspaceId ?? null),
   );
@@ -333,9 +358,6 @@ export function useEditorSession() {
   const [collabBootstrappedForId, setCollabBootstrappedForId] = useState<
     string | null
   >(null);
-  const [editorShellRevealedForId, setEditorShellRevealedForId] = useState<
-    string | null
-  >(null);
 
   const {
     ydoc,
@@ -349,8 +371,14 @@ export function useEditorSession() {
     needsInitialSeed: collabNeedsInitialSeed,
     flushPersist: flushCollabPersist,
   } = useYjsCollaboration({
-    documentId: isEditingTemplate ? null : (document?.id ?? null),
-    enabled: !isEditingTemplate && crossScopeAccess !== "denied",
+    // Start the CRDT as soon as the URL/doc id is known — don't wait for
+    // Postgres metadata or we serialize load + risk a collab restart when
+    // `document` arrives.
+    documentId: isEditingTemplate ? null : resolvedId,
+    enabled:
+      !isEditingTemplate &&
+      Boolean(resolvedId) &&
+      crossScopeAccess !== "denied",
     userId: session.userId,
     displayName: session.displayName || session.userEmail,
   });
@@ -403,8 +431,12 @@ export function useEditorSession() {
   ]);
 
   useEffect(() => {
+    if (previousResolvedIdRef.current === resolvedId) return;
+    previousResolvedIdRef.current = resolvedId;
     setCollabBootstrappedForId(null);
-    setEditorShellRevealedForId(null);
+    hydratedDocumentIdRef.current = null;
+    titleHydratedForIdRef.current = null;
+    setContentHydratedForId(null);
   }, [resolvedId]);
 
   useEffect(() => {
@@ -417,6 +449,7 @@ export function useEditorSession() {
     ) {
       return;
     }
+    markCollabBootstrapped(document.id);
     setCollabBootstrappedForId(document.id);
   }, [
     collabDocReady,
@@ -649,23 +682,76 @@ export function useEditorSession() {
   useEffect(() => {
     if (isEditingTemplate) return;
 
-    const browserOffline =
-      typeof navigator !== "undefined" && !navigator.onLine;
     if (scopesLoading && !browserOffline) return;
 
-    if (effectiveRequestedId) {
-      setResolvedId(effectiveRequestedId);
+    const browserDoc =
+      readDocIdFromBrowserLocation() ??
+      (browserDocId && isDocumentId(browserDocId) ? browserDocId : null);
+    const workspaceForLast = resolvedWorkspaceId ?? readActiveWorkspaceId();
+    const lastDoc =
+      workspaceForLast != null ? readLastDocumentId(workspaceForLast) : null;
+
+    const targetId =
+      (effectiveRequestedId && isDocumentId(effectiveRequestedId)
+        ? effectiveRequestedId
+        : null) ??
+      (browserDoc && isDocumentId(browserDoc) ? browserDoc : null) ??
+      (lastDoc && isDocumentId(lastDoc) ? lastDoc : null);
+
+    if (targetId) {
+      setResolvedId(targetId);
+      if (!browserDoc || browserDoc !== targetId) {
+        replaceAppHistory(buildEditorPath(targetId));
+      }
       return;
     }
 
-    if (!browserOffline) {
+    if (!browserOffline && pathToView(pathname) === "editor") {
       router.replace("/documents");
     }
-  }, [scopesLoading, effectiveRequestedId, isEditingTemplate, router]);
+  }, [
+    browserDocId,
+    browserOffline,
+    effectiveRequestedId,
+    isEditingTemplate,
+    pathname,
+    resolvedWorkspaceId,
+    router,
+    scopesLoading,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!hydrated || !resolvedId || isEditingTemplate) return;
+
+    const cachedTitle = readCachedDocumentTitle(resolvedId);
+    if (cachedTitle) {
+      setDocumentTitle(cachedTitle);
+    }
+
+    let cancelled = false;
+    void getOfflineDocument(resolvedId)
+      .then((cached) => {
+        if (cancelled || !cached?.title) return;
+        if (titleHydratedForIdRef.current === resolvedId) return;
+        setDocumentTitle(cached.title);
+        cacheDocumentTitle(resolvedId, cached.title);
+      })
+      .catch(() => {
+        /* IDB unavailable */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, isEditingTemplate, resolvedId, setDocumentTitle]);
 
   useEffect(() => {
     if (!document || !effectiveWorkspaceId || isEditingTemplate) {
       setCrossScopeAccess("allowed");
+      return;
+    }
+
+    if (scopesLoading && !browserOffline) {
       return;
     }
 
@@ -708,6 +794,10 @@ export function useEditorSession() {
       if (!cancelled) {
         setCrossScopeAccess(allowed ? "allowed" : "denied");
       }
+    }).catch(() => {
+      if (!cancelled) {
+        setCrossScopeAccess("allowed");
+      }
     });
 
     return () => {
@@ -721,21 +811,17 @@ export function useEditorSession() {
     isEditingTemplate,
     online,
     scopes,
+    scopesLoading,
     session.userId,
   ]);
 
   useEffect(() => {
-    if (crossScopeAccess === "denied") {
-      router.replace("/documents");
-      replaceAppHistory("/documents");
-    }
-  }, [crossScopeAccess, router]);
+    if (crossScopeAccess !== "denied") return;
+    if (scopesLoading && !browserOffline) return;
 
-  useEffect(() => {
-    hydratedDocumentIdRef.current = null;
-    titleHydratedForIdRef.current = null;
-    setContentHydratedForId(null);
-  }, [resolvedId]);
+    router.replace("/documents");
+    replaceAppHistory("/documents");
+  }, [browserOffline, crossScopeAccess, router, scopesLoading]);
 
   useEffect(() => {
     if (!document || isEditingTemplate) return;
@@ -744,6 +830,7 @@ export function useEditorSession() {
     titleHydratedForIdRef.current = document.id;
     setDocumentId(document.id);
     setDocumentTitle(document.title);
+    cacheDocumentTitle(document.id, document.title);
     if (document.metadata?.template_draft !== true) {
       writeLastDocumentId(document.workspace_id, document.id);
     }
@@ -1239,12 +1326,16 @@ export function useEditorSession() {
   const contentReady =
     document == null ||
     contentHydratedForId === document.id ||
-    (collabEnabled && collabDocReady);
+    (collabEnabled && collabDocReady && ydoc != null);
+
+  const collabStackReady =
+    document != null &&
+    (collabBootstrappedForId === document.id || isCollabBootstrapped(document.id));
 
   const waitingForCollabStack =
     collabEnabled &&
     document != null &&
-    collabBootstrappedForId !== document.id &&
+    !collabStackReady &&
     !collabDocReady;
 
   const blockingLoad = isEditingTemplate
@@ -1261,18 +1352,19 @@ export function useEditorSession() {
   const templateShellKey = isEditingTemplate
     ? `template:${requestedTemplateId ?? ""}`
     : null;
-  const documentShellKey = document?.id ?? null;
-  const shellRevealed = isEditingTemplate
-    ? editorShellRevealedForId === templateShellKey && Boolean(templateShellKey)
-    : editorShellRevealedForId === documentShellKey && Boolean(documentShellKey);
+  const documentShellKey = document?.id ?? resolvedId;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (blockingLoad) return;
     if (isEditingTemplate) {
-      if (templateShellKey) setEditorShellRevealedForId(templateShellKey);
+      if (templateShellKey) {
+        markEditorShellRevealed(templateShellKey);
+      }
       return;
     }
-    if (documentShellKey) setEditorShellRevealedForId(documentShellKey);
+    if (documentShellKey) {
+      markEditorShellRevealed(documentShellKey);
+    }
   }, [blockingLoad, documentShellKey, isEditingTemplate, templateShellKey]);
 
   const reloadRemoteDocument = useCallback(async () => {
@@ -1300,7 +1392,7 @@ export function useEditorSession() {
     workspaceId: isEditingTemplate
       ? (templateRecord?.workspace_id ?? effectiveWorkspaceId)
       : (document?.workspace_id ?? effectiveWorkspaceId ?? null),
-    loading: shellRevealed ? false : blockingLoad,
+    loading: blockingLoad,
     error: isEditingTemplate ? templateError : error,
     content,
     contentPlain,
