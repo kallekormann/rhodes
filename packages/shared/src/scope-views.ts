@@ -33,10 +33,45 @@ export const ESSENTIAL_SCOPE_VIEW_IDS = [
 ] as const satisfies readonly EssentialScopeViewId[];
 
 /**
- * Additional scope views (Gantt, Calendar, etc.) — empty until catalog session.
- * Phase 8 wires storage + count limits only.
+ * Additional scope views (Gantt, Calendar, etc.) — M2 catalog seed; surfaces ship in M6.
  */
-export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [];
+export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [
+  {
+    id: "kanban",
+    label: "Kanban",
+    description: "Task boards per project",
+    status: "coming_soon",
+    minTier: "basic",
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    description: "Deadlines and publishing schedule",
+    status: "coming_soon",
+    minTier: "basic",
+  },
+  {
+    id: "gantt",
+    label: "Gantt",
+    description: "Long-form planning timelines",
+    status: "coming_soon",
+    minTier: "pro",
+  },
+  {
+    id: "wiki",
+    label: "Wiki / links",
+    description: "Internal doc graph",
+    status: "coming_soon",
+    minTier: "basic",
+  },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    description: "Scope metrics and summaries",
+    status: "coming_soon",
+    minTier: "pro",
+  },
+];
 
 const TIER_RANK: Record<BillingTier, number> = {
   free: 0,

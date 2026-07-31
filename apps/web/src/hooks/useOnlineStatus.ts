@@ -6,11 +6,13 @@ import { useCallback, useEffect, useState } from "react";
 const RECONNECT_DEFER_MS = 1_000;
 
 function readNavigatorOnline(): boolean {
-  return typeof navigator === "undefined" ? true : navigator.onLine;
+  if (typeof navigator === "undefined") return true;
+  return navigator.onLine;
 }
 
 export function useOnlineStatus(_workspaceId?: string | null) {
-  const [online, setOnline] = useState(readNavigatorOnline);
+  // Match SSR: assume online until mounted, then sync from navigator.
+  const [online, setOnline] = useState(true);
 
   useEffect(() => {
     const syncOnline = () => setOnline(readNavigatorOnline());
