@@ -9,7 +9,7 @@ import type { ClientErrorEntry } from "@/lib/dev/client-error-log-types";
 
 export type { ClientErrorEntry } from "@/lib/dev/client-error-log-types";
 
-const API_PATH = "/api/dev/client-errors";
+const API_PATH = "/app/api/dev/client-errors";
 const SESSION_KEY = "rhodes:client_errors:v1";
 const MAX_MEMORY_ENTRIES = 80;
 const MAX_SESSION_ENTRIES = 80;

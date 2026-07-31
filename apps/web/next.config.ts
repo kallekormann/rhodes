@@ -5,6 +5,10 @@ const supabaseInternalUrl =
 
 const nextConfig: NextConfig = {
   basePath: "/app",
+  // Next.js 15 streams metadata via AsyncMetadataOutlet for normal browsers.
+  // That Suspense boundary can mismatch during hydration (React 19 + dev SSR).
+  // Treat all user agents as HTML-limited so metadata is resolved before the page streams.
+  htmlLimitedBots: /.*/,
   transpilePackages: ["@rhodes/db", "@rhodes/shared"],
   serverExternalPackages: ["nodemailer"],
   async redirects() {

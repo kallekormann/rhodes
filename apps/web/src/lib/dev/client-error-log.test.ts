@@ -59,7 +59,7 @@ describe("client-error-log", () => {
     await clearClientErrors();
     expect(await readClientErrors()).toEqual([]);
     expect(fetch).toHaveBeenCalledWith(
-      "/api/dev/client-errors",
+      "/app/api/dev/client-errors",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
