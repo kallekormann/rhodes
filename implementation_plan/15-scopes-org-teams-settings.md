@@ -77,12 +77,15 @@ Migrations: `00050_organizations_and_scope_policies.sql`, `00051_organization_in
 - Solo-pro-as-org UX (collapsed single-team org)
 - `org_id` on scope model; org team create via workspace API
 
-### M2.4 — Settings catalog — **in progress**
+### M2.4 — Settings catalog — **done**
 
 - Sharing, views, templates, collaborators per scope/org
 - `GET/PATCH /api/workspaces/[id]/policy`, `GET/PATCH /api/organizations/[id]/policy`
-- Settings nav: Sharing, Views, Templates, Collaborators, Organization (org admins)
-- Policy types in `@rhodes/shared/scope-policies`; enforcement stubs until M2.5b/M7
+- Settings nav: Account | Scope switcher; Sharing, Views, Templates (placeholder), Collaborators (placeholder), Organization (org admins)
+- Policy types in `@rhodes/shared/scope-policies`; view catalog in `scope-views`
+- Policy GET returns defaults without admin insert; PATCH persists rows
+- Settings URL synced client-side after mount (avoids Next.js `AsyncMetadataOutlet` hydration drift)
+- **Deferred:** share API enforcement (M2.5b), Templates wizard (M2.5), Collaborators/guests (M2.6)
 
 ### M2.5 — ScopeSetupWizard — **pending**
 
