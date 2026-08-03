@@ -26,7 +26,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | `strategy-consulting` | Strategy & Consulting | available | M2.5.9 |
 | `people-ops` | People Operations & HR | available | M2.5.10 |
 | `legal-compliance-finance` | Legal, Compliance & Finance | available | M2.5.11 |
-| `academic-research` | Academic & Scientific Research | pending | M2.5.12 (post-M7) |
+| `academic-research` | Academic & Scientific Research | available | M2.5.12 |
 
 Reordered from the original brief so Growth & Experimentation (a foundational, cross-audience use
 case flowing Insight/Problem → Experiment) ships right after Knowledge Base & Ops, ahead of the more

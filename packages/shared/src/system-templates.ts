@@ -43,7 +43,11 @@ export type SystemTemplateSlug =
   | "legal-document"
   | "contract-review"
   | "compliance-checklist"
-  | "financial-report";
+  | "financial-report"
+  | "research-paper"
+  | "thesis"
+  | "student-essay"
+  | "literature-review";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -110,6 +114,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   contract_review: "Contract Review",
   compliance_checklist: "Compliance Checklist",
   financial_report: "Financial Report",
+  research_paper: "Research Paper",
+  thesis: "Thesis",
+  student_essay: "Student Essay",
+  literature_review: "Literature Review",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -294,6 +302,17 @@ const LEGAL_FINANCE_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_key: "jurisdiction",
     field_label: "Jurisdiction",
     field_type: "text",
+    ai_fill_enabled: true,
+  },
+];
+
+/** Academic & Scientific Research fields — shared by Research Paper / Thesis / Literature Review. */
+const ACADEMIC_RESEARCH_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "citation_style",
+    field_label: "Citation style",
+    field_type: "select",
+    options: ["apa", "mla", "chicago", "ieee"],
     ai_fill_enabled: true,
   },
 ];
@@ -2251,6 +2270,244 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       ]),
       default_properties: {
         status: "draft",
+      },
+    },
+  },
+  {
+    slug: "research-paper",
+    name: "Research Paper",
+    description: "Abstract, methodology, results, discussion, and references",
+    structure_json: doc(
+      heading(2, "Abstract"),
+      tip("The whole paper in 150-250 words — problem, method, key result."),
+      paragraph(text("[Abstract.]")),
+      heading(2, "Introduction"),
+      tip("The gap in existing knowledge this paper addresses."),
+      paragraph(text("[Introduction.]")),
+      heading(2, "Methodology"),
+      tip("How the research was conducted, in enough detail to replicate."),
+      paragraph(text("[Methodology.]")),
+      heading(2, "Results"),
+      tip("What was found — data and observations, without interpretation yet."),
+      paragraph(text("[Results.]")),
+      heading(2, "Discussion"),
+      tip("What the results mean, their limitations, and implications."),
+      paragraph(text("[Discussion.]")),
+      heading(2, "References"),
+      tip("Every source cited, formatted per the target venue's style."),
+      bullet(["[Reference]"]),
+    ),
+    metadata: {
+      document_type: "research_paper",
+      use_cases: ["Journal submissions", "Conference papers", "Preprints"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "paper_status",
+          field_label: "Paper status",
+          field_type: "status",
+          options: [
+            { value: "drafting", label: "Drafting", category: "unstarted" },
+            { value: "under_review", label: "Under review", category: "started" },
+            { value: "revision", label: "Revision", category: "started" },
+            { value: "accepted", label: "Accepted", category: "completed" },
+            { value: "published", label: "Published", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "journal_or_venue",
+          field_label: "Journal / venue",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        ...ACADEMIC_RESEARCH_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        paper_status: "drafting",
+      },
+    },
+  },
+  {
+    slug: "thesis",
+    name: "Thesis",
+    description: "Abstract, research question, literature review, methodology, and findings",
+    structure_json: doc(
+      heading(2, "Abstract"),
+      tip("The thesis in miniature — question, method, and conclusion."),
+      paragraph(text("[Abstract.]")),
+      heading(2, "Introduction & Research Question"),
+      tip("Why this question matters, and precisely what it is."),
+      paragraph(text("[Introduction and research question.]")),
+      heading(2, "Literature Review"),
+      tip("What's already known, and where this thesis fits in."),
+      paragraph(text("[Literature review.]")),
+      heading(2, "Methodology"),
+      tip("How the research question was investigated."),
+      paragraph(text("[Methodology.]")),
+      heading(2, "Findings"),
+      tip("What the research revealed."),
+      paragraph(text("[Findings.]")),
+      heading(2, "Conclusion & Future Work"),
+      tip("What this means, and what's left to explore."),
+      paragraph(text("[Conclusion and future work.]")),
+      heading(2, "References"),
+      tip("Every source cited."),
+      bullet(["[Reference]"]),
+    ),
+    metadata: {
+      document_type: "thesis",
+      use_cases: ["Bachelor thesis", "Master thesis", "PhD dissertations"],
+      supported_views: ["wiki", "kanban", "gantt"],
+      schema_fields: withEssentials([
+        {
+          field_key: "thesis_level",
+          field_label: "Thesis level",
+          field_type: "select",
+          options: ["bachelor", "master", "phd"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "thesis_status",
+          field_label: "Thesis status",
+          field_type: "status",
+          options: [
+            { value: "proposal", label: "Proposal", category: "unstarted" },
+            { value: "writing", label: "Writing", category: "started" },
+            { value: "review", label: "Review", category: "started" },
+            { value: "defense_scheduled", label: "Defense scheduled", category: "started" },
+            { value: "completed", label: "Completed", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "advisor",
+          field_label: "Advisor",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "defense_date",
+          field_label: "Defense date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        ...ACADEMIC_RESEARCH_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        thesis_level: "bachelor",
+        thesis_status: "proposal",
+      },
+    },
+  },
+  {
+    slug: "student-essay",
+    name: "Student Essay",
+    description: "Thesis statement, argument, counterarguments, and conclusion",
+    structure_json: doc(
+      heading(2, "Thesis Statement"),
+      tip("The single claim this essay argues for, in one sentence."),
+      paragraph(text("[Thesis statement.]")),
+      heading(2, "Body Paragraphs / Argument"),
+      tip("Each point supporting the thesis, with evidence."),
+      paragraph(text("[Argument and evidence.]")),
+      heading(2, "Counterarguments"),
+      tip("The strongest objection to your thesis, and your response to it."),
+      paragraph(text("[Counterargument and response.]")),
+      heading(2, "Conclusion"),
+      tip("Restate the thesis in light of the argument, and its wider significance."),
+      paragraph(text("[Conclusion.]")),
+      heading(2, "References"),
+      tip("Every source cited."),
+      bullet(["[Reference]"]),
+    ),
+    metadata: {
+      document_type: "student_essay",
+      use_cases: ["Coursework essays", "Argumentative writing", "Exam preparation"],
+      supported_views: ["wiki", "calendar"],
+      schema_fields: withEssentials([
+        {
+          field_key: "course",
+          field_label: "Course",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "word_count_target",
+          field_label: "Word count target",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "essay_status",
+          field_label: "Essay status",
+          field_type: "status",
+          options: [
+            { value: "outline", label: "Outline", category: "unstarted" },
+            { value: "drafting", label: "Drafting", category: "started" },
+            { value: "revising", label: "Revising", category: "started" },
+            { value: "submitted", label: "Submitted", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        essay_status: "outline",
+      },
+    },
+  },
+  {
+    slug: "literature-review",
+    name: "Literature Review",
+    description: "Sources reviewed, synthesis of themes, and gaps in the literature",
+    structure_json: doc(
+      heading(2, "Research Question / Scope"),
+      tip("What this review is trying to answer, and its boundaries."),
+      paragraph(text("[Research question and scope.]")),
+      heading(2, "Sources Reviewed"),
+      tip("Every source, with its key finding and relevance to your question."),
+      table(
+        ["Source", "Key Findings", "Relevance"],
+        [["[Source]", "[Key finding]", "[Relevance]"]],
+      ),
+      heading(2, "Synthesis & Themes"),
+      tip("The patterns and disagreements across sources — not a list, a synthesis."),
+      paragraph(text("[Synthesis and themes.]")),
+      heading(2, "Gaps in Literature"),
+      tip("What's missing — this is often where your own research question lives."),
+      bullet(["[Gap]"]),
+    ),
+    metadata: {
+      document_type: "literature_review",
+      use_cases: ["Thesis background chapters", "Systematic reviews", "Research proposals"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "research_area",
+          field_label: "Research area",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "review_status",
+          field_label: "Review status",
+          field_type: "status",
+          options: [
+            { value: "scoping", label: "Scoping", category: "unstarted" },
+            { value: "reviewing", label: "Reviewing", category: "started" },
+            { value: "synthesizing", label: "Synthesizing", category: "started" },
+            { value: "complete", label: "Complete", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...ACADEMIC_RESEARCH_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        review_status: "scoping",
       },
     },
   },

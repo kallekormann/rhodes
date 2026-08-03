@@ -29,6 +29,7 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "job-description",
       "launch-checklist",
       "legal-document",
+      "literature-review",
       "meeting-notes",
       "onboarding-guide",
       "one-on-one-notes",
@@ -42,12 +43,15 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "professional-business-letter",
       "project-charter",
       "report",
+      "research-paper",
       "scientific-experiment",
       "seo-brief",
       "social-post-batch",
       "sop",
+      "student-essay",
       "swot-analysis",
       "technical-requirements-document",
+      "thesis",
       "user-flow-definition",
       "weekly-status",
       "workflow-definition",
@@ -317,6 +321,38 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     expect(
       financialReport?.metadata.schema_fields.find((f) => f.field_key === "report_type"),
     ).toBeTruthy();
+  });
+
+  it("Academic & Scientific Research templates ship citation_style and status workflows without colliding with essentials", () => {
+    for (const slug of ["research-paper", "thesis", "literature-review"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const citationStyle = seed?.metadata.schema_fields.find((f) => f.field_key === "citation_style");
+      expect(citationStyle, `${slug} missing citation_style`).toBeTruthy();
+      const essentialStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "status");
+      expect(essentialStatus?.field_type).toBe("select");
+    }
+
+    const researchPaper = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "research-paper");
+    const paperStatus = researchPaper?.metadata.schema_fields.find((f) => f.field_key === "paper_status");
+    expect(paperStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(paperStatus?.options)?.length).toBeGreaterThan(0);
+
+    const thesis = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "thesis");
+    const thesisStatus = thesis?.metadata.schema_fields.find((f) => f.field_key === "thesis_status");
+    expect(thesisStatus?.field_type).toBe("status");
+    expect(thesis?.metadata.schema_fields.find((f) => f.field_key === "thesis_level")).toBeTruthy();
+
+    const literatureReview = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "literature-review");
+    const reviewStatus = literatureReview?.metadata.schema_fields.find(
+      (f) => f.field_key === "review_status",
+    );
+    expect(reviewStatus?.field_type).toBe("status");
+
+    const studentEssay = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "student-essay");
+    expect(studentEssay, "missing student-essay").toBeTruthy();
+    const essayStatus = studentEssay?.metadata.schema_fields.find((f) => f.field_key === "essay_status");
+    expect(essayStatus?.field_type).toBe("status");
   });
 
   it("ships essentials with field_type and AI fill", () => {

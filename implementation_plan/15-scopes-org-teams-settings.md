@@ -105,6 +105,7 @@ Sub-phases (see plan `m2.5_scopesetupwizard`):
 | M2.5.9 Bundle: Strategy & Consulting | **done** | Digital Maturity Audit, General Audit, Business Plan, Professional Business Letter — engagement tracker dashboard |
 | M2.5.10 Bundle: People Operations & HR | **done** | 1:1 Notes, Personal Development Plan, Job Description, Performance Review — 1:1/review calendar + people ops board |
 | M2.5.11 Bundle: Legal, Compliance & Finance | **done** | Legal Document, Contract Review, Compliance Checklist, Financial Report — contract pipeline Kanban + compliance dashboard |
+| M2.5.12 Bundle: Academic & Scientific Research | **done** | Research Paper, Thesis, Student Essay, Literature Review — research pipeline Kanban + thesis timeline Gantt |
 
 - Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`
 - Bidirectional view↔template inference; multi-bundle; non-limiting composition

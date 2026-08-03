@@ -412,6 +412,40 @@ export const LEGAL_COMPLIANCE_FINANCE_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const ACADEMIC_RESEARCH_BUNDLE: BundleDefinition = {
+  id: "academic-research",
+  label: "Academic & Scientific Research",
+  description: "Papers, theses, essays, and literature reviews — from research question to submission.",
+  audience: ["students", "pupils", "analysts", "scientific-research"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "research-pipeline",
+      baseViewType: "kanban",
+      label: "Research pipeline",
+      description: "Papers, theses, and essays grouped by status",
+      config: { groupBy: "paper_status" },
+    },
+    {
+      id: "thesis-timeline",
+      baseViewType: "gantt",
+      label: "Thesis timeline",
+      description: "Theses by defense date",
+      config: { groupBy: "defense_date" },
+    },
+  ],
+  templateSlugs: ["research-paper", "thesis", "student-essay", "literature-review"],
+  metadataFields: [
+    {
+      field_key: "citation_style",
+      field_label: "Citation style",
+      field_type: "select",
+      options: ["apa", "mla", "chicago", "ieee"],
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
@@ -423,6 +457,7 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   STRATEGY_CONSULTING_BUNDLE,
   PEOPLE_OPS_HR_BUNDLE,
   LEGAL_COMPLIANCE_FINANCE_BUNDLE,
+  ACADEMIC_RESEARCH_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

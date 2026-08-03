@@ -196,6 +196,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Financial Report",
     description: "Summary, key figures with variance, and outlook for a reporting period",
   },
+  {
+    slug: "research-paper",
+    label: "Research Paper",
+    description: "Abstract, methodology, results, discussion, and references",
+  },
+  {
+    slug: "thesis",
+    label: "Thesis",
+    description: "Abstract, research question, literature review, methodology, and findings",
+  },
+  {
+    slug: "student-essay",
+    label: "Student Essay",
+    description: "Thesis statement, argument, counterarguments, and conclusion",
+  },
+  {
+    slug: "literature-review",
+    label: "Literature Review",
+    description: "Sources reviewed, synthesis of themes, and gaps in the literature",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {
