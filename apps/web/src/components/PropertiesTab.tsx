@@ -32,6 +32,10 @@ import {
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
+import {
+  DOCUMENT_TYPE_LABELS,
+  isEssentialTemplateFieldKey,
+} from "@rhodes/shared/system-templates";
 import { upgradeCopyForFeature } from "@/lib/features/upgrade-copy";
 import { DocumentHistorySection, type ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import "./PropertiesTab.css";
@@ -253,6 +257,17 @@ export function PropertiesTab({
   const wordCount =
     metadata && typeof metadata.word_count === "number" ? metadata.word_count : null;
 
+  // Tier A: document_type is classification from the template — not an editable schema field.
+  const documentTypeKey =
+    metadata && typeof metadata.document_type === "string" ? metadata.document_type : null;
+  const documentTypeLabel = documentTypeKey
+    ? DOCUMENT_TYPE_LABELS[documentTypeKey] ?? documentTypeKey.replace(/_/g, " ")
+    : null;
+
+  const editableSchemas = schemas.filter(
+    (field) => field.field_key !== "document_type",
+  );
+
   const handleMetadataFieldChange = useCallback(
     (fieldKey: string, value: MetadataFieldValue) => {
       onMetadataFieldChange?.(fieldKey, value);
@@ -279,20 +294,21 @@ export function PropertiesTab({
 
   const handleDefaultPropertyChange = (fieldKey: string, value: MetadataFieldValue) => {
     if (!onTemplateMetadataChange) return;
-    const next = { ...defaultProperties };
-    if (value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+    const next: Record<string, MetadataFieldValue> = { ...defaultProperties };
+    if (
+      value === null ||
+      value === "" ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
       delete next[fieldKey];
-    } else if (typeof value === "string") {
+    } else {
       next[fieldKey] = value;
-    } else if (typeof value === "number" || typeof value === "boolean") {
-      next[fieldKey] = String(value);
-    } else if (Array.isArray(value)) {
-      next[fieldKey] = value.join(", ");
-    } else if (value.start || value.end) {
-      next[fieldKey] = [value.start, value.end].filter(Boolean).join(" → ");
     }
     onTemplateMetadataChange({
       use_cases: templateMetadata?.use_cases ?? [],
+      document_type: templateMetadata?.document_type,
+      supported_views: templateMetadata?.supported_views,
+      schema_fields: templateMetadata?.schema_fields,
       default_properties: next,
     });
   };
@@ -489,26 +505,33 @@ export function PropertiesTab({
       <div className={`props-list ${isManage ? "props-list--manage" : ""}`}>
         {createdAtLabel && <SystemReadonlyRow label="Created" value={createdAtLabel} />}
         {createdByLabel && <SystemReadonlyRow label="Created by" value={createdByLabel} />}
+        {documentTypeLabel && (
+          <SystemReadonlyRow label="Document type" value={documentTypeLabel} />
+        )}
         {wordCount !== null && (
           <SystemReadonlyRow label="Word count" value={String(wordCount)} />
         )}
 
         {isManage ? (
           <div className="props-list__fields">
-            {schemas.map((field) => (
+            {editableSchemas.map((field) => (
               <PropertyManageRow
                 key={field.id}
                 field={field}
                 value={readMetadataFieldValue(metadata, field)}
                 aiSuggested={field.ai_fill_enabled === true && aiFilledKeys.has(field.field_key)}
                 onEdit={() => openEditField(field)}
-                onRemove={() => setDeleteFieldTarget(field)}
+                onRemove={
+                  isEssentialTemplateFieldKey(field.field_key)
+                    ? undefined
+                    : () => setDeleteFieldTarget(field)
+                }
               />
             ))}
           </div>
         ) : (
           <dl className="props-list__fields">
-            {schemas.map((field) => (
+            {editableSchemas.map((field) => (
               <SchemaFieldRow
                 key={field.id}
                 field={field}
@@ -539,7 +562,7 @@ export function PropertiesTab({
           ),
         )}
 
-        {schemas.length === 0 && groups.length === 0 && (
+        {editableSchemas.length === 0 && groups.length === 0 && (
           <p className="caption property-panel__empty">
             No properties on this document yet. Use Manage to add fields or groups.
           </p>
@@ -637,14 +660,17 @@ export function PropertiesTab({
               onChange={(useCases) =>
                 onTemplateMetadataChange?.({
                   use_cases: useCases,
+                  document_type: templateMetadata?.document_type,
+                  supported_views: templateMetadata?.supported_views,
+                  schema_fields: templateMetadata?.schema_fields,
                   default_properties: defaultProperties,
                 })
               }
             />
-            {schemas.length > 0 && (
+            {editableSchemas.length > 0 && (
               <div className="props-list__section">
                 <h4 className="props-list__section-title">Default properties</h4>
-                {schemas.map((field) => (
+                {editableSchemas.map((field) => (
                   <SchemaFieldRow
                     key={`default-${field.id}`}
                     field={field}

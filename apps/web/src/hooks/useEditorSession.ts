@@ -34,6 +34,7 @@ import { formatCreatedAt, formatUpdatedAt } from "@/lib/documents/format";
 import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
 import { isDocumentId } from "@/lib/documents/ids";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
+import { bodyRichness } from "@/lib/offline/document-body";
 import { writeLastDocumentId, readLastDocumentId } from "@/lib/documents/last-document";
 import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
 import {
@@ -381,6 +382,15 @@ export function useEditorSession() {
       crossScopeAccess !== "denied",
     userId: session.userId,
     displayName: session.displayName || session.userEmail,
+    getProjectionContent: () => {
+      const fromDoc = document?.content as Record<string, unknown> | null;
+      if (fromDoc && bodyRichness(fromDoc, document?.content_plain) > 0) {
+        return fromDoc;
+      }
+      const fromEditor = latestContentRef.current;
+      if (fromEditor && bodyRichness(fromEditor, null) > 0) return fromEditor;
+      return null;
+    },
   });
   ydocForSnapshotRef.current = ydoc;
   collabActiveRef.current = collabActive;
@@ -390,20 +400,8 @@ export function useEditorSession() {
     if (isEditingTemplate || !document?.id) return;
     if (contentHydratedForId === document.id) return;
 
-    const yjsOwnsBody =
-      Boolean(session.userId) && crossScopeAccess !== "denied";
-
-    if (yjsOwnsBody && !collabDocReady) {
-      return;
-    }
-
-    if (yjsOwnsBody && collabDocReady) {
-      setComments(parseDocumentComments(document.metadata));
-      setContentHydratedForId(document.id);
-      hydratedDocumentIdRef.current = document.id;
-      return;
-    }
-
+    // Hydrate TipTap JSON from Postgres immediately — do not wait for Yjs.
+    // Collab TipTap mounts with this snapshot and seeds an empty Y.Doc from it.
     const raw =
       (document.content as Record<string, unknown> | null) ??
       EMPTY_DOCUMENT_CONTENT;
@@ -419,15 +417,12 @@ export function useEditorSession() {
     setComments(parseDocumentComments(document.metadata));
     prefetchDocumentImages(normalized);
   }, [
-    collabDocReady,
     contentHydratedForId,
-    crossScopeAccess,
     document?.content,
     document?.content_plain,
     document?.id,
     document?.metadata,
     isEditingTemplate,
-    session.userId,
   ]);
 
   useEffect(() => {
@@ -1324,9 +1319,7 @@ export function useEditorSession() {
     Boolean(session.userId);
 
   const contentReady =
-    document == null ||
-    contentHydratedForId === document.id ||
-    (collabEnabled && collabDocReady && ydoc != null);
+    document == null || contentHydratedForId === document.id;
 
   const collabStackReady =
     document != null &&

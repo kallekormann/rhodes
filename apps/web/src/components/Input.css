@@ -54,10 +54,15 @@
   background: var(--color-surface);
 }
 
-.input:focus {
+.input:focus-visible {
   border-color: var(--color-accent);
   outline: none;
   box-shadow: 0 0 0 var(--focus-ring-width) var(--color-focus-ring);
+}
+
+.input:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
 .input:disabled {
@@ -83,7 +88,11 @@
   background: var(--color-surface-hover);
 }
 
-.input--plain:focus {
+.input-wrap--plain:focus-within {
+  outline: none;
+}
+
+.input--plain:focus-visible {
   background: var(--color-bg-elevated);
   border-color: var(--color-border);
   box-shadow: none;

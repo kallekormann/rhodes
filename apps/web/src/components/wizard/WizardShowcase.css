@@ -1,0 +1,35 @@
+.wizard-showcase__setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.wizard-showcase__intro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.wizard-showcase__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wizard-showcase__option {
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-normal) ease;
+}
+
+.wizard-showcase__option:hover {
+  background: var(--color-surface-hover);
+}
+
+.wizard-showcase__checkbox {
+  width: 100%;
+  padding: var(--space-sm) var(--space-xs);
+}

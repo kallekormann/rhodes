@@ -1,0 +1,64 @@
+.scope-composition {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 0;
+}
+
+.scope-composition__intro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.scope-composition__empty-panel {
+  margin: 0;
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-hover);
+}
+
+.scope-composition__footnote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.scope-composition__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.scope-composition__option {
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-normal) ease;
+}
+
+.scope-composition__option:hover {
+  background: var(--color-surface-hover);
+}
+
+.scope-composition__checkbox {
+  width: 100%;
+  padding: var(--space-sm) var(--space-sm);
+}
+
+.scope-composition-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.scope-composition-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+}

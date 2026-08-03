@@ -19,11 +19,11 @@ Templates accelerate structured writing. Views (saved filters) scale document di
 | Template | Sections |
 |----------|----------|
 | Blank | Empty doc |
-| Meeting Minutes | Attendees, Agenda, Notes, Action Items |
-| Report | Summary, Findings, Recommendations |
-| Product Spec | Problem, Goals, Requirements, Out of Scope |
+| Meeting Notes | Objective, Agenda, Discussion & Notes, Action Items (+ tips) |
+| Report | Executive Summary, Findings, Analysis, Roadblocks, Next Steps |
+| Product Spec | Problem & Insight, Hypothesis, Goals, UX Flow, Architecture, Metrics |
 
-Stored as JSON TipTap document trees in `rhodes-app/templates/`.
+Authoring contract: [34-template-authoring.md](34-template-authoring.md). Seeds: `packages/shared/src/system-templates.ts`.
 
 ### User templates
 

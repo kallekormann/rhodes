@@ -12,6 +12,8 @@
     "./scope-views": "./src/scope-views.ts",
     "./scope-policies": "./src/scope-policies.ts",
     "./scope-bundles": "./src/scope-bundles.ts",
+    "./scope-template-catalog": "./src/scope-template-catalog.ts",
+    "./system-templates": "./src/system-templates.ts",
     "./view-template-affinity": "./src/view-template-affinity.ts",
     "./scope-composition": "./src/scope-composition.ts",
     "./chunk-metadata": "./src/chunk-metadata.ts",

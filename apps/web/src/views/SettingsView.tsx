@@ -17,6 +17,7 @@ import { RadioGroup } from "@/components/Radio";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { ScopeCreateWizard } from "@/components/ScopeCreateWizard";
 import { OrgPolicySettings } from "@/components/settings/OrgPolicySettings";
+import { ScopeCompositionSettings } from "@/components/settings/ScopeCompositionSettings";
 import { ScopeSettingsPlaceholder } from "@/components/settings/ScopeSettingsPlaceholder";
 import { ScopeSharingSettings } from "@/components/settings/ScopeSharingSettings";
 import { ScopeViewsSettings } from "@/components/settings/ScopeViewsSettings";
@@ -337,6 +338,7 @@ export function SettingsView() {
     saving: scopePolicySaving,
     savePolicy,
     saveEnabledViews,
+    saveScopeComposition,
   } = useScopePolicy(scopePolicyWorkspaceId);
 
   const scopePolicyPending =
@@ -415,10 +417,23 @@ export function SettingsView() {
     setDefaultScopeId(activeScope.id);
   }, [activeScope.id, scopes]);
 
-  const handleCreate = (input: { name: string; enabledViews: string[] }) => {
-    if (createKind === "personal") void createPersonalSpace(input.name, input.enabledViews);
-    if (createKind === "team") void createTeamSpace(input.name, input.enabledViews);
-    setCreateKind(null);
+  const handleCreate = async (input: {
+    name: string;
+    scopeComposition: import("@/lib/scope-composition/apply").ScopeCompositionBody;
+    pendingInvites?: import("@/components/ScopeSetupWizard").PendingTeamInvite[];
+  }) => {
+    if (createKind === "personal") {
+      return createPersonalSpace(input.name, input.scopeComposition);
+    }
+    if (createKind === "team") {
+      return createTeamSpace(
+        input.name,
+        input.scopeComposition,
+        null,
+        input.pendingInvites,
+      );
+    }
+    return false;
   };
 
   const handleThemeModeChange = (value: string) => {
@@ -1023,11 +1038,26 @@ export function SettingsView() {
 
           {section === "Templates" && (
             <div className="settings-section">
-              <SectionHeader title="Templates" />
-              <ScopeSettingsPlaceholder
-                description="Bundle templates with scope views at creation time. Edit defaults and auto-selected templates per view in a later release."
-                milestone="M2.5 ScopeSetupWizard"
-              />
+              <SectionHeader title="Templates & composition" />
+              {scopePolicyPending ? (
+                <p className="caption settings-section__empty">Loading composition…</p>
+              ) : scopePolicyError ? (
+                <p className="caption settings-section__empty">{scopePolicyError}</p>
+              ) : scopePolicyData ? (
+                <ScopeCompositionSettings
+                  bundleIds={scopePolicyData.bundle_ids}
+                  setupConfig={scopePolicyData.setup_config}
+                  canEdit={canEditScopePolicy}
+                  saving={scopePolicySaving}
+                  onSave={async (composition) => {
+                    const ok = await saveScopeComposition(composition);
+                    if (ok) {
+                      await refreshScopes();
+                    }
+                    return ok;
+                  }}
+                />
+              ) : null}
             </div>
           )}
 

@@ -13,6 +13,8 @@ import {
 } from "@/lib/documents/schemas";
 import { createClient } from "@/lib/supabase/server";
 import { stripLeadingTitleHeading } from "@/lib/templates/content";
+import { documentMetadataFromTemplate } from "@/lib/templates/metadata";
+import { seedTemplateSchemaFields } from "@/lib/templates/seed-schema";
 
 const DOCUMENT_FIELDS =
   "id, workspace_id, created_by, title, content, content_plain, metadata, updated_at, created_at";
@@ -267,26 +269,45 @@ export async function POST(request: Request) {
   if (parsed.data.template_id) {
     const template = await supabase
       .from("templates")
-      .select("structure_json, metadata")
+      .select("id, slug, structure_json, metadata")
       .eq("id", parsed.data.template_id)
       .maybeSingle();
 
-    if (template.data?.structure_json) {
-      content = template.data.structure_json as Record<string, unknown>;
+    if (template.error || !template.data) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Template not found or inaccessible" },
+          { status: 400 },
+        ),
+      );
     }
 
-    const templateMetadata =
-      (template.data?.metadata as Record<string, unknown> | null) ?? {};
-    const defaultProperties =
-      templateMetadata.default_properties &&
-      typeof templateMetadata.default_properties === "object"
-        ? (templateMetadata.default_properties as Record<string, unknown>)
-        : {};
+    if (!template.data.structure_json) {
+      return withSecurityHeaders(
+        NextResponse.json(
+          { error: "Template has no content structure" },
+          { status: 400 },
+        ),
+      );
+    }
 
-    metadata = {
-      ...defaultProperties,
-      ...metadata,
-    };
+    content = template.data.structure_json as Record<string, unknown>;
+
+    const seeded = await seedTemplateSchemaFields(
+      supabase,
+      parsed.data.workspace_id,
+      template.data.metadata,
+    );
+    if (!seeded.ok) {
+      return withSecurityHeaders(
+        NextResponse.json({ error: seeded.message }, { status: 400 }),
+      );
+    }
+
+    metadata = documentMetadataFromTemplate(template.data.metadata, metadata);
+    if (typeof template.data.slug === "string" && template.data.slug) {
+      metadata = { ...metadata, template_slug: template.data.slug };
+    }
   }
 
   const title = parsed.data.title ?? "Untitled Document";

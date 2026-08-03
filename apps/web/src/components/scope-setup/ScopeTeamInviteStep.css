@@ -1,0 +1,153 @@
+.scope-team-invite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-height: 0;
+}
+
+.scope-team-invite__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.scope-team-invite__search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.scope-team-invite__section-label {
+  margin: 0 0 var(--space-xs);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.scope-team-invite__hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.scope-team-invite__error {
+  margin: 0;
+  color: var(--color-error);
+}
+
+.scope-team-invite__suggestions {
+  flex-shrink: 0;
+}
+
+.scope-team-invite__suggestion-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scope-team-invite__suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-sm) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-normal) ease;
+}
+
+.scope-team-invite__suggestion:hover {
+  background: var(--color-surface-hover);
+}
+
+.scope-team-invite__suggestion-name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-text);
+}
+
+.scope-team-invite__suggestion-email {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+}
+
+.scope-team-invite__added {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.scope-team-invite__member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-height: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.scope-team-invite__member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px auto;
+  gap: var(--space-sm);
+  align-items: center;
+  padding: var(--space-xs) 0;
+}
+
+.scope-team-invite__member-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scope-team-invite__member-name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-team-invite__member-email {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .scope-team-invite__search-row,
+  .scope-team-invite__member {
+    grid-template-columns: 1fr;
+  }
+}

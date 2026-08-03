@@ -27,6 +27,7 @@ export type ScopeCompositionInput = {
 
 export type ScopeSetupConfig = {
   viewPresetIds: string[];
+  baseViewIds: string[];
   templateSlugs: string[];
   featuredTemplateSlugs: string[];
   bundleIds: string[];
@@ -223,6 +224,7 @@ export function resolveScopeComposition(
   const metadataFields = mergeMetadataFields(explicitBundles);
   const setupConfig: ScopeSetupConfig = {
     viewPresetIds: viewPresetIdsList,
+    baseViewIds: uniqueOrdered(input.selectedBaseViewIds),
     templateSlugs: templateSlugsList,
     featuredTemplateSlugs: templateSlugsList.slice(0, 6),
     bundleIds: bundleIdsList,

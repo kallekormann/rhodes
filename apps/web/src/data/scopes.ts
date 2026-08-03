@@ -11,6 +11,7 @@ export type Scope = {
   orgId: string | null;
   createdAt: string;
   enabledViewsCount: number;
+  enabledViews: string[];
 };
 
 export const initialScopes: Scope[] = [
@@ -22,6 +23,7 @@ export const initialScopes: Scope[] = [
     orgId: null,
     createdAt: "2020-01-01T00:00:00.000Z",
     enabledViewsCount: 0,
+    enabledViews: [],
   },
   {
     id: "private-book",
@@ -31,6 +33,7 @@ export const initialScopes: Scope[] = [
     orgId: null,
     createdAt: "2020-01-02T00:00:00.000Z",
     enabledViewsCount: 0,
+    enabledViews: [],
   },
   {
     id: "private-research",
@@ -40,6 +43,7 @@ export const initialScopes: Scope[] = [
     orgId: null,
     createdAt: "2020-01-03T00:00:00.000Z",
     enabledViewsCount: 0,
+    enabledViews: [],
   },
   {
     id: "team-growth",
@@ -49,6 +53,7 @@ export const initialScopes: Scope[] = [
     orgId: null,
     createdAt: "2020-01-04T00:00:00.000Z",
     enabledViewsCount: 0,
+    enabledViews: [],
   },
   {
     id: "team-product",
@@ -58,6 +63,7 @@ export const initialScopes: Scope[] = [
     orgId: null,
     createdAt: "2020-01-05T00:00:00.000Z",
     enabledViewsCount: 0,
+    enabledViews: [],
   },
 ];
 

@@ -17,6 +17,7 @@ export type MetadataFieldSeed = {
     | "url"
     | "checkbox";
   options?: string[] | null;
+  ai_fill_enabled?: boolean;
 };
 
 /** Bundle-specific configured instance of a base scope view (ships in M6). */
@@ -45,9 +46,28 @@ export type BundleDefinition = {
 
 /**
  * Bundle catalog — populated incrementally (M2.5.3+).
- * M2.5.0 ships the type system and an empty catalog; pilot bundles land in M2.5.3–4.
+ * M2.5.1 ships one wizard test bundle for composition UI verification.
  */
-export const BUNDLE_CATALOG: readonly BundleDefinition[] = [];
+export const WIZARD_STARTER_BUNDLE: BundleDefinition = {
+  id: "wizard-starter",
+  label: "Starter pack",
+  description: "Wiki workflows and meeting templates to try scope composition.",
+  audience: ["general"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "wiki-starter",
+      baseViewType: "wiki",
+      label: "Doc graph",
+      description: "Link pages into a lightweight knowledge base",
+      config: { layout: "graph" },
+    },
+  ],
+  templateSlugs: ["meeting-notes", "report"],
+  metadataFields: [],
+};
+
+export const BUNDLE_CATALOG: readonly BundleDefinition[] = [WIZARD_STARTER_BUNDLE];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {
   return BUNDLE_CATALOG.find((bundle) => bundle.id === bundleId);

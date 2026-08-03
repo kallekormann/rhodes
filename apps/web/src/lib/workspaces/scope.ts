@@ -42,6 +42,7 @@ export function membershipToScope(row: MembershipRow): Scope | null {
     orgId: workspace.org_id ?? null,
     createdAt: workspace.created_at,
     enabledViewsCount: workspace.enabled_views?.length ?? 0,
+    enabledViews: workspace.enabled_views ?? [],
   };
 }
 

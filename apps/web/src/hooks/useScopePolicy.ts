@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ScopePolicy } from "@rhodes/shared/scope-policies";
+import type { ScopeCompositionBody } from "@/lib/scope-composition/apply";
 
 function isResolvableWorkspaceId(id: string | null | undefined): id is string {
   return Boolean(id) && id !== "loading";
@@ -11,6 +12,8 @@ type ScopePolicyResponse = {
   workspace_id: string;
   is_team_workspace: boolean;
   enabled_views: string[];
+  bundle_ids: string[];
+  setup_config: Record<string, unknown>;
   policy: ScopePolicy;
   version?: number;
 };
@@ -124,6 +127,37 @@ export function useScopePolicy(workspaceId: string | null) {
     [resolvedId],
   );
 
+  const saveScopeComposition = useCallback(
+    async (scopeComposition: ScopeCompositionBody) => {
+      if (!resolvedId) return false;
+      setSaving(true);
+      setError(null);
+      try {
+        const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope_composition: scopeComposition }),
+        });
+        const body = (await response.json().catch(() => ({}))) as ScopePolicyResponse & {
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(body.error ?? "Couldn't save scope composition");
+        }
+        setData(body);
+        return true;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Couldn't save scope composition";
+        setError(message);
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [resolvedId],
+  );
+
   const refresh = useCallback(async () => {
     if (!resolvedId) return;
     setLoading(true);
@@ -153,6 +187,7 @@ export function useScopePolicy(workspaceId: string | null) {
     refresh,
     savePolicy,
     saveEnabledViews,
+    saveScopeComposition,
     ready: resolvedId !== null && !loading && data !== null,
   };
 }

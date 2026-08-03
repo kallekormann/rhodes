@@ -67,14 +67,31 @@ export function ScopeSwitcher() {
     setCreateOrgTarget(org ?? null);
   };
 
-  const handleCreate = (input: { name: string; enabledViews: string[] }) => {
-    if (createKind === "personal") createPersonalSpace(input.name, input.enabledViews);
-    if (createKind === "team") createTeamSpace(input.name, input.enabledViews);
-    if (createKind === "org-team") {
-      createTeamSpace(input.name, input.enabledViews, createOrgTarget?.id ?? null);
+  const handleCreate = async (input: {
+    name: string;
+    scopeComposition: import("@/lib/scope-composition/apply").ScopeCompositionBody;
+    pendingInvites?: import("@/components/ScopeSetupWizard").PendingTeamInvite[];
+  }) => {
+    if (createKind === "personal") {
+      return createPersonalSpace(input.name, input.scopeComposition);
     }
-    setCreateKind(null);
-    setCreateOrgTarget(null);
+    if (createKind === "team") {
+      return createTeamSpace(
+        input.name,
+        input.scopeComposition,
+        null,
+        input.pendingInvites,
+      );
+    }
+    if (createKind === "org-team") {
+      return createTeamSpace(
+        input.name,
+        input.scopeComposition,
+        createOrgTarget?.id ?? null,
+        input.pendingInvites,
+      );
+    }
+    return false;
   };
 
   const canCreateOrgTeam = (org: Organization) =>

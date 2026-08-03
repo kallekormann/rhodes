@@ -13,10 +13,16 @@ export function templateRecordToUi(template: TemplateRecord): Template {
         : ["Custom template"];
 
   const properties = metadata.default_properties
-    ? Object.entries(metadata.default_properties).map(([label, value]) => ({
-        label,
-        value,
-      }))
+    ? Object.entries(metadata.default_properties)
+        .filter(([, value]) => value !== null && value !== undefined)
+        .map(([label, value]) => ({
+          label,
+          value: Array.isArray(value)
+            ? value.join(", ")
+            : typeof value === "object"
+              ? [value.start, value.end].filter(Boolean).join(" → ")
+              : String(value),
+        }))
     : undefined;
 
   return {

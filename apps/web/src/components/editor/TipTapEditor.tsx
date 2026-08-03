@@ -748,16 +748,14 @@ export function TipTapEditor({
           collabSaveReadyRef.current = true;
           return;
         }
-        // Seed from Postgres/React JSON at most once ever per document — the
-        // Y.Doc itself (via collabNeedsInitialSeed) is the source of truth for
-        // whether this has already happened, so we never re-inject content
-        // into an existing CRDT (that duplicates text across peers).
+        // Seed from Postgres/React JSON at most once. TipTap Collaboration often
+        // inserts an empty paragraph into Y.Doc on mount — fragment.length > 0
+        // must NOT block seeding. Use plain-text emptiness instead.
         if (collabNeedsInitialSeedRef.current && !seededCollabRef.current) {
           const snapshot = contentSnapshotRef.current;
           const plainFromContent = plainFromDoc(snapshot);
-          const ydocHasBody =
-            ydoc != null && ydoc.getXmlFragment("default").length > 0;
-          if (!ydocHasBody && plainFromContent.length > 0) {
+          const editorPlain = instance.getText().trim();
+          if (editorPlain.length === 0 && plainFromContent.length > 0) {
             instance.commands.setContent(snapshot);
             ensureEditorBlockIds(instance);
             contentSnapshotRef.current = instance.getJSON() as Record<
@@ -765,14 +763,30 @@ export function TipTapEditor({
               unknown
             >;
             onUpdateRef.current(instance.getJSON(), instance.getText());
+            seededCollabRef.current = true;
+            if (ydoc) {
+              ydoc.getMap("rhodes").set("seeded", true);
+              onCollabBootstrappedRef.current?.();
+            }
+          } else if (editorPlain.length > 0) {
+            seededCollabRef.current = true;
+            if (ydoc && ydocHasCollaborationBody(ydoc)) {
+              ydoc.getMap("rhodes").set("seeded", true);
+              onCollabBootstrappedRef.current?.();
+            }
           }
-          if (ydoc && ydocHasCollaborationBody(ydoc)) {
-            ydoc.getMap("rhodes").set("seeded", true);
-            onCollabBootstrappedRef.current?.();
-          }
+          // Empty editor + empty snapshot: leave seededCollabRef false so a
+          // late content arrival (template body) can still seed once.
+        } else if (
+          ydoc &&
+          ydocHasCollaborationBody(ydoc) &&
+          instance.getText().trim().length > 0
+        ) {
+          ydoc.getMap("rhodes").set("seeded", true);
+          onCollabBootstrappedRef.current?.();
+          seededCollabRef.current = true;
         }
         collabSaveReadyRef.current = true;
-        seededCollabRef.current = true;
       },
       // Schema-level document corruption (e.g. a malformed CRDT merge producing
       // a node the schema can't parse) fails silently otherwise — TipTap
@@ -902,6 +916,36 @@ export function TipTapEditor({
       editor.commands.setTextSelection({ from: safeFrom, to: safeTo });
     }
   }, [collabMode, content, contentSyncToken, editor]);
+
+  // Template/create race: TipTap can mount before Postgres content lands in
+  // React state. Seed once when rich content arrives and the CRDT is still empty.
+  useEffect(() => {
+    if (!editor || !collabMode) return;
+    if (!collabNeedsInitialSeed || seededCollabRef.current) return;
+    const plainFromContent = plainFromDoc(content);
+    if (plainFromContent.length === 0) return;
+    if (editor.getText().trim().length > 0) {
+      seededCollabRef.current = true;
+      return;
+    }
+
+    editor.commands.setContent(content);
+    ensureEditorBlockIds(editor);
+    contentSnapshotRef.current = editor.getJSON() as Record<string, unknown>;
+    onUpdateRef.current(editor.getJSON(), editor.getText());
+    seededCollabRef.current = true;
+    if (ydoc) {
+      ydoc.getMap("rhodes").set("seeded", true);
+      onCollabBootstrappedRef.current?.();
+    }
+  }, [
+    collabMode,
+    collabNeedsInitialSeed,
+    content,
+    editor,
+    plainFromDoc,
+    ydoc,
+  ]);
 
   useEffect(() => {
     if (!editor) return;

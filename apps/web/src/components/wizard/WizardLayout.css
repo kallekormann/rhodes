@@ -1,0 +1,172 @@
+/* UI Director · wizard layout: generous spacing, visible scroll when content overflows */
+.wizard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--wizard-aside-width);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: var(--wizard-body-max-height);
+  overflow: hidden;
+  background: var(--wizard-content-bg);
+}
+
+.wizard-layout--full {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: min(480px, calc(100vh - 260px));
+}
+
+.wizard-layout--full .scope-setup-summary {
+  max-width: none;
+}
+
+.wizard-layout__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--wizard-content-bg);
+}
+
+.wizard-layout__main-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-height: 0;
+  padding: var(--wizard-main-padding);
+  overflow: hidden;
+}
+
+.wizard-layout__main-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  --wizard-focus-clearance: calc(var(--focus-ring-width) + var(--focus-ring-offset));
+  padding: var(--wizard-focus-clearance);
+  padding-right: calc(var(--space-xs) + var(--wizard-focus-clearance));
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+}
+
+.wizard-layout__main-body::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+}
+
+.wizard-layout__main-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wizard-layout__main-body::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-size);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.wizard-layout__main-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+.wizard-name-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 480px;
+}
+
+.wizard-name-step .input-wrap {
+  width: 100%;
+}
+
+.wizard-error {
+  flex-shrink: 0;
+  margin: 0;
+  color: var(--color-error);
+}
+
+.wizard-layout__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--wizard-aside-bg);
+  overflow: hidden;
+}
+
+.wizard-layout__aside-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+}
+
+.wizard-layout__aside-scroll::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+}
+
+.wizard-layout__aside-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wizard-layout__aside-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-size);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.wizard-layout__aside-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Optional alias — same behavior as main-body / aside-scroll */
+.wizard-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+  scrollbar-gutter: stable;
+}
+
+.wizard-scroll::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+}
+
+.wizard-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wizard-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-size);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.wizard-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+@media (max-width: 720px) {
+  .wizard-layout {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+
+  .wizard-layout__aside {
+    min-height: 240px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-outline__preview-name,
+  .wizard-outline__detail {
+    transition: none;
+  }
+}

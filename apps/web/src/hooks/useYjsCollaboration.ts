@@ -19,7 +19,7 @@ import {
   persistLocalYjsState,
   RhodesYjsPersistence,
 } from "@/lib/offline/yjs-rhodes-persistence";
-import { ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
+import { ydocHasMeaningfulCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { seedYjsFromProjectionIfNeeded } from "@/lib/offline/seed-yjs-from-projection";
 import { avatarHueForUser } from "@/lib/profile/avatar";
 import { DocumentSessionPresence } from "@/lib/collaboration/document-session-presence";
@@ -188,10 +188,6 @@ async function waitForAuthSession(
   return false;
 }
 
-/** Shared key marking whether this Y.Doc has ever been seeded from Postgres JSON. */
-const SEEDED_MAP_KEY = "rhodes";
-const SEEDED_FLAG = "seeded";
-
 function applyServerState(doc: Y.Doc, state: Uint8Array): void {
   if (state.length === 0) return;
   Y.applyUpdate(doc, state);
@@ -214,6 +210,8 @@ export function useYjsCollaboration(params: {
   enabled: boolean;
   userId: string;
   displayName: string;
+  /** Optional Postgres/React TipTap JSON used when IDB has no body yet. */
+  getProjectionContent?: () => Record<string, unknown> | null | undefined;
   onDisconnected?: () => void;
 }): {
   ydoc: Y.Doc | null;
@@ -234,7 +232,16 @@ export function useYjsCollaboration(params: {
   /** Immediately persist the current Y.Doc state to the server (e.g. after bootstrap seed). */
   flushPersist: () => void;
 } {
-  const { documentId, enabled, userId, displayName, onDisconnected } = params;
+  const {
+    documentId,
+    enabled,
+    userId,
+    displayName,
+    getProjectionContent,
+    onDisconnected,
+  } = params;
+  const getProjectionContentRef = useRef(getProjectionContent);
+  getProjectionContentRef.current = getProjectionContent;
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const [provider, setProvider] = useState<SupabaseYjsProvider | null>(null);
   const [awareness, setAwareness] = useState<Awareness | null>(null);
@@ -490,7 +497,7 @@ export function useYjsCollaboration(params: {
       if (cancelled) return;
 
       // Solo: local IDB is enough on open — skip GET /yjs until a peer joins.
-      if (!isOffline && !ydocHasCollaborationBody(doc)) {
+      if (!isOffline && !ydocHasMeaningfulCollaborationBody(doc)) {
         const server = await fetchPersistedStateWithTimeout(documentId);
         if (cancelled) return;
         if (server.state && server.state.length > 0) {
@@ -499,17 +506,21 @@ export function useYjsCollaboration(params: {
       }
       if (cancelled) return;
 
-      await seedYjsFromProjectionIfNeeded(documentId, doc);
+      await seedYjsFromProjectionIfNeeded(
+        documentId,
+        doc,
+        getProjectionContentRef.current?.() ?? null,
+      );
       if (cancelled) return;
 
       // Stale offline conflict snapshots must never rewind a fresh server load.
-      if (!isOffline && ydocHasCollaborationBody(doc)) {
+      if (!isOffline && ydocHasMeaningfulCollaborationBody(doc)) {
         await clearOfflineSnapshots(documentId);
       }
 
-      const alreadySeeded =
-        doc.getMap(SEEDED_MAP_KEY).get(SEEDED_FLAG) === true ||
-        ydocHasCollaborationBody(doc);
+      // Empty paragraphs still count as fragment.length > 0 — only real text
+      // means the CRDT already owns the body.
+      const alreadySeeded = ydocHasMeaningfulCollaborationBody(doc);
       setNeedsInitialSeed(!alreadySeeded);
       setLocalReady(true);
       setYdoc(doc);

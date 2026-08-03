@@ -5,7 +5,6 @@ import {
   ChevronRight,
   CircleUser,
   Ellipsis,
-  Files,
   Moon,
   Palette,
   Plus,
@@ -19,6 +18,8 @@ import { useApp, type AppView } from "@/context/AppContext";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useEditorRouteActive } from "@/hooks/useEditorRouteActive";
 import { ScopeSwitcher } from "./ScopeSwitcher";
+import { ScopeViewNav } from "./ScopeViewNav";
+import { DOCUMENTS_SCOPE_NAV_VIEW, scopeNavViewLabel } from "@/lib/scope-views/nav";
 import { ConnectivityIndicator } from "./ConnectivityIndicator";
 import { IconButton } from "./IconButton";
 import "./AppHeader.css";
@@ -27,11 +28,17 @@ function HeaderTrail({
   view,
   documentTitle,
   onNavigate,
+  scopeNavViewId,
 }: {
   view: AppView;
   documentTitle: string;
   onNavigate: (view: AppView) => void;
+  scopeNavViewId: string;
 }) {
+  if (scopeNavViewId !== DOCUMENTS_SCOPE_NAV_VIEW.id) {
+    return <span className="app-header__context-label">{scopeNavViewLabel(scopeNavViewId)}</span>;
+  }
+
   if (view === "documents") {
     return <span className="app-header__context-label">Overview</span>;
   }
@@ -162,6 +169,9 @@ export function AppHeader() {
     createNewDocument,
     canWriteActiveScope,
     session,
+    activeScopeNavViewId,
+    setActiveScopeNavViewId,
+    scopeNavViews,
   } = useApp();
   const router = useRouter();
   const hydrated = useClientHydrated();
@@ -180,7 +190,14 @@ export function AppHeader() {
 
   const isEditor = useEditorRouteActive();
   const isHidden = isEditor && headerHidden;
-  const isDocumentsSection = view === "documents" || view === "templates" || view === "editor";
+  const isDocumentsSection =
+    activeScopeNavViewId === DOCUMENTS_SCOPE_NAV_VIEW.id &&
+    (view === "documents" || view === "templates" || view === "editor");
+  const showScopeTrail =
+    isDocumentsSection ||
+    view === "library" ||
+    view === "settings" ||
+    view === "sticker-sheet";
 
   const overflowItems: OverflowItem[] = [
     {
@@ -233,24 +250,26 @@ export function AppHeader() {
             <span className="app-header__sep" aria-hidden="true">
               ·
             </span>
-            <button
-              type="button"
-              className={`nav-link ${isDocumentsSection ? "nav-link--active" : ""}`}
-              onClick={() => setView("documents")}
-            >
-              <Files size={18} strokeWidth={1.75} />
-              <span className="nav-link__label">Documents</span>
-            </button>
-            <span className="app-header__sep app-header__sep--trail" aria-hidden="true">
-              ·
-            </span>
-            <div className="app-header__trail">
-              <HeaderTrail
-                view={view}
-                documentTitle={documentTitle}
-                onNavigate={setView}
-              />
-            </div>
+            <ScopeViewNav
+              views={scopeNavViews}
+              activeViewId={activeScopeNavViewId}
+              onChange={setActiveScopeNavViewId}
+            />
+            {showScopeTrail ? (
+              <>
+                <span className="app-header__sep app-header__sep--trail" aria-hidden="true">
+                  ·
+                </span>
+                <div className="app-header__trail">
+                  <HeaderTrail
+                    view={view}
+                    documentTitle={documentTitle}
+                    onNavigate={setView}
+                    scopeNavViewId={activeScopeNavViewId}
+                  />
+                </div>
+              </>
+            ) : null}
           </nav>
         </div>
 

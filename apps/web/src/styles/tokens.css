@@ -90,28 +90,56 @@
   --editor-max-width: 720px;
 
   --scrollbar-size: 8px;
-  --scrollbar-thumb: rgba(0, 0, 0, 0.22);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.35);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.28);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
 
   --duration-fast: 100ms;
   --duration-normal: 150ms;
   --duration-panel: 250ms;
   --duration-header: 200ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Wizard modal — comfortable spacing, fits ~1100×760 with scroll when needed */
+  --wizard-width: min(800px, calc(100vw - 48px));
+  --wizard-body-min-height: 320px;
+  --wizard-body-max-height: min(460px, calc(100vh - 260px));
+  --wizard-aside-width: 320px;
+  --wizard-aside-padding: var(--space-lg);
+  --wizard-content-bg: var(--color-bg-elevated);
+  --wizard-aside-bg: var(--color-surface);
+  --wizard-aside-divider: var(--color-border);
+  --wizard-surface-inset: var(--color-surface);
+  --wizard-preview-bg: var(--color-surface);
+  --wizard-preview-border: var(--color-border);
+  --wizard-main-padding: var(--space-lg);
+  --wizard-step-size: 28px;
+  --wizard-step-connector: var(--color-border-subtle);
+  --wizard-step-connector-complete: var(--color-border);
+  --wizard-step-current-bg: var(--color-accent);
+  --wizard-step-current-text: var(--color-accent-on-accent);
+  --wizard-step-current: var(--color-text);
+  --wizard-step-complete: var(--color-text-secondary);
+  --wizard-step-complete-border: var(--color-accent-muted-strong);
+  --wizard-step-complete-bg: var(--color-accent-subtle);
+  --wizard-step-complete-text: var(--color-accent);
+  --wizard-step-upcoming-border: var(--color-border);
+  --wizard-step-upcoming-bg: transparent;
+  --wizard-step-upcoming-text: var(--color-text-tertiary);
+  --wizard-preview-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme="dark"] {
-  --color-bg: #0a0a0a;
-  --color-bg-elevated: #141416;
-  --color-surface: #1a1c20;
-  --color-surface-hover: #212327;
-  --color-border: #212327;
-  --color-border-subtle: #1a1c20;
+  --color-bg: #111113;
+  --color-bg-elevated: #1a1a1e;
+  --color-surface: #222226;
+  --color-surface-hover: #2a2a30;
+  --color-border: #38383f;
+  --color-border-subtle: #2e2e34;
 
   --color-text: #ffffff;
   --color-text-secondary: #dadbdf;
   --color-text-tertiary: #7d8187;
-  --color-text-inverse: #0a0a0a;
+  --color-text-inverse: #111113;
 
   --color-accent: #a78bfa;
   --color-accent-hover: #b89ffc;
@@ -119,7 +147,7 @@
   --color-accent-muted: #2e1065;
   --color-accent-muted-strong: #3b1a7a;
   --color-accent-subtle: #1e1b2e;
-  --color-accent-on-accent: #0a0a0a;
+  --color-accent-on-accent: #111113;
 
   --color-secondary: #7d8187;
   --color-link-visited: #8b6fe8;
@@ -154,12 +182,32 @@
     0 4px 16px rgba(0, 0, 0, 0.45),
     0 12px 32px rgba(0, 0, 0, 0.55);
 
-  --scrollbar-thumb: rgba(255, 255, 255, 0.28);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.42);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.34);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.48);
 
   --color-studio-sidebar-bg: var(--color-bg-elevated);
   --color-studio-editor-bg: var(--color-bg);
   --color-studio-presets-bg: var(--color-surface);
+
+  --wizard-content-bg: var(--color-bg-elevated);
+  --wizard-aside-bg: var(--color-surface);
+  --wizard-aside-divider: var(--color-border);
+  --wizard-surface-inset: #26262c;
+  --wizard-preview-bg: var(--color-surface);
+  --wizard-preview-border: var(--color-border);
+  --wizard-step-current-bg: var(--color-accent);
+  --wizard-step-current-text: var(--color-accent-on-accent);
+  --wizard-step-current: var(--color-text);
+  --wizard-step-complete: var(--color-text-secondary);
+  --wizard-step-complete-border: var(--color-accent-muted-strong);
+  --wizard-step-complete-bg: var(--color-accent-subtle);
+  --wizard-step-complete-text: var(--color-accent);
+  --wizard-step-upcoming-border: var(--color-border);
+  --wizard-step-upcoming-bg: transparent;
+  --wizard-step-upcoming-text: var(--color-text-tertiary);
+  --wizard-step-connector: var(--color-border-subtle);
+  --wizard-step-connector-complete: var(--color-border);
+  --wizard-preview-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {

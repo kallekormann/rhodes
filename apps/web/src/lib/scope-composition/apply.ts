@@ -37,6 +37,9 @@ function metadataFieldsToJson(fields: MetadataFieldSeed[]): unknown[] {
     field_label: field.field_label,
     field_type: field.field_type,
     ...(field.options != null ? { options: field.options } : {}),
+    ...(typeof field.ai_fill_enabled === "boolean"
+      ? { ai_fill_enabled: field.ai_fill_enabled }
+      : {}),
   }));
 }
 

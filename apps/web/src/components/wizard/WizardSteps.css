@@ -1,0 +1,104 @@
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.wizard-steps__item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.wizard-steps__item:last-child {
+  flex: 0 1 auto;
+}
+
+.wizard-steps__content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wizard-steps__connector {
+  flex: 1;
+  height: 1px;
+  min-width: var(--space-md);
+  margin: 0 var(--space-md);
+  background: var(--wizard-step-connector);
+}
+
+.wizard-steps__item--complete .wizard-steps__connector {
+  background: var(--wizard-step-connector-complete);
+}
+
+.wizard-steps__marker {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--wizard-step-size);
+  height: var(--wizard-step-size);
+  border-radius: 999px;
+  border: 1.5px solid var(--wizard-step-upcoming-border);
+  background: var(--wizard-step-upcoming-bg);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wizard-step-upcoming-text);
+}
+
+.wizard-steps__item--current .wizard-steps__marker {
+  border-color: var(--wizard-step-current-bg);
+  background: var(--wizard-step-current-bg);
+  color: var(--wizard-step-current-text);
+}
+
+.wizard-steps__item--complete .wizard-steps__marker {
+  border-color: var(--wizard-step-complete-border);
+  background: var(--wizard-step-complete-bg);
+  color: var(--wizard-step-complete-text);
+}
+
+.wizard-steps__label {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--wizard-step-upcoming-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wizard-steps__item--current .wizard-steps__label {
+  color: var(--wizard-step-current);
+  font-weight: 600;
+}
+
+.wizard-steps__item--complete .wizard-steps__label {
+  color: var(--wizard-step-complete);
+}
+
+@media (max-width: 840px) {
+  .wizard-steps__connector {
+    min-width: var(--space-sm);
+    margin: 0 var(--space-sm);
+  }
+
+  .wizard-steps__content {
+    gap: var(--space-sm);
+  }
+}
+
+@media (max-width: 640px) {
+  .wizard-steps__label {
+    display: none;
+  }
+
+  .wizard-steps__connector {
+    margin: 0 var(--space-sm);
+  }
+}

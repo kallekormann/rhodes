@@ -7,12 +7,12 @@ import { ScopeTrigger } from "./ScopeTrigger";
 import "./ScopeSwitcherShowcase.css";
 
 const demoPersonal: Scope[] = [
-  { id: "demo-private", name: "Private", type: "private", role: "owner", orgId: null, createdAt: "2020-01-01T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-book", name: "Book Draft", type: "private", role: "owner", orgId: null, createdAt: "2020-01-02T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-private", name: "Private", type: "private", role: "owner", orgId: null, createdAt: "2020-01-01T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
+  { id: "demo-book", name: "Book Draft", type: "private", role: "owner", orgId: null, createdAt: "2020-01-02T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
 ];
 
 const demoStandaloneTeams: Scope[] = [
-  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", orgId: null, createdAt: "2020-01-04T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-growth", name: "Growth Engine", type: "team", role: "admin", orgId: null, createdAt: "2020-01-04T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
 ];
 
 const demoOrgA: Organization = {
@@ -28,12 +28,12 @@ const demoOrgB: Organization = {
 };
 
 const demoOrgATeams: Scope[] = [
-  { id: "demo-org-product", name: "Product", type: "team", role: "admin", orgId: demoOrgA.id, createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0 },
-  { id: "demo-org-marketing", name: "Marketing", type: "team", role: "member", orgId: demoOrgA.id, createdAt: "2020-01-06T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-org-product", name: "Product", type: "team", role: "admin", orgId: demoOrgA.id, createdAt: "2020-01-05T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
+  { id: "demo-org-marketing", name: "Marketing", type: "team", role: "member", orgId: demoOrgA.id, createdAt: "2020-01-06T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
 ];
 
 const demoOrgBTeams: Scope[] = [
-  { id: "demo-org-client", name: "Delivery", type: "team", role: "member", orgId: demoOrgB.id, createdAt: "2020-01-08T00:00:00.000Z", enabledViewsCount: 0 },
+  { id: "demo-org-client", name: "Delivery", type: "team", role: "member", orgId: demoOrgB.id, createdAt: "2020-01-08T00:00:00.000Z", enabledViewsCount: 0, enabledViews: [] },
 ];
 
 const multiOrgGroups: OrgPickerGroup[] = [

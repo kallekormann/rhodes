@@ -1,99 +1,62 @@
 # 08 — Metadata System
 
-**Status:** draft
+**Status:** living (aligned with Properties builder)
 
 ## Context
 
-Documents and library sources need structured metadata for filtering, views, and AI context — beyond raw text and embeddings.
+Documents need structured metadata for filtering, views, AI context, and team workflows—beyond raw text.
 
-## Decision
+## Three layers (product)
 
-Three metadata layers: **system** (automatic), **AI** (on ingest), **user-defined** (workspace schema). Detection via hybrid extraction; editing via on-demand sidebar.
+### Tier A — System / derived (readonly)
 
-## Specification
+| Field | Source |
+|-------|--------|
+| Created | `documents.created_at` |
+| Created by | `documents.created_by` |
+| Word count | `documents.metadata.word_count` |
+| Document type | `documents.metadata.document_type` (set by template) |
 
-### Layer 1 — System metadata (automatic)
+Shown via `SystemReadonlyRow`. Not schema pickers. Not AI-filled as form fields.
 
-| Field | Source | Tables |
-|-------|--------|--------|
-| `created_at`, `updated_at` | DB defaults | documents, library_sources |
-| `created_by`, `uploaded_by` | auth.uid() | documents, library_sources |
-| `word_count` | computed from `content_plain` | documents |
-| `file_type`, `file_name` | upload | library_sources |
-| `page_count` | Tika extraction | library_sources |
-| `embedding_status` | worker pipeline | library_sources |
-| `detected_language` | franc / LLM | both |
+### Tier B / C — Workspace schema + values
 
-### Layer 2 — AI metadata (on ingest / save)
+**Definitions** live in `metadata_schemas` (+ `metadata_schema_groups`).  
+**Values** live in `documents.metadata[field_key]`.
 
-| Field | How |
-|-------|-----|
-| `summary` | 5 bullet LLM summary | library_sources |
-| `topics[]` | LLM extract, stored in `metadata.topics` | both |
-| `entities[]` | LLM NER (people, orgs, products) | both |
+Users build schema via Properties **Manage → Add → Single | Group | Preset** (`PropertyFieldComposer` / `PropertyGroupComposer`). UI is always **label + control** (`SchemaFieldRow`).
 
-Generated during ingestion pipeline; refreshed on significant document edit (optional V1.5).
-
-### Layer 3 — User-defined metadata
-
-**Schema per workspace** (`metadata_schemas` table):
-
-```json
-{
-  "field_key": "status",
-  "field_label": "Status",
-  "field_type": "select",
-  "options": ["draft", "review", "published"]
-}
-```
-
-**Values** stored in `documents.metadata` / `library_sources.metadata`:
-
-```json
-{
-  "status": "draft",
-  "project": "Q3 Growth",
-  "review_date": "2026-08-01"
-}
-```
-
-### Field types (V1)
-
-| Type | UI control |
-|------|------------|
-| `text` | Single line input |
+| `field_type` | Control |
+|--------------|---------|
+| `text` / `url` | Input |
+| `textarea` | TextArea |
 | `select` | Dropdown |
-| `date` | Date picker |
-| `tags` | Tag chips, freeform |
-| `number` | Number input |
+| `multi_select` | Chips |
+| `date` | DatePicker |
+| `date_range` | DateRange |
+| `tags` | TagsEditor |
+| `number` | Input + unit |
+| `checkbox` | Checkbox |
 
-### Metadata detection
+### AI-assisted values
 
-| Source | Method |
-|--------|--------|
-| PDF/DOCX frontmatter | YAML parser if present |
-| Filename patterns | `YYYY-MM-DD-title.pdf` → date + title hint |
-| Document content | LLM extraction on first save (optional) |
-| Manual | User edits in ⓘ sidebar |
+- Per-field `metadata_schemas.ai_fill_enabled` (“Enable AI suggestions” in composers).  
+- On document save (content threshold), worker fills empty top-level AI-enabled fields and sets `_ai_filled_keys`.  
+- User edit clears that key’s AI mark.  
+- Templates turn AI on for Tier B inferable fields by default.
 
-### UI
+## Templates
 
-- **Edit:** Header ⓘ → right sidebar "Document info" section
-- **Display:** Not shown in editor by default — only in sidebar and search results
-- **Views (V1.5):** Filter documents by metadata via saved views
+Templates declare `schema_fields` (same shape as bundle `MetadataFieldSeed` + `ai_fill_enabled`) and typed `default_properties`. On Use, fields are seeded onto the workspace. See [34-template-authoring.md](34-template-authoring.md).
 
-### Workspace admin
+Essential keys (`status`, `due_date`, `owner`, `summary`) cannot be deleted from Manage.
 
-- Owner/Admin can add/remove custom fields in space settings (future settings page or Cmd+K "Manage fields")
-- Max 20 custom fields per workspace (V1)
+## Reserved metadata keys
 
-## Open questions
+`favorite`, `archived`, `archived_at`, `template_draft`, `comments`, plus bookkeeping `_ai_filled_keys`, `word_count`, `document_type`, `template_slug`.
 
-- Inherit metadata schema from team template on new space?
-- AI auto-fill metadata on every save (cost/latency)?
+## Related
 
-## Dependencies
-
-- [04-data-model.md](04-data-model.md)
-- [10-templates-and-views.md](10-templates-and-views.md)
-- [16-ingestion-pipeline.md](16-ingestion-pipeline.md)
+- [10-templates-and-views.md](10-templates-and-views.md)  
+- [34-template-authoring.md](34-template-authoring.md)  
+- Implementation: `apps/web/src/components/properties/`, `lib/metadata/`

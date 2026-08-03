@@ -41,6 +41,12 @@ import { readActiveWorkspaceId } from "@/lib/workspaces/scope";
 import { useWorkspaces } from "@/hooks/useWorkspaces";
 import { unlockOfflineVaults } from "@/lib/offline/offline-vault-session";
 import { cleanupLegacyYjsIndexedDbDatabases } from "@/lib/offline/legacy-yjs-idb-cleanup";
+import type { ScopeCompositionBody } from "@/lib/scope-composition/apply";
+import type { PendingTeamInvite } from "@/components/ScopeSetupWizard";
+import {
+  DOCUMENTS_SCOPE_NAV_VIEW,
+  servableScopeNavViews,
+} from "@/lib/scope-views/nav";
 
 export type AppView =
   | "editor"
@@ -124,6 +130,9 @@ type AppContextValue = {
   isFavorite: (id: string) => boolean;
   toggleFavorite: (id: string) => void;
   activeScope: Scope;
+  activeScopeNavViewId: string;
+  setActiveScopeNavViewId: (viewId: string) => void;
+  scopeNavViews: ReturnType<typeof servableScopeNavViews>;
   scopes: Scope[];
   organizations: Organization[];
   scopesLoading: boolean;
@@ -131,12 +140,16 @@ type AppContextValue = {
   ensureWorkspace: () => Promise<Scope | null>;
   refreshScopes: () => Promise<void>;
   setActiveScope: (scopeId: string) => void;
-  createPersonalSpace: (name: string, enabledViews?: string[]) => Promise<void>;
+  createPersonalSpace: (
+    name: string,
+    scopeComposition?: ScopeCompositionBody,
+  ) => Promise<boolean>;
   createTeamSpace: (
     name: string,
-    enabledViews?: string[],
+    scopeComposition?: ScopeCompositionBody,
     orgId?: string | null,
-  ) => Promise<void>;
+    pendingInvites?: PendingTeamInvite[],
+  ) => Promise<boolean>;
   updateDisplayName: (name: string) => void;
   updateAvatarUrl: (avatarUrl: string | null) => void;
   canCreatePersonalSpace: boolean;
@@ -167,6 +180,7 @@ const FALLBACK_SCOPE: Scope = {
   orgId: null,
   createdAt: new Date(0).toISOString(),
   enabledViewsCount: 0,
+  enabledViews: [],
 };
 
 function readStoredThemeMode(): ThemeMode {
@@ -209,6 +223,9 @@ export function AppProvider({
   const [showBubble, setShowBubble] = useState(false);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   const [documentId, setDocumentId] = useState("");
+  const [activeScopeNavViewId, setActiveScopeNavViewIdState] = useState(
+    DOCUMENTS_SCOPE_NAV_VIEW.id,
+  );
   const [favorites, setFavorites] = useState<Set<string>>(
     () => new Set(initialFavoriteIds),
   );
@@ -242,6 +259,10 @@ export function AppProvider({
 
   const activeScope =
     scopes.find((s) => s.id === activeScopeId) ?? scopes[0] ?? FALLBACK_SCOPE;
+  const scopeNavViews = useMemo(
+    () => servableScopeNavViews(activeScope.enabledViews ?? []),
+    [activeScope.enabledViews],
+  );
   const featureGates = useMemo(
     () =>
       buildFeatureGates({
@@ -461,9 +482,10 @@ export function AppProvider({
     async (
       name: string,
       isTeam: boolean,
-      enabledViews: string[] = [],
+      scopeComposition?: ScopeCompositionBody,
       orgId?: string | null,
-    ) => {
+      pendingInvites?: PendingTeamInvite[],
+    ): Promise<boolean> => {
       try {
         const response = await fetch("/app/api/workspaces", {
           method: "POST",
@@ -471,7 +493,9 @@ export function AppProvider({
           body: JSON.stringify({
             name,
             is_team_workspace: isTeam,
-            enabled_views: enabledViews,
+            ...(scopeComposition
+              ? { scope_composition: scopeComposition }
+              : {}),
             ...(orgId ? { org_id: orgId } : {}),
           }),
         });
@@ -482,32 +506,74 @@ export function AppProvider({
         };
 
         if (!response.ok) {
-          showToast(body.error ?? "Couldn't create scope", "error");
-          return;
+          const message =
+            typeof body.error === "string"
+              ? body.error
+              : "Couldn't create scope";
+          showToast(message, "error");
+          return false;
         }
 
         await refreshScopes();
 
         if (body.workspace?.id) {
           setActiveScopeId(body.workspace.id);
+
+          if (isTeam && pendingInvites?.length) {
+            let sent = 0;
+            let failed = 0;
+            for (const invite of pendingInvites) {
+              try {
+                const inviteResponse = await fetch(
+                  `/app/api/workspaces/${body.workspace.id}/invite`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(invite),
+                  },
+                );
+                if (inviteResponse.ok) sent += 1;
+                else failed += 1;
+              } catch {
+                failed += 1;
+              }
+            }
+            if (sent > 0 && failed === 0) {
+              showToast(
+                `Sent ${sent} invite${sent === 1 ? "" : "s"}`,
+                "success",
+              );
+            } else if (sent > 0) {
+              showToast(`Sent ${sent} invites, ${failed} failed`, "error");
+            } else if (failed > 0) {
+              showToast("Couldn't send team invites", "error");
+            }
+          }
         }
 
         showToast(`"${name}" scope created`, "success");
+        return true;
       } catch {
         showToast("Couldn't create scope", "error");
+        return false;
       }
     },
     [refreshScopes, setActiveScopeId, showToast],
   );
 
   const createPersonalSpace = useCallback(
-    (name: string, enabledViews: string[] = []) => createScope(name, false, enabledViews),
+    (name: string, scopeComposition?: ScopeCompositionBody) =>
+      createScope(name, false, scopeComposition),
     [createScope],
   );
 
   const createTeamSpace = useCallback(
-    (name: string, enabledViews: string[] = [], orgId?: string | null) =>
-      createScope(name, true, enabledViews, orgId),
+    (
+      name: string,
+      scopeComposition?: ScopeCompositionBody,
+      orgId?: string | null,
+      pendingInvites?: PendingTeamInvite[],
+    ) => createScope(name, true, scopeComposition, orgId, pendingInvites),
     [createScope],
   );
 
@@ -557,6 +623,22 @@ export function AppProvider({
       navigate();
     },
     [commitAppNavigation, documentId, view],
+  );
+
+  useEffect(() => {
+    if (!scopeNavViews.some((navView) => navView.id === activeScopeNavViewId)) {
+      setActiveScopeNavViewIdState(DOCUMENTS_SCOPE_NAV_VIEW.id);
+    }
+  }, [activeScope.id, activeScopeNavViewId, scopeNavViews]);
+
+  const setActiveScopeNavViewId = useCallback(
+    (viewId: string) => {
+      setActiveScopeNavViewIdState(viewId);
+      if (viewId === DOCUMENTS_SCOPE_NAV_VIEW.id) {
+        setView("documents");
+      }
+    },
+    [setView],
   );
 
   const openEditor = useCallback(
@@ -714,6 +796,9 @@ export function AppProvider({
       isFavorite,
       toggleFavorite,
       activeScope,
+      activeScopeNavViewId,
+      setActiveScopeNavViewId,
+      scopeNavViews,
       scopes,
       organizations,
       scopesLoading,
@@ -764,6 +849,9 @@ export function AppProvider({
       isFavorite,
       toggleFavorite,
       activeScope,
+      activeScopeNavViewId,
+      setActiveScopeNavViewId,
+      scopeNavViews,
       scopes,
       organizations,
       scopesLoading,

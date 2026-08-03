@@ -49,6 +49,7 @@ import { ChatMessageBubbleShowcase } from "@/components/ChatMessageBubbleShowcas
 import { ChartShowcase } from "@/components/charts/ChartShowcase";
 import { PropertiesStudioShowcase } from "@/components/properties/PropertiesStudioShowcase";
 import { ScopeSwitcherShowcase } from "@/components/ScopeSwitcherShowcase";
+import { WizardShowcase } from "@/components/wizard/WizardShowcase";
 import { SlashMenuShowcase } from "@/components/SlashMenuShowcase";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatusPill } from "@/components/StatusPill";
@@ -688,6 +689,14 @@ export function StickerSheetView() {
           onConfirm={() => showToast("Space deleted", "success")}
           onClose={() => setDialogOpen(false)}
         />
+      </section>
+
+      <section className="sticker-section">
+        <h2 className="type-sticker-heading">Wizard</h2>
+        <p className="type-caption sticker-section__desc">
+          Two-column modal with stepper and live scope outline — used for scope setup.
+        </p>
+        <WizardShowcase />
       </section>
 
       <section className="sticker-section">

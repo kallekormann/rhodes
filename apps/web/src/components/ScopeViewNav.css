@@ -1,0 +1,19 @@
+.scope-view-nav.dropdown {
+  flex-shrink: 0;
+}
+
+.scope-view-nav .dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.scope-view-nav--single {
+  cursor: default;
+}

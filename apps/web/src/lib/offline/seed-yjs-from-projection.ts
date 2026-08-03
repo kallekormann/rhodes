@@ -1,12 +1,13 @@
 /**
- * One-time safety net: import TipTap JSON from IDB into an empty local Y.Doc.
+ * One-time safety net: import TipTap JSON into an empty local Y.Doc.
+ * Prefers offline IDB; falls back to optional Postgres/projection content.
  */
 
 import Collaboration from "@tiptap/extension-collaboration";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor } from "@tiptap/core";
 import * as Y from "yjs";
-import { COLLAB_FRAGMENT, ydocHasCollaborationBody } from "@/lib/collaboration/yjs-document";
+import { COLLAB_FRAGMENT, ydocHasMeaningfulCollaborationBody } from "@/lib/collaboration/yjs-document";
 import { bodyRichness } from "@/lib/offline/document-body";
 import { getOfflineDocument } from "@/lib/offline/documents-cache";
 
@@ -16,30 +17,36 @@ const SEEDED_FLAG = "seeded";
 export async function seedYjsFromProjectionIfNeeded(
   documentId: string,
   doc: Y.Doc,
+  fallbackContent?: Record<string, unknown> | null,
 ): Promise<boolean> {
-  if (ydocHasCollaborationBody(doc)) return false;
-  if (doc.getMap(SEEDED_MAP_KEY).get(SEEDED_FLAG) === true) return false;
+  if (ydocHasMeaningfulCollaborationBody(doc)) return false;
+  // Allow re-seed when a prior empty-paragraph bootstrap flipped `seeded`
+  // without real text — otherwise template tips never appear.
 
   const offline = await getOfflineDocument(documentId);
-  if (!offline?.content) return false;
+  const content =
+    offline?.content && bodyRichness(offline.content, offline.content_plain) > 0
+      ? offline.content
+      : fallbackContent && bodyRichness(fallbackContent, null) > 0
+        ? fallbackContent
+        : null;
 
-  const rich = bodyRichness(offline.content, offline.content_plain);
-  if (rich === 0) return false;
+  if (!content) return false;
 
   const editor = new Editor({
     extensions: [
       StarterKit.configure({ history: false }),
       Collaboration.configure({ document: doc, field: COLLAB_FRAGMENT }),
     ],
-    content: offline.content,
+    content,
   });
 
   try {
-    if (!ydocHasCollaborationBody(doc)) {
-      editor.commands.setContent(offline.content);
+    if (!ydocHasMeaningfulCollaborationBody(doc)) {
+      editor.commands.setContent(content);
     }
     doc.getMap(SEEDED_MAP_KEY).set(SEEDED_FLAG, true);
-    return ydocHasCollaborationBody(doc);
+    return ydocHasMeaningfulCollaborationBody(doc);
   } finally {
     editor.destroy();
   }

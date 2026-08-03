@@ -6,6 +6,7 @@ import {
 } from "@/lib/metadata/api";
 import { canManageWorkspaceMetadata } from "@/lib/metadata/access";
 import { createClient } from "@/lib/supabase/server";
+import { isEssentialTemplateFieldKey } from "@rhodes/shared/system-templates";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -125,6 +126,18 @@ export async function DELETE(request: Request, context: RouteContext) {
       NextResponse.json(
         { error: "Only workspace owners and admins can manage properties" },
         { status: 403 },
+      ),
+    );
+  }
+
+  if (isEssentialTemplateFieldKey(existing.field_key)) {
+    return withSecurityHeaders(
+      NextResponse.json(
+        {
+          error:
+            "This property is required by templates (status, due, owner, or summary) and cannot be removed.",
+        },
+        { status: 400 },
       ),
     );
   }
