@@ -108,7 +108,12 @@ export async function buildWorkspaceAskContext(
   const groups = groupsResult.data ?? [];
 
   const selectKeys = schemas
-    .filter((field) => field.field_type === "select" || field.field_type === "multi_select")
+    .filter(
+      (field) =>
+        field.field_type === "select" ||
+        field.field_type === "multi_select" ||
+        field.field_type === "status",
+    )
     .map((field) => field.field_key);
 
   // Prefer status first in property snippets

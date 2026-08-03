@@ -71,6 +71,13 @@ export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [
     status: "coming_soon",
     minTier: "pro",
   },
+  {
+    id: "graph",
+    label: "Mind-map / dependencies",
+    description: "Visualize relation-linked documents",
+    status: "coming_soon",
+    minTier: "pro",
+  },
 ];
 
 const TIER_RANK: Record<BillingTier, number> = {

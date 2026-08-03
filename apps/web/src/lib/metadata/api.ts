@@ -18,6 +18,20 @@ export const metadataFieldTypeSchema = z.enum([
   "number",
   "url",
   "checkbox",
+  "status",
+  "relation",
+]);
+
+const statusOptionSchema = z.object({
+  value: z.string().min(1).max(80),
+  label: z.string().min(1).max(80),
+  category: z.enum(["unstarted", "started", "completed", "canceled"]),
+});
+
+const metadataOptionsSchema = z.union([
+  z.array(z.string().min(1).max(80)),
+  z.array(statusOptionSchema),
+  z.object({ unit: z.string().max(12) }),
 ]);
 
 export const createMetadataSchemaInput = z.object({
@@ -26,10 +40,7 @@ export const createMetadataSchemaInput = z.object({
   field_type: metadataFieldTypeSchema,
   field_key: z.string().min(1).max(48).optional(),
   ai_fill_enabled: z.boolean().optional(),
-  options: z.union([
-    z.array(z.string().min(1).max(80)),
-    z.object({ unit: z.string().max(12) }),
-  ]).nullish(),
+  options: metadataOptionsSchema.nullish(),
 });
 
 export const createMetadataGroupFieldInput = z.object({
@@ -37,10 +48,7 @@ export const createMetadataGroupFieldInput = z.object({
   field_type: metadataFieldTypeSchema,
   sub_key: z.string().min(1).max(32).optional(),
   ai_fill_enabled: z.boolean().optional(),
-  options: z.union([
-    z.array(z.string().min(1).max(80)),
-    z.object({ unit: z.string().max(12) }),
-  ]).nullish(),
+  options: metadataOptionsSchema.nullish(),
   sort_order: z.number().int().min(0).optional(),
 });
 
@@ -55,10 +63,7 @@ export const createMetadataGroupInput = z.object({
 export const updateMetadataSchemaInput = z.object({
   field_label: z.string().min(1).max(80),
   field_type: metadataFieldTypeSchema,
-  options: z.union([
-    z.array(z.string().min(1).max(80)),
-    z.object({ unit: z.string().max(12) }),
-  ]).nullish(),
+  options: metadataOptionsSchema.nullish(),
   ai_fill_enabled: z.boolean().optional(),
 });
 
@@ -76,17 +81,23 @@ export function normalizeUpdateMetadataSchemaInput(
   input: z.infer<typeof updateMetadataSchemaInput>,
 ) {
   const needsOptions =
-    input.field_type === "select" || input.field_type === "multi_select";
+    input.field_type === "select" ||
+    input.field_type === "multi_select" ||
+    input.field_type === "status";
 
   if (needsOptions && (!Array.isArray(input.options) || input.options.length === 0)) {
-    throw new Error("Select fields require at least one option");
+    throw new Error(
+      input.field_type === "status"
+        ? "Status fields require at least one status option"
+        : "Select fields require at least one option",
+    );
   }
 
   return {
     field_label: input.field_label.trim(),
     field_type: input.field_type as MetadataFieldType,
     options: needsOptions ? input.options : input.options ?? null,
-    ai_fill_enabled: input.ai_fill_enabled ?? false,
+    ai_fill_enabled: input.field_type === "relation" ? false : input.ai_fill_enabled ?? false,
   };
 }
 
@@ -104,7 +115,9 @@ export function normalizeUpdateMetadataGroupInput(
 
     const field_key = groupFieldKey(groupKey, sub_key);
     const needsOptions =
-      field.field_type === "select" || field.field_type === "multi_select";
+      field.field_type === "select" ||
+      field.field_type === "multi_select" ||
+      field.field_type === "status";
 
     if (needsOptions && (!Array.isArray(field.options) || field.options.length === 0)) {
       throw new Error(`"${field.field_label}" requires at least one option`);
@@ -118,7 +131,7 @@ export function normalizeUpdateMetadataGroupInput(
       field_type: field.field_type as MetadataFieldType,
       options: needsOptions ? field.options : field.options ?? null,
       sort_order: field.sort_order ?? index,
-      ai_fill_enabled: field.ai_fill_enabled ?? false,
+      ai_fill_enabled: field.field_type === "relation" ? false : field.ai_fill_enabled ?? false,
     };
   });
 
@@ -139,10 +152,16 @@ export function normalizeCreateMetadataSchemaInput(
   }
 
   const needsOptions =
-    input.field_type === "select" || input.field_type === "multi_select";
+    input.field_type === "select" ||
+    input.field_type === "multi_select" ||
+    input.field_type === "status";
 
   if (needsOptions && (!Array.isArray(input.options) || input.options.length === 0)) {
-    throw new Error("Select fields require at least one option");
+    throw new Error(
+      input.field_type === "status"
+        ? "Status fields require at least one status option"
+        : "Select fields require at least one option",
+    );
   }
 
   return {
@@ -151,7 +170,7 @@ export function normalizeCreateMetadataSchemaInput(
     field_key,
     field_type: input.field_type as MetadataFieldType,
     options: needsOptions ? input.options : input.options ?? null,
-    ai_fill_enabled: input.ai_fill_enabled ?? false,
+    ai_fill_enabled: input.field_type === "relation" ? false : input.ai_fill_enabled ?? false,
   };
 }
 
@@ -174,7 +193,9 @@ export function normalizeCreateMetadataGroupInput(
 
     const field_key = groupFieldKey(group_key, sub_key);
     const needsOptions =
-      field.field_type === "select" || field.field_type === "multi_select";
+      field.field_type === "select" ||
+      field.field_type === "multi_select" ||
+      field.field_type === "status";
 
     if (needsOptions && (!Array.isArray(field.options) || field.options.length === 0)) {
       throw new Error(`"${field.field_label}" requires at least one option`);
@@ -187,7 +208,7 @@ export function normalizeCreateMetadataGroupInput(
       field_type: field.field_type as MetadataFieldType,
       options: needsOptions ? field.options : field.options ?? null,
       sort_order: field.sort_order ?? index,
-      ai_fill_enabled: field.ai_fill_enabled ?? false,
+      ai_fill_enabled: field.field_type === "relation" ? false : field.ai_fill_enabled ?? false,
     };
   });
 

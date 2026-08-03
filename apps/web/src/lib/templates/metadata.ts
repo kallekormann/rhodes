@@ -20,6 +20,8 @@ const FIELD_TYPES = new Set([
   "number",
   "url",
   "checkbox",
+  "status",
+  "relation",
 ]);
 
 function isMetadataFieldValue(value: unknown): value is MetadataFieldValue {
@@ -31,14 +33,36 @@ function isMetadataFieldValue(value: unknown): value is MetadataFieldValue {
     return value.every((item) => typeof item === "string");
   }
   if (typeof value === "object") {
-    const range = value as { start?: unknown; end?: unknown };
+    const record = value as { start?: unknown; end?: unknown; document_id?: unknown };
+    if ("document_id" in record) {
+      return typeof record.document_id === "string";
+    }
     return (
-      ("start" in range || "end" in range) &&
-      (range.start === null || typeof range.start === "string") &&
-      (range.end === null || typeof range.end === "string")
+      ("start" in record || "end" in record) &&
+      (record.start === null || typeof record.start === "string") &&
+      (record.end === null || typeof record.end === "string")
     );
   }
   return false;
+}
+
+type StatusOptionSeedShape = {
+  value: string;
+  label: string;
+  category: "unstarted" | "started" | "completed" | "canceled";
+};
+
+const STATUS_CATEGORY_VALUES = new Set(["unstarted", "started", "completed", "canceled"]);
+
+function isStatusOptionSeed(value: unknown): value is StatusOptionSeedShape {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.value === "string" &&
+    typeof record.label === "string" &&
+    typeof record.category === "string" &&
+    STATUS_CATEGORY_VALUES.has(record.category)
+  );
 }
 
 function parseSchemaFields(raw: unknown): TemplateSchemaFieldSeed[] | undefined {
@@ -58,7 +82,9 @@ function parseSchemaFields(raw: unknown): TemplateSchemaFieldSeed[] | undefined 
     if (!field_key || !field_label || !field_type) continue;
 
     const options = Array.isArray(record.options)
-      ? record.options.filter((item): item is string => typeof item === "string")
+      ? record.options.every(isStatusOptionSeed)
+        ? (record.options as StatusOptionSeedShape[])
+        : record.options.filter((item): item is string => typeof item === "string")
       : record.options === null
         ? null
         : undefined;

@@ -5,12 +5,14 @@ import {
   CalendarRange,
   CheckSquare,
   Hash,
+  Link,
   Link2,
   List,
   ListChecks,
   Tags,
   Text,
   AlignLeft,
+  Workflow,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MetadataFieldType } from "@/lib/metadata/schemas";
@@ -42,6 +44,7 @@ const TYPE_GROUPS: Array<{ title: string; chips: TypeChip[] }> = [
       { type: "select", icon: List, label: METADATA_FIELD_TYPE_LABELS.select },
       { type: "multi_select", icon: ListChecks, label: METADATA_FIELD_TYPE_LABELS.multi_select },
       { type: "checkbox", icon: CheckSquare, label: "Yes/No" },
+      { type: "status", icon: Workflow, label: METADATA_FIELD_TYPE_LABELS.status },
     ],
   },
   {
@@ -53,7 +56,10 @@ const TYPE_GROUPS: Array<{ title: string; chips: TypeChip[] }> = [
   },
   {
     title: "Other",
-    chips: [{ type: "tags", icon: Tags, label: METADATA_FIELD_TYPE_LABELS.tags }],
+    chips: [
+      { type: "tags", icon: Tags, label: METADATA_FIELD_TYPE_LABELS.tags },
+      { type: "relation", icon: Link, label: METADATA_FIELD_TYPE_LABELS.relation },
+    ],
   },
 ];
 

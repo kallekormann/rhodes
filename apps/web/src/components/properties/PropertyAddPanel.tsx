@@ -11,7 +11,12 @@ import {
   type PropertyGroupComposerHandle,
 } from "@/components/properties/PropertyGroupComposer";
 import { PropertyPresetRow } from "@/components/properties/PropertyPresetRow";
-import { type MetadataFieldType, type MetadataSchemaField, type MetadataSchemaGroup } from "@/lib/metadata/schemas";
+import {
+  type MetadataFieldType,
+  type MetadataSchemaField,
+  type MetadataSchemaGroup,
+  type StatusOption,
+} from "@/lib/metadata/schemas";
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import {
@@ -42,7 +47,7 @@ type PropertyAddPanelProps = {
   onCreateSchema: (input: {
     field_label: string;
     field_type: MetadataFieldType;
-    options?: string[] | { unit: string };
+    options?: string[] | StatusOption[] | { unit: string };
     ai_fill_enabled?: boolean;
   }) => Promise<{ ok: boolean; error?: string }>;
   onCreateGroup: (input: {
@@ -61,7 +66,7 @@ type PropertyAddPanelProps = {
     input: {
       field_label: string;
       field_type: MetadataFieldType;
-      options?: string[] | { unit: string };
+      options?: string[] | StatusOption[] | { unit: string };
       ai_fill_enabled?: boolean;
     },
   ) => Promise<{ ok: boolean; error?: string }>;

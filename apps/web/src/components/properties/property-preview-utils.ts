@@ -22,6 +22,10 @@ export function previewValueForFieldType(
       return { start: null, end: null };
     case "textarea":
       return "";
+    case "status":
+      return null;
+    case "relation":
+      return null;
     default:
       return "";
   }

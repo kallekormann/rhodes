@@ -30,9 +30,13 @@ type PropertiesManageSheetProps = {
   ) => Promise<{ ok: boolean; error?: string }>;
 };
 
+// Status (per-option category) and Relation (document picker) need richer UI than this
+// plain-text sheet supports — create those from the "Add property" flyout instead.
 const fieldTypeOptions = (
   Object.entries(METADATA_FIELD_TYPE_LABELS) as [MetadataFieldType, string][]
-).map(([id, label]) => ({ id, label }));
+)
+  .filter(([id]) => id !== "status" && id !== "relation")
+  .map(([id, label]) => ({ id, label }));
 
 function needsOptions(fieldType: MetadataFieldType) {
   return fieldType === "select" || fieldType === "multi_select";

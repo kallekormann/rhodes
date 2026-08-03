@@ -23,6 +23,7 @@ import type {
   MetadataFieldValue,
   MetadataSchemaField,
   MetadataSchemaGroup,
+  StatusOption,
 } from "@/lib/metadata/schemas";
 import {
   readMetadataFieldValue,
@@ -56,7 +57,7 @@ type PropertiesTabProps = {
   createMetadataSchema: (input: {
     field_label: string;
     field_type: MetadataFieldType;
-    options?: string[] | { unit: string };
+    options?: string[] | StatusOption[] | { unit: string };
     ai_fill_enabled?: boolean;
   }) => Promise<{ ok: boolean; error?: string }>;
   createMetadataGroup: (input: {
@@ -75,7 +76,7 @@ type PropertiesTabProps = {
     input: {
       field_label: string;
       field_type: MetadataFieldType;
-      options?: string[] | { unit: string };
+      options?: string[] | StatusOption[] | { unit: string };
       ai_fill_enabled?: boolean;
     },
   ) => Promise<{ ok: boolean; error?: string }>;

@@ -19,8 +19,10 @@ export function templateRecordToUi(template: TemplateRecord): Template {
           label,
           value: Array.isArray(value)
             ? value.join(", ")
-            : typeof value === "object"
-              ? [value.start, value.end].filter(Boolean).join(" → ")
+            : typeof value === "object" && value !== null
+              ? "document_id" in value
+                ? String(value.title ?? "Linked document")
+                : [value.start, value.end].filter(Boolean).join(" → ")
               : String(value),
         }))
     : undefined;

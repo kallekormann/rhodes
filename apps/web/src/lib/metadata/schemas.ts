@@ -20,11 +20,28 @@ export type MetadataFieldType =
   | "tags"
   | "number"
   | "url"
-  | "checkbox";
+  | "checkbox"
+  | "status"
+  | "relation";
 
 export type MetadataDateRange = {
   start: string | null;
   end: string | null;
+};
+
+/** Workflow category a status option belongs to — drives generic progress/kanban math regardless of custom labels. */
+export type StatusCategory = "unstarted" | "started" | "completed" | "canceled";
+
+export type StatusOption = {
+  value: string;
+  label: string;
+  category: StatusCategory;
+};
+
+/** Reference to another document (Coda-style relation column). Single-value only in v1. */
+export type MetadataRelationValue = {
+  document_id: string;
+  title: string;
 };
 
 export type MetadataFieldValue =
@@ -33,6 +50,7 @@ export type MetadataFieldValue =
   | boolean
   | string[]
   | MetadataDateRange
+  | MetadataRelationValue
   | null;
 
 export type MetadataSchemaField = {
@@ -84,7 +102,43 @@ export const METADATA_FIELD_TYPE_LABELS: Record<MetadataFieldType, string> = {
   number: "Number",
   url: "URL",
   checkbox: "Checkbox",
+  status: "Status (workflow)",
+  relation: "Linked document",
 };
+
+export const STATUS_CATEGORIES: readonly StatusCategory[] = [
+  "unstarted",
+  "started",
+  "completed",
+  "canceled",
+];
+
+export const STATUS_CATEGORY_LABELS: Record<StatusCategory, string> = {
+  unstarted: "Not started",
+  started: "In progress",
+  completed: "Completed",
+  canceled: "Canceled",
+};
+
+export function isStatusCategory(value: unknown): value is StatusCategory {
+  return (
+    typeof value === "string" && (STATUS_CATEGORIES as readonly string[]).includes(value)
+  );
+}
+
+export function parseStatusOptions(options: unknown): StatusOption[] | null {
+  if (!Array.isArray(options)) return null;
+  const values = options.filter((item): item is StatusOption => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return (
+      typeof record.value === "string" &&
+      typeof record.label === "string" &&
+      isStatusCategory(record.category)
+    );
+  });
+  return values.length > 0 ? values : null;
+}
 
 export function fieldKeyFromLabel(label: string): string {
   const base = label
@@ -145,6 +199,20 @@ export function readMetadataDateRange(
   };
 }
 
+export function readMetadataRelationValue(
+  metadata: Record<string, unknown> | null | undefined,
+  fieldKey: string,
+): MetadataRelationValue | null {
+  if (!metadata) return null;
+  const value = metadata[fieldKey];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  return typeof record.document_id === "string"
+    ? { document_id: record.document_id, title: typeof record.title === "string" ? record.title : "" }
+    : null;
+}
+
 export function readMetadataTags(
   metadata: Record<string, unknown> | null | undefined,
   fieldKey: string,
@@ -173,6 +241,8 @@ export function readMetadataFieldValue(
       return readMetadataTags(metadata, field.field_key);
     case "date_range":
       return readMetadataDateRange(metadata, field.field_key);
+    case "relation":
+      return readMetadataRelationValue(metadata, field.field_key);
     default:
       return typeof value === "string" ? value : String(value);
   }
@@ -194,6 +264,7 @@ function isEmptyMetadataValue(value: MetadataFieldValue): boolean {
   if (typeof value === "boolean") return false;
   if (typeof value === "number") return false;
   if (Array.isArray(value)) return value.length === 0;
+  if ("document_id" in value) return !value.document_id;
   return !value.start && !value.end;
 }
 

@@ -1,6 +1,15 @@
 import type { BillingTier } from "./tiers";
 import type { AdditionalScopeViewId } from "./scope-views";
 
+/** Workflow category a status option belongs to — mirrors apps/web's MetadataFieldSchema StatusCategory. */
+export type StatusCategorySeed = "unstarted" | "started" | "completed" | "canceled";
+
+export type StatusOptionSeed = {
+  value: string;
+  label: string;
+  category: StatusCategorySeed;
+};
+
 /** Metadata field injected when a bundle or view preset is applied to a scope. */
 export type MetadataFieldSeed = {
   field_key: string;
@@ -15,8 +24,10 @@ export type MetadataFieldSeed = {
     | "tags"
     | "number"
     | "url"
-    | "checkbox";
-  options?: string[] | null;
+    | "checkbox"
+    | "status"
+    | "relation";
+  options?: string[] | StatusOptionSeed[] | null;
   ai_fill_enabled?: boolean;
 };
 

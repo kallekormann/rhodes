@@ -6,6 +6,7 @@ import { DateRangeField, type DateRange } from "@/components/DateRangePicker";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import { TextArea } from "@/components/TextArea";
+import { RelationFieldEditor } from "@/components/properties/RelationFieldEditor";
 import {
   useBufferedNumberValue,
   useBufferedStringValue,
@@ -13,9 +14,10 @@ import {
 import type {
   MetadataDateRange,
   MetadataFieldValue,
+  MetadataRelationValue,
   MetadataSchemaField,
 } from "@/lib/metadata/schemas";
-import { parseSchemaOptions, parseSchemaUnit } from "@/lib/metadata/schemas";
+import { parseSchemaOptions, parseStatusOptions, parseSchemaUnit } from "@/lib/metadata/schemas";
 
 function parseDateValue(value: string | null | undefined): Date | null {
   if (!value) return null;
@@ -204,6 +206,50 @@ export function SchemaFieldRow({
       {aiSuggested && <span className="props-list__ai-hint">AI suggested</span>}
     </>
   );
+
+  if (field.field_type === "status") {
+    const statusOptions = parseStatusOptions(field.options);
+    return (
+      <div className={rowClass}>
+        <dt>{label}</dt>
+        <dd>
+          {statusOptions ? (
+            <Dropdown
+              variant="plain"
+              value={typeof value === "string" ? value : ""}
+              options={statusOptions.map((option) => ({
+                id: option.value,
+                label: option.label,
+              }))}
+              onChange={(next) => onChange(next || null)}
+            />
+          ) : (
+            <span className="props-list__empty-options">
+              No statuses — add them in Manage
+            </span>
+          )}
+        </dd>
+      </div>
+    );
+  }
+
+  if (field.field_type === "relation") {
+    const relation =
+      value && typeof value === "object" && !Array.isArray(value) && "document_id" in value
+        ? (value as MetadataRelationValue)
+        : null;
+    return (
+      <div className={rowClass}>
+        <dt>{label}</dt>
+        <dd>
+          <RelationFieldEditor
+            value={relation}
+            onChange={(next) => onChange(next)}
+          />
+        </dd>
+      </div>
+    );
+  }
 
   if (field.field_type === "select") {
     return (

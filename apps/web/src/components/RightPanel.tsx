@@ -15,7 +15,7 @@ import { PANEL_TAB_OPTIONS } from "@/lib/panel-tabs";
 import type { InsightMatch } from "@/hooks/useInsights";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
 import type { MetadataFieldValue, MetadataSchemaField, MetadataSchemaGroup } from "@/lib/metadata/schemas";
-import type { MetadataFieldType } from "@/lib/metadata/schemas";
+import type { MetadataFieldType, StatusOption } from "@/lib/metadata/schemas";
 import { PropertiesTab, type PropertiesPanelStage } from "./PropertiesTab";
 import type { ActivityNavigateTarget } from "./DocumentHistorySection";
 import { AskPanel } from "./AskPanel";
@@ -48,7 +48,7 @@ type RightPanelProps = {
   createMetadataSchema: (input: {
     field_label: string;
     field_type: MetadataFieldType;
-    options?: string[] | { unit: string };
+    options?: string[] | StatusOption[] | { unit: string };
     ai_fill_enabled?: boolean;
   }) => Promise<MetadataSchemaWriteResult>;
   createMetadataGroup: (input: {
@@ -67,7 +67,7 @@ type RightPanelProps = {
     input: {
       field_label: string;
       field_type: MetadataFieldType;
-      options?: string[] | { unit: string };
+      options?: string[] | StatusOption[] | { unit: string };
       ai_fill_enabled?: boolean;
     },
   ) => Promise<MetadataSchemaWriteResult>;

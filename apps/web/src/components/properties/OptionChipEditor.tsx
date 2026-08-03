@@ -67,5 +67,10 @@ export function OptionChipEditor({
 }
 
 export function needsChoiceOptions(fieldType: string) {
-  return fieldType === "select" || fieldType === "multi_select" || fieldType === "checkbox";
+  return (
+    fieldType === "select" ||
+    fieldType === "multi_select" ||
+    fieldType === "checkbox" ||
+    fieldType === "status"
+  );
 }

@@ -1,5 +1,5 @@
 import type { MetadataFieldValue, MetadataSchemaField } from "@/lib/metadata/schemas";
-import { parseSchemaOptions, parseSchemaUnit } from "@/lib/metadata/schemas";
+import { parseSchemaOptions, parseSchemaUnit, parseStatusOptions } from "@/lib/metadata/schemas";
 
 export function formatMetadataValueForDisplay(
   field: MetadataSchemaField,
@@ -24,6 +24,18 @@ export function formatMetadataValueForDisplay(
         : "—";
     case "select":
       return typeof value === "string" ? value.replace(/_/g, " ") : "—";
+    case "status": {
+      const statusOptions = parseStatusOptions(field.options);
+      const match = statusOptions?.find((option) => option.value === value);
+      return match ? match.label : typeof value === "string" ? value.replace(/_/g, " ") : "—";
+    }
+    case "relation": {
+      if (value && typeof value === "object" && !Array.isArray(value) && "document_id" in value) {
+        const relation = value as { title?: string };
+        return relation.title || "Untitled";
+      }
+      return "—";
+    }
     case "date_range": {
       if (value && typeof value === "object" && !Array.isArray(value)) {
         const range = value as { start?: string | null; end?: string | null };

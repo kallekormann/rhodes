@@ -1,0 +1,67 @@
+.relation-field-editor {
+  position: relative;
+  min-width: 0;
+}
+
+.relation-field-editor__results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+  padding: 4px;
+}
+
+.relation-field-editor__result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs, 4px);
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.relation-field-editor__result:hover {
+  background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.relation-field-editor__hint {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.relation-field-editor__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-surface-muted, rgba(0, 0, 0, 0.05));
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.relation-field-editor__remove {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}

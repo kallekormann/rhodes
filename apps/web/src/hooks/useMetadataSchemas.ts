@@ -7,7 +7,10 @@ import type {
   MetadataGroupField,
   MetadataSchemaField,
   MetadataSchemaGroup,
+  StatusOption,
 } from "@/lib/metadata/schemas";
+
+type SchemaOptionsInput = string[] | StatusOption[] | { unit: string };
 
 function mapGroupFromApi(group: MetadataSchemaGroup): MetadataSchemaGroup {
   const rawFields = group.fields as Array<
@@ -90,7 +93,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
     async (input: {
       field_label: string;
       field_type: MetadataFieldType;
-      options?: string[] | { unit: string };
+      options?: SchemaOptionsInput;
       field_key?: string;
       ai_fill_enabled?: boolean;
     }) => {
@@ -127,7 +130,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         field_label: string;
         field_type: MetadataFieldType;
         sub_key?: string;
-        options?: string[] | { unit: string };
+        options?: SchemaOptionsInput;
         ai_fill_enabled?: boolean;
       }>;
     }) => {
@@ -200,7 +203,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
       input: {
         field_label: string;
         field_type: MetadataFieldType;
-        options?: string[] | { unit: string };
+        options?: SchemaOptionsInput;
         ai_fill_enabled?: boolean;
       },
     ) => {
@@ -233,7 +236,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
           field_label: string;
           field_type: MetadataFieldType;
           sub_key?: string;
-          options?: string[] | { unit: string };
+          options?: SchemaOptionsInput;
           ai_fill_enabled?: boolean;
         }>;
       },

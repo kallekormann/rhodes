@@ -6,7 +6,7 @@ import { IconButton } from "@/components/IconButton";
 import { PropertyFieldComposer } from "@/components/properties/PropertyFieldComposer";
 import { PropertyGroupComposer } from "@/components/properties/PropertyGroupComposer";
 import { PropertyPickPanel } from "@/components/properties/PropertyPickPanel";
-import type { MetadataFieldType, MetadataSchemaField, MetadataSchemaGroup } from "@/lib/metadata/schemas";
+import type { MetadataFieldType, MetadataSchemaField, MetadataSchemaGroup, StatusOption } from "@/lib/metadata/schemas";
 import "./PropertyAddFlyout.css";
 import "./property-composer.css";
 
@@ -31,7 +31,7 @@ type PropertyAddFlyoutProps = {
   onCreateSchema: (input: {
     field_label: string;
     field_type: MetadataFieldType;
-    options?: string[] | { unit: string };
+    options?: string[] | StatusOption[] | { unit: string };
   }) => Promise<{ ok: boolean; error?: string }>;
   onCreateGroup: (input: {
     group_label: string;
@@ -78,7 +78,7 @@ export function PropertyAddFlyout({
   const handleCreateSchema = async (input: {
     field_label: string;
     field_type: MetadataFieldType;
-    options?: string[] | { unit: string };
+    options?: string[] | StatusOption[] | { unit: string };
   }) => {
     const result = await onCreateSchema(input);
     if (result.ok) onClose();
