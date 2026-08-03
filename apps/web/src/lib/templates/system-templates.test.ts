@@ -16,6 +16,8 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "ab-experiment",
       "adr",
       "blank",
+      "campaign-brief",
+      "editorial-calendar",
       "gtm-plan",
       "insight",
       "launch-checklist",
@@ -29,6 +31,8 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "project-charter",
       "report",
       "scientific-experiment",
+      "seo-brief",
+      "social-post-batch",
       "sop",
       "swot-analysis",
       "technical-requirements-document",
@@ -169,6 +173,41 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     expect(weeklyStatus, "missing weekly-status").toBeTruthy();
     const health = weeklyStatus?.metadata.schema_fields.find((f) => f.field_key === "health");
     expect(health?.field_type).toBe("status");
+  });
+
+  it("Content & Campaign Marketing templates ship campaign relation and their own status keys without colliding with essentials", () => {
+    for (const slug of ["editorial-calendar", "seo-brief", "social-post-batch"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const campaign = seed?.metadata.schema_fields.find((f) => f.field_key === "campaign");
+      expect(campaign?.field_type, `${slug} missing campaign relation`).toBe("relation");
+    }
+
+    const campaignBrief = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "campaign-brief");
+    expect(campaignBrief, "missing campaign-brief").toBeTruthy();
+    const essentialStatus = campaignBrief?.metadata.schema_fields.find((f) => f.field_key === "status");
+    expect(essentialStatus?.field_type).toBe("select");
+    const campaignStatus = campaignBrief?.metadata.schema_fields.find(
+      (f) => f.field_key === "campaign_status",
+    );
+    expect(campaignStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(campaignStatus?.options)?.length).toBeGreaterThan(0);
+
+    const editorialCalendar = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "editorial-calendar");
+    const contentStatus = editorialCalendar?.metadata.schema_fields.find(
+      (f) => f.field_key === "content_status",
+    );
+    expect(contentStatus?.field_type).toBe("status");
+
+    const seoBrief = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "seo-brief");
+    const seoStatus = seoBrief?.metadata.schema_fields.find((f) => f.field_key === "seo_status");
+    expect(seoStatus?.field_type).toBe("status");
+
+    const socialPostBatch = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "social-post-batch");
+    const batchStatus = socialPostBatch?.metadata.schema_fields.find(
+      (f) => f.field_key === "batch_status",
+    );
+    expect(batchStatus?.field_type).toBe("status");
   });
 
   it("ships essentials with field_type and AI fill", () => {

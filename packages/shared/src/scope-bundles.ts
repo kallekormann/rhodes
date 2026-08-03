@@ -272,6 +272,39 @@ export const GTM_PROJECT_EXECUTION_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const CONTENT_MARKETING_BUNDLE: BundleDefinition = {
+  id: "content-marketing",
+  label: "Content & Campaign Marketing",
+  description: "Campaign briefs, content calendar, SEO briefs, and social batches — all traceable to a campaign.",
+  audience: ["content-marketing", "seo", "social-media", "marketing"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "content-calendar",
+      baseViewType: "calendar",
+      label: "Content calendar",
+      description: "Content pieces and social batches by publish/scheduled date",
+      config: { dateField: "publish_date" },
+    },
+    {
+      id: "content-pipeline-board",
+      baseViewType: "kanban",
+      label: "Content pipeline",
+      description: "Idea → Drafting → Review → Scheduled → Published",
+      config: { groupBy: "content_status" },
+    },
+  ],
+  templateSlugs: ["campaign-brief", "editorial-calendar", "seo-brief", "social-post-batch"],
+  metadataFields: [
+    {
+      field_key: "campaign",
+      field_label: "Campaign",
+      field_type: "relation",
+      ai_fill_enabled: false,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
@@ -279,6 +312,7 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   PRODUCT_ARCHITECTURE_BUNDLE,
   PRODUCT_DISCOVERY_UX_BUNDLE,
   GTM_PROJECT_EXECUTION_BUNDLE,
+  CONTENT_MARKETING_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

@@ -27,7 +27,11 @@ export type SystemTemplateSlug =
   | "project-charter"
   | "gtm-plan"
   | "launch-checklist"
-  | "weekly-status";
+  | "weekly-status"
+  | "campaign-brief"
+  | "editorial-calendar"
+  | "seo-brief"
+  | "social-post-batch";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -78,6 +82,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   gtm_plan: "GTM Plan",
   launch_checklist: "Launch Checklist",
   weekly_status: "Status Report",
+  campaign_brief: "Campaign Brief",
+  editorial_calendar: "Content Calendar Item",
+  seo_brief: "SEO Brief",
+  social_post_batch: "Social Post Batch",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -203,6 +211,16 @@ const GTM_PROJECT_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_label: "Sponsor",
     field_type: "text",
     ai_fill_enabled: true,
+  },
+];
+
+/** Content & Campaign Marketing fields — shared by Content Calendar Item / SEO Brief / Social Post Batch. */
+const CONTENT_MARKETING_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "campaign",
+    field_label: "Campaign",
+    field_type: "relation",
+    ai_fill_enabled: false,
   },
 ];
 
@@ -1328,6 +1346,229 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         health: "on_track",
+      },
+    },
+  },
+  {
+    slug: "campaign-brief",
+    name: "Campaign Brief",
+    description: "Objective, audience, channels, timeline, and success metrics for a campaign",
+    structure_json: doc(
+      heading(2, "Objective & Audience"),
+      tip("What this campaign is trying to achieve, and for whom."),
+      paragraph(text("[Objective and target audience.]")),
+      heading(2, "Key Message"),
+      tip("The single message every asset should reinforce."),
+      paragraph(text("[Key message.]")),
+      heading(2, "Channels & Timeline"),
+      tip("Where this runs, and when each phase happens."),
+      table(
+        ["Channel", "Phase", "Timing", "Owner"],
+        [["[Channel]", "[Phase]", "[Dates]", "[Owner]"]],
+      ),
+      heading(2, "Success Metrics"),
+      tip("How you'll know the campaign worked."),
+      bullet(["[Metric and target]"]),
+    ),
+    metadata: {
+      document_type: "campaign_brief",
+      use_cases: ["Marketing campaigns", "Product launches", "Brand initiatives"],
+      supported_views: ["wiki", "kanban", "gantt", "dashboard"],
+      schema_fields: withEssentials([
+        {
+          field_key: "campaign_status",
+          field_label: "Campaign status",
+          field_type: "status",
+          options: [
+            { value: "planning", label: "Planning", category: "unstarted" },
+            { value: "live", label: "Live", category: "started" },
+            { value: "complete", label: "Complete", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "channel",
+          field_label: "Channel",
+          field_type: "multi_select",
+          options: ["email", "social", "paid", "organic", "pr"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "budget",
+          field_label: "Budget",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        campaign_status: "planning",
+      },
+    },
+  },
+  {
+    slug: "editorial-calendar",
+    name: "Content Calendar Item",
+    description: "Brief, outline, SEO keywords, and distribution for a single piece of content",
+    structure_json: doc(
+      heading(2, "Brief & Angle"),
+      tip("What this piece is about, and the unique angle it takes."),
+      paragraph(text("[Brief and angle.]")),
+      heading(2, "Outline"),
+      tip("The structure this piece will follow."),
+      ordered(["[Section 1]", "[Section 2]", "[Section 3]"]),
+      heading(2, "SEO Keywords"),
+      tip("Primary and secondary keywords this piece should rank for."),
+      bullet(["[Primary keyword]", "[Secondary keyword]"]),
+      heading(2, "Distribution Channels"),
+      tip("Where this gets published and promoted."),
+      bullet(["[Channel]"]),
+    ),
+    metadata: {
+      document_type: "editorial_calendar",
+      use_cases: ["Blog posts", "Newsletters", "Video/podcast planning"],
+      supported_views: ["calendar", "kanban", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "publish_date",
+          field_label: "Publish date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "content_status",
+          field_label: "Content status",
+          field_type: "status",
+          options: [
+            { value: "idea", label: "Idea", category: "unstarted" },
+            { value: "drafting", label: "Drafting", category: "started" },
+            { value: "review", label: "Review", category: "started" },
+            { value: "scheduled", label: "Scheduled", category: "started" },
+            { value: "published", label: "Published", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "content_type",
+          field_label: "Content type",
+          field_type: "select",
+          options: ["blog", "video", "social", "newsletter", "podcast"],
+          ai_fill_enabled: true,
+        },
+        ...CONTENT_MARKETING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        content_status: "idea",
+      },
+    },
+  },
+  {
+    slug: "seo-brief",
+    name: "SEO Brief",
+    description: "Target keyword, search intent, competing pages, and content outline",
+    structure_json: doc(
+      heading(2, "Target Keyword & Search Intent"),
+      tip("The keyword this page targets, and what the searcher actually wants."),
+      paragraph(text("[Target keyword and search intent.]")),
+      heading(2, "Competing Pages"),
+      tip("What's currently ranking, and what it does well or poorly."),
+      table(
+        ["URL", "Word Count", "Notes"],
+        [["[Competing URL]", "[Word count]", "[Notes]"]],
+      ),
+      heading(2, "Content Outline"),
+      tip("The heading structure that will satisfy search intent."),
+      ordered(["[H2 section]", "[H2 section]", "[H2 section]"]),
+      heading(2, "Internal Linking Plan"),
+      tip("Which existing pages should link to this, and vice versa."),
+      bullet(["[Page to link from/to]"]),
+    ),
+    metadata: {
+      document_type: "seo_brief",
+      use_cases: ["SEO content", "Page optimization", "Content strategy"],
+      supported_views: ["kanban", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "target_keyword",
+          field_label: "Target keyword",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "search_intent",
+          field_label: "Search intent",
+          field_type: "select",
+          options: ["informational", "navigational", "transactional", "commercial"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "seo_status",
+          field_label: "SEO status",
+          field_type: "status",
+          options: [
+            { value: "research", label: "Research", category: "unstarted" },
+            { value: "drafting", label: "Drafting", category: "started" },
+            { value: "optimizing", label: "Optimizing", category: "started" },
+            { value: "published", label: "Published", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...CONTENT_MARKETING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        seo_status: "research",
+      },
+    },
+  },
+  {
+    slug: "social-post-batch",
+    name: "Social Post Batch",
+    description: "A batch of scheduled posts across platforms, with copy and performance notes",
+    structure_json: doc(
+      heading(2, "Posts"),
+      tip("Every post in this batch, with copy, platform, and schedule."),
+      table(
+        ["Post", "Platform", "Copy", "Scheduled Date", "Status"],
+        [["[Post 1]", "[Platform]", "[Copy]", "[Date]", "[Not started]"]],
+      ),
+      heading(2, "Hashtags & Mentions"),
+      tip("Reusable hashtags and accounts to tag across this batch."),
+      bullet(["[#hashtag]", "[@mention]"]),
+      heading(2, "Performance Notes"),
+      tip("What worked, what didn't — feed this into the next batch."),
+      paragraph(text("[Performance notes.]")),
+    ),
+    metadata: {
+      document_type: "social_post_batch",
+      use_cases: ["Social media scheduling", "Campaign amplification", "Community management"],
+      supported_views: ["calendar", "kanban", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "platform",
+          field_label: "Platform",
+          field_type: "multi_select",
+          options: ["instagram", "tiktok", "x", "linkedin", "facebook", "youtube"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "batch_status",
+          field_label: "Batch status",
+          field_type: "status",
+          options: [
+            { value: "planning", label: "Planning", category: "unstarted" },
+            { value: "drafting", label: "Drafting", category: "started" },
+            { value: "scheduled", label: "Scheduled", category: "started" },
+            { value: "posted", label: "Posted", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...CONTENT_MARKETING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        batch_status: "planning",
       },
     },
   },

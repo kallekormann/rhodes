@@ -22,7 +22,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | `product-architecture` | Product Architecture & Decisions | available | M2.5.5 |
 | `product-discovery-ux` | Product Discovery & UX | available | M2.5.6 |
 | `gtm-project-execution` | GTM & Project Execution | available | M2.5.7 |
-| `content-marketing` | Content & Campaign Marketing | pending | M2.5.8 |
+| `content-marketing` | Content & Campaign Marketing | available | M2.5.8 |
 | `strategy-consulting` | Strategy & Consulting | pending | M2.5.9 |
 | `people-ops` | People Operations & HR | pending | M2.5.10 |
 | `legal-compliance-finance` | Legal, Compliance & Finance | pending | M2.5.11 |

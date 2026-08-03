@@ -116,6 +116,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Status Report",
     description: "Summary, key metrics, wins, risks, and next steps for a reporting period",
   },
+  {
+    slug: "campaign-brief",
+    label: "Campaign Brief",
+    description: "Objective, audience, channels, timeline, and success metrics for a campaign",
+  },
+  {
+    slug: "editorial-calendar",
+    label: "Content Calendar Item",
+    description: "Brief, outline, SEO keywords, and distribution for a single piece of content",
+  },
+  {
+    slug: "seo-brief",
+    label: "SEO Brief",
+    description: "Target keyword, search intent, competing pages, and content outline",
+  },
+  {
+    slug: "social-post-batch",
+    label: "Social Post Batch",
+    description: "A batch of scheduled posts across platforms, with copy and performance notes",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {
