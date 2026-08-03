@@ -96,6 +96,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "SWOT Analysis",
     description: "Strengths, weaknesses, opportunities, and threats for a product or strategy",
   },
+  {
+    slug: "project-charter",
+    label: "Project Charter",
+    description: "Objective, scope, stakeholders, milestones, and success criteria",
+  },
+  {
+    slug: "gtm-plan",
+    label: "GTM Plan",
+    description: "Positioning, audience, channels, and success metrics for a launch",
+  },
+  {
+    slug: "launch-checklist",
+    label: "Launch Checklist",
+    description: "Readiness tasks, go/no-go criteria, and rollback plan",
+  },
+  {
+    slug: "weekly-status",
+    label: "Status Report",
+    description: "Summary, key metrics, wins, risks, and next steps for a reporting period",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

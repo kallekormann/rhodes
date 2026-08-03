@@ -239,12 +239,46 @@ export const PRODUCT_DISCOVERY_UX_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const GTM_PROJECT_EXECUTION_BUNDLE: BundleDefinition = {
+  id: "gtm-project-execution",
+  label: "GTM & Project Execution",
+  description: "Charters, GTM plans, and launch checklists — with a live status cadence.",
+  audience: ["gtm", "project-manager", "founders", "startups", "marketing"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "launch-timeline",
+      baseViewType: "gantt",
+      label: "Launch timeline",
+      description: "Project charters and GTM plans by target launch date",
+      config: { groupBy: "target_launch_date" },
+    },
+    {
+      id: "status-dashboard",
+      baseViewType: "dashboard",
+      label: "Status dashboard",
+      description: "Latest status reports grouped by health (on track / at risk / off track)",
+      config: { groupBy: "health" },
+    },
+  ],
+  templateSlugs: ["project-charter", "gtm-plan", "launch-checklist", "weekly-status"],
+  metadataFields: [
+    {
+      field_key: "sponsor",
+      field_label: "Sponsor",
+      field_type: "text",
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
   GROWTH_EXPERIMENTATION_BUNDLE,
   PRODUCT_ARCHITECTURE_BUNDLE,
   PRODUCT_DISCOVERY_UX_BUNDLE,
+  GTM_PROJECT_EXECUTION_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

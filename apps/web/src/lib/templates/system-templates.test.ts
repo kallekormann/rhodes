@@ -16,7 +16,9 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "ab-experiment",
       "adr",
       "blank",
+      "gtm-plan",
       "insight",
+      "launch-checklist",
       "meeting-notes",
       "onboarding-guide",
       "policy-document",
@@ -24,12 +26,14 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "problem",
       "product-feature",
       "product-spec",
+      "project-charter",
       "report",
       "scientific-experiment",
       "sop",
       "swot-analysis",
       "technical-requirements-document",
       "user-flow-definition",
+      "weekly-status",
       "workflow-definition",
     ]);
   });
@@ -137,6 +141,34 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     const swot = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "swot-analysis");
     expect(swot, "missing swot-analysis").toBeTruthy();
     expect(swot?.metadata.supported_views).toContain("wiki");
+  });
+
+  it("GTM & Project Execution templates ship sponsor/status workflow fields without colliding with essentials", () => {
+    for (const slug of ["project-charter", "gtm-plan"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const sponsor = seed?.metadata.schema_fields.find((f) => f.field_key === "sponsor");
+      expect(sponsor, `${slug} missing sponsor`).toBeTruthy();
+    }
+
+    const gtmPlan = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "gtm-plan");
+    const essentialStatus = gtmPlan?.metadata.schema_fields.find((f) => f.field_key === "status");
+    expect(essentialStatus?.field_type).toBe("select");
+    const gtmStatus = gtmPlan?.metadata.schema_fields.find((f) => f.field_key === "gtm_status");
+    expect(gtmStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(gtmStatus?.options)?.length).toBeGreaterThan(0);
+
+    const launchChecklist = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "launch-checklist");
+    const launchStatus = launchChecklist?.metadata.schema_fields.find(
+      (f) => f.field_key === "launch_status",
+    );
+    expect(launchStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(launchStatus?.options)?.length).toBeGreaterThan(0);
+
+    const weeklyStatus = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "weekly-status");
+    expect(weeklyStatus, "missing weekly-status").toBeTruthy();
+    const health = weeklyStatus?.metadata.schema_fields.find((f) => f.field_key === "health");
+    expect(health?.field_type).toBe("status");
   });
 
   it("ships essentials with field_type and AI fill", () => {

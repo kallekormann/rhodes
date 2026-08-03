@@ -100,6 +100,7 @@ Sub-phases (see plan `m2.5_scopesetupwizard`):
 | M2.5.4 Bundle: Growth & Experimentation | **done** | `relation`/`status` field types (Phase 0) + A/B Experiment, Insight, Problem, Scientific Experiment |
 | M2.5.5 Bundle: Product Architecture & Decisions | **done** | ADR, Technical Requirements Document, Workflow Definition — decision log Kanban + architecture wiki |
 | M2.5.6 Bundle: Product Discovery & UX | **done** | PRD, Product Feature, User Flow Definition, SWOT Analysis — feature board Kanban + roadmap Gantt |
+| M2.5.7 Bundle: GTM & Project Execution | **done** | Project Charter, GTM Plan, Launch Checklist, Status Report — launch timeline Gantt + status dashboard |
 
 - Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`
 - Bidirectional view↔template inference; multi-bundle; non-limiting composition

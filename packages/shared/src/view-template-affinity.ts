@@ -26,11 +26,13 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "prd",
       "product-feature",
       "user-flow-definition",
+      "launch-checklist",
+      "gtm-plan",
     ],
     minForView: 1,
   },
   calendar: {
-    recommended: ["editorial-calendar", "meeting-notes", "report"],
+    recommended: ["editorial-calendar", "meeting-notes", "report", "weekly-status"],
     minForView: 1,
   },
   gantt: {
@@ -42,6 +44,7 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "scientific-experiment",
       "prd",
       "product-feature",
+      "gtm-plan",
     ],
     minForView: 1,
   },
@@ -61,11 +64,15 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "product-feature",
       "user-flow-definition",
       "swot-analysis",
+      "project-charter",
+      "gtm-plan",
+      "launch-checklist",
+      "weekly-status",
     ],
     minForView: 1,
   },
   dashboard: {
-    recommended: ["weekly-status", "report", "product-spec", "ab-experiment"],
+    recommended: ["weekly-status", "report", "product-spec", "ab-experiment", "gtm-plan"],
     minForView: 1,
   },
 };
@@ -90,6 +97,10 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   "product-feature": ["kanban", "wiki", "gantt"],
   "user-flow-definition": ["wiki", "kanban"],
   "swot-analysis": ["wiki"],
+  "project-charter": ["wiki", "gantt", "kanban"],
+  "gtm-plan": ["wiki", "kanban", "gantt", "dashboard"],
+  "launch-checklist": ["kanban", "wiki"],
+  "weekly-status": ["dashboard", "calendar", "wiki"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

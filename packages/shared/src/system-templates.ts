@@ -23,7 +23,11 @@ export type SystemTemplateSlug =
   | "prd"
   | "product-feature"
   | "user-flow-definition"
-  | "swot-analysis";
+  | "swot-analysis"
+  | "project-charter"
+  | "gtm-plan"
+  | "launch-checklist"
+  | "weekly-status";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -70,6 +74,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   product_feature: "Product Feature",
   user_flow_definition: "User Flow Definition",
   swot_analysis: "SWOT Analysis",
+  project_charter: "Project Charter",
+  gtm_plan: "GTM Plan",
+  launch_checklist: "Launch Checklist",
+  weekly_status: "Status Report",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -185,6 +193,16 @@ const PRODUCT_DISCOVERY_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_label: "Target release",
     field_type: "text",
     ai_fill_enabled: false,
+  },
+];
+
+/** GTM & Project Execution fields — shared by Project Charter / GTM Plan. */
+const GTM_PROJECT_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "sponsor",
+    field_label: "Sponsor",
+    field_type: "text",
+    ai_fill_enabled: true,
   },
 ];
 
@@ -1119,6 +1137,197 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       ]),
       default_properties: {
         status: "draft",
+      },
+    },
+  },
+  {
+    slug: "project-charter",
+    name: "Project Charter",
+    description: "Objective, scope, stakeholders, milestones, and success criteria",
+    structure_json: doc(
+      heading(2, "Objective & Business Case"),
+      tip("Why this project exists, and the value it delivers."),
+      paragraph(text("[Objective and business case.]")),
+      heading(2, "Scope"),
+      tip("What's in scope, and — just as important — what's explicitly out."),
+      bullet(["In scope: [item]", "Out of scope: [item]"]),
+      heading(2, "Stakeholders & Roles"),
+      tip("Who's involved, and what they're responsible for."),
+      bullet(["[Name/Role] — [Responsibility]"]),
+      heading(2, "Milestones"),
+      tip("The key checkpoints from kickoff to completion."),
+      table(
+        ["Milestone", "Target Date", "Owner"],
+        [["[Milestone]", "[Date]", "[Owner]"]],
+      ),
+      heading(2, "Success Criteria"),
+      tip("How you'll know this project succeeded."),
+      bullet(["[Success criterion]"]),
+    ),
+    metadata: {
+      document_type: "project_charter",
+      use_cases: ["Project kickoff", "Cross-functional initiatives", "Stakeholder alignment"],
+      supported_views: ["wiki", "gantt", "kanban"],
+      schema_fields: withEssentials(GTM_PROJECT_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+      },
+    },
+  },
+  {
+    slug: "gtm-plan",
+    name: "GTM Plan",
+    description: "Positioning, audience, channels, and success metrics for a launch",
+    structure_json: doc(
+      heading(2, "Positioning & Messaging"),
+      tip("How this is positioned, and the core message across channels."),
+      paragraph(text("[Positioning and key message.]")),
+      heading(2, "Target Audience & Segments"),
+      tip("Who this launch is for, segmented enough to tailor messaging."),
+      bullet(["[Segment 1]", "[Segment 2]"]),
+      heading(2, "Channels & Tactics"),
+      tip("Where and how you'll reach each segment."),
+      table(
+        ["Channel", "Tactic", "Owner", "Budget"],
+        [["[Channel]", "[Tactic]", "[Owner]", "[Budget]"]],
+      ),
+      heading(2, "Success Metrics & KPIs"),
+      tip("How you'll measure whether the launch worked."),
+      bullet(["[Metric and target]"]),
+    ),
+    metadata: {
+      document_type: "gtm_plan",
+      use_cases: ["Product launches", "Campaign planning", "Market entry"],
+      supported_views: ["wiki", "kanban", "gantt", "dashboard"],
+      schema_fields: withEssentials([
+        {
+          field_key: "gtm_status",
+          field_label: "GTM status",
+          field_type: "status",
+          options: [
+            { value: "draft", label: "Draft", category: "unstarted" },
+            { value: "approved", label: "Approved", category: "unstarted" },
+            { value: "executing", label: "Executing", category: "started" },
+            { value: "complete", label: "Complete", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "target_launch_date",
+          field_label: "Target launch date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        ...GTM_PROJECT_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        gtm_status: "draft",
+      },
+    },
+  },
+  {
+    slug: "launch-checklist",
+    name: "Launch Checklist",
+    description: "Readiness tasks, go/no-go criteria, and rollback plan",
+    structure_json: doc(
+      heading(2, "Checklist"),
+      tip("Every task required to launch, with an owner and current status."),
+      table(
+        ["Task", "Owner", "Status", "Notes"],
+        [
+          ["[Engineering readiness]", "[Owner]", "[Not started]", "[Notes]"],
+          ["[Marketing readiness]", "[Owner]", "[Not started]", "[Notes]"],
+          ["[Support readiness]", "[Owner]", "[Not started]", "[Notes]"],
+        ],
+      ),
+      heading(2, "Go / No-Go Criteria"),
+      tip("The conditions that must be true to launch."),
+      bullet(["[Criterion]"]),
+      heading(2, "Rollback Plan"),
+      tip("What happens if something goes wrong after launch."),
+      paragraph(text("[Rollback plan.]")),
+    ),
+    metadata: {
+      document_type: "launch_checklist",
+      use_cases: ["Product launches", "Feature rollouts", "Release management"],
+      supported_views: ["kanban", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "launch_date",
+          field_label: "Launch date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "launch_status",
+          field_label: "Launch status",
+          field_type: "status",
+          options: [
+            { value: "planning", label: "Planning", category: "unstarted" },
+            { value: "ready", label: "Ready", category: "started" },
+            { value: "launched", label: "Launched", category: "completed" },
+            { value: "rolled_back", label: "Rolled back", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        launch_status: "planning",
+      },
+    },
+  },
+  {
+    slug: "weekly-status",
+    name: "Status Report",
+    description: "Summary, key metrics, wins, risks, and next steps for a reporting period",
+    structure_json: doc(
+      heading(2, "Summary"),
+      tip("A short, scannable summary of where things stand."),
+      paragraph(text("[Summary.]")),
+      heading(2, "Key Metrics"),
+      tip("The numbers that matter this period, with trend if useful."),
+      table(
+        ["Metric", "This Period", "Trend"],
+        [["[Metric]", "[Value]", "[↑/↓/→]"]],
+      ),
+      heading(2, "Wins"),
+      tip("What went well since the last report."),
+      bullet(["[Win]"]),
+      heading(2, "Risks & Blockers"),
+      tip("What's at risk, and what's blocking progress."),
+      bullet(["[Risk or blocker]"]),
+      heading(2, "Next Steps"),
+      tip("What happens between now and the next report."),
+      bullet(["[Next step]"]),
+    ),
+    metadata: {
+      document_type: "weekly_status",
+      use_cases: ["Status updates", "Stakeholder reporting", "Project health checks"],
+      supported_views: ["dashboard", "calendar", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "report_period",
+          field_label: "Report period",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "health",
+          field_label: "Health",
+          field_type: "status",
+          options: [
+            { value: "on_track", label: "On track", category: "started" },
+            { value: "at_risk", label: "At risk", category: "started" },
+            { value: "off_track", label: "Off track", category: "started" },
+          ],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        health: "on_track",
       },
     },
   },
