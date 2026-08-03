@@ -13,7 +13,17 @@ export type ViewTemplateAffinityMap = Record<string, ViewTemplateAffinity>;
  */
 export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
   kanban: {
-    recommended: ["project-kickoff", "sprint-retro", "meeting-notes", "ab-experiment", "insight", "problem"],
+    recommended: [
+      "project-kickoff",
+      "sprint-retro",
+      "meeting-notes",
+      "ab-experiment",
+      "insight",
+      "problem",
+      "adr",
+      "technical-requirements-document",
+      "workflow-definition",
+    ],
     minForView: 1,
   },
   calendar: {
@@ -25,7 +35,18 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
     minForView: 1,
   },
   wiki: {
-    recommended: ["sop", "onboarding-guide", "policy-document", "blank", "insight", "problem", "scientific-experiment"],
+    recommended: [
+      "sop",
+      "onboarding-guide",
+      "policy-document",
+      "blank",
+      "insight",
+      "problem",
+      "scientific-experiment",
+      "adr",
+      "technical-requirements-document",
+      "workflow-definition",
+    ],
     minForView: 1,
   },
   dashboard: {
@@ -47,6 +68,9 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   insight: ["kanban", "wiki"],
   problem: ["kanban", "wiki"],
   "scientific-experiment": ["kanban", "gantt", "wiki"],
+  adr: ["wiki", "kanban"],
+  "technical-requirements-document": ["wiki", "kanban"],
+  "workflow-definition": ["wiki", "kanban"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

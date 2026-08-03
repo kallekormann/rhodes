@@ -16,7 +16,10 @@ export type SystemTemplateSlug =
   | "ab-experiment"
   | "insight"
   | "problem"
-  | "scientific-experiment";
+  | "scientific-experiment"
+  | "adr"
+  | "technical-requirements-document"
+  | "workflow-definition";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -56,6 +59,9 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   insight: "Insight",
   problem: "Problem",
   scientific_experiment: "Scientific Experiment",
+  adr: "Architecture Decision Record",
+  technical_requirements_document: "Technical Requirements Document",
+  workflow_definition: "Workflow Definition",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -143,6 +149,17 @@ const KB_OPS_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_type: "select",
     options: ["monthly", "quarterly", "biannual", "annual"],
     ai_fill_enabled: false,
+  },
+];
+
+/** Product Architecture & Decisions fields — shared by ADR / Technical Requirements Document. */
+const PRODUCT_ARCHITECTURE_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "impact_area",
+    field_label: "Impact area",
+    field_type: "multi_select",
+    options: ["frontend", "backend", "database", "infrastructure"],
+    ai_fill_enabled: true,
   },
 ];
 
@@ -753,6 +770,158 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         experiment_status: "planned",
+      },
+    },
+  },
+  {
+    slug: "adr",
+    name: "Architecture Decision Record",
+    description: "Context, decision, alternatives, and consequences of a technical choice",
+    structure_json: doc(
+      heading(2, "Context & Problem"),
+      tip("The technical constraint or requirement that forces a decision."),
+      paragraph(text("[Context and problem statement.]")),
+      heading(2, "Decision"),
+      tip("The decision, stated as a clear, single commitment."),
+      paragraph(text("[Decision, stated plainly.]")),
+      heading(2, "Considered Alternatives"),
+      tip("Every option seriously considered, and why it was or wasn't chosen."),
+      table(
+        ["Alternative", "Pros", "Cons", "Reason for Rejection"],
+        [
+          ["[Option A]", "[Pros]", "[Cons]", "[Reason]"],
+          ["[Option B]", "[Pros]", "[Cons]", "[Reason]"],
+        ],
+      ),
+      heading(2, "Consequences"),
+      tip("What becomes easier or harder as a result — positive and negative."),
+      bullet(["[Positive consequence]", "[Negative consequence / trade-off]"]),
+    ),
+    metadata: {
+      document_type: "adr",
+      use_cases: ["Architecture decisions", "Technical RFCs", "Engineering design records"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "decision_date",
+          field_label: "Decision date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "decision_status",
+          field_label: "Decision status",
+          field_type: "status",
+          options: [
+            { value: "proposed", label: "Proposed", category: "unstarted" },
+            { value: "accepted", label: "Accepted", category: "completed" },
+            { value: "deprecated", label: "Deprecated", category: "canceled" },
+            { value: "superseded", label: "Superseded", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "requires_downtime",
+          field_label: "Requires downtime",
+          field_type: "checkbox",
+          ai_fill_enabled: false,
+        },
+        ...PRODUCT_ARCHITECTURE_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        decision_status: "proposed",
+      },
+    },
+  },
+  {
+    slug: "technical-requirements-document",
+    name: "Technical Requirements Document",
+    description: "Functional and non-functional requirements, dependencies, and risks",
+    structure_json: doc(
+      heading(2, "Overview & Goals"),
+      tip("What this system/feature must accomplish, and why it matters."),
+      paragraph(text("[Overview and goals.]")),
+      heading(2, "Functional Requirements"),
+      tip("What the system must do — one row per discrete, testable requirement."),
+      table(
+        ["Req ID", "Description", "Priority", "Status"],
+        [
+          ["REQ-1", "[Requirement description]", "[Must/Should/Could]", "[Not started]"],
+          ["REQ-2", "[Requirement description]", "[Must/Should/Could]", "[Not started]"],
+        ],
+      ),
+      heading(2, "Non-Functional Requirements"),
+      tip("Performance, security, scalability, and other quality constraints."),
+      bullet(["[Performance requirement]", "[Security requirement]", "[Scalability requirement]"]),
+      heading(2, "Dependencies & Risks"),
+      tip("What this depends on, and what could block or derail it."),
+      bullet(["[Dependency]", "[Risk / mitigation]"]),
+    ),
+    metadata: {
+      document_type: "technical_requirements_document",
+      use_cases: ["Engineering specs", "System design", "Requirements gathering"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "priority",
+          field_label: "Priority",
+          field_type: "select",
+          options: ["low", "medium", "high", "critical"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "target_release",
+          field_label: "Target release",
+          field_type: "text",
+          ai_fill_enabled: false,
+        },
+        ...PRODUCT_ARCHITECTURE_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        priority: "medium",
+      },
+    },
+  },
+  {
+    slug: "workflow-definition",
+    name: "Workflow Definition",
+    description: "A repeatable process — trigger, steps, roles, and exceptions",
+    structure_json: doc(
+      heading(2, "Trigger"),
+      tip("What starts this workflow — an event, request, or schedule."),
+      paragraph(text("[What kicks this off.]")),
+      heading(2, "Steps"),
+      tip("The ordered steps from trigger to completion."),
+      ordered(["[Step 1]", "[Step 2]", "[Step 3]"]),
+      heading(2, "Roles & Handoffs"),
+      tip("Who owns each step, and where work changes hands."),
+      bullet(["[Role] — [Responsibility]", "[Role] — [Responsibility]"]),
+      heading(2, "Exceptions"),
+      tip("What happens when a step fails or a special case arises."),
+      bullet(["[Exception case] — [How it's handled]"]),
+    ),
+    metadata: {
+      document_type: "workflow_definition",
+      use_cases: ["Process documentation", "Operational runbooks", "Cross-team handoffs"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "workflow_status",
+          field_label: "Workflow status",
+          field_type: "status",
+          options: [
+            { value: "draft", label: "Draft", category: "unstarted" },
+            { value: "active", label: "Active", category: "started" },
+            { value: "deprecated", label: "Deprecated", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        workflow_status: "draft",
       },
     },
   },

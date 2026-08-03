@@ -171,10 +171,45 @@ export const GROWTH_EXPERIMENTATION_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const PRODUCT_ARCHITECTURE_BUNDLE: BundleDefinition = {
+  id: "product-architecture",
+  label: "Product Architecture & Decisions",
+  description: "ADRs, requirements docs, and workflow definitions with a decision log and traceable history.",
+  audience: ["engineering", "cto", "developer", "startups", "product"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "architecture-decision-log",
+      baseViewType: "kanban",
+      label: "Decision log",
+      description: "Proposed → Accepted → Deprecated/Superseded",
+      config: { groupBy: "decision_status" },
+    },
+    {
+      id: "architecture-wiki",
+      baseViewType: "wiki",
+      label: "Architecture wiki",
+      description: "Browse ADRs, requirements, and workflow definitions as a linked knowledge base",
+      config: { layout: "graph" },
+    },
+  ],
+  templateSlugs: ["adr", "technical-requirements-document", "workflow-definition"],
+  metadataFields: [
+    {
+      field_key: "impact_area",
+      field_label: "Impact area",
+      field_type: "multi_select",
+      options: ["frontend", "backend", "database", "infrastructure"],
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
   GROWTH_EXPERIMENTATION_BUNDLE,
+  PRODUCT_ARCHITECTURE_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

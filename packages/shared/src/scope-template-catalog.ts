@@ -61,6 +61,21 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Scientific Experiment",
     description: "Hypothesis, methodology, variables, results, and conclusion",
   },
+  {
+    slug: "adr",
+    label: "Architecture Decision Record",
+    description: "Context, decision, alternatives, and consequences of a technical choice",
+  },
+  {
+    slug: "technical-requirements-document",
+    label: "Technical Requirements Document",
+    description: "Functional and non-functional requirements, dependencies, and risks",
+  },
+  {
+    slug: "workflow-definition",
+    label: "Workflow Definition",
+    description: "A repeatable process — trigger, steps, roles, and exceptions",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

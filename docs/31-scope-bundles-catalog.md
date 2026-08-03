@@ -19,7 +19,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | `wizard-starter` | Starter pack | available | M2.5.1 (wizard test) |
 | `knowledge-base-ops` | Knowledge Base & Operations | available | M2.5.3 |
 | `growth-experimentation` | Growth & Experimentation | available | M2.5.4 |
-| `product-architecture` | Product Architecture & Decisions | pending | M2.5.5 |
+| `product-architecture` | Product Architecture & Decisions | available | M2.5.5 |
 | `product-discovery-ux` | Product Discovery & UX | pending | M2.5.6 |
 | `gtm-project-execution` | GTM & Project Execution | pending | M2.5.7 |
 | `content-marketing` | Content & Campaign Marketing | pending | M2.5.8 |

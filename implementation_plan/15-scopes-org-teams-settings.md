@@ -98,7 +98,7 @@ Sub-phases (see plan `m2.5_scopesetupwizard`):
 | M2.5.2 Core templates | **done** | Properties-native templates + hydrate fix + authoring guideline ([docs/34](../docs/34-template-authoring.md)) |
 | M2.5.3 Pilot bundle KB | **done** | Knowledge Base & Operations |
 | M2.5.4 Bundle: Growth & Experimentation | **done** | `relation`/`status` field types (Phase 0) + A/B Experiment, Insight, Problem, Scientific Experiment |
-| M2.5.5 Bundle: Product Architecture & Decisions | pending | ADR, Technical Requirements Document, Workflow Definition |
+| M2.5.5 Bundle: Product Architecture & Decisions | **done** | ADR, Technical Requirements Document, Workflow Definition — decision log Kanban + architecture wiki |
 | M2.5.6 Bundle: Product Discovery & UX | pending | PRD, Product Feature, User Flow Definition, SWOT Analysis |
 
 - Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`

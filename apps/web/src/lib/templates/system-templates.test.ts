@@ -14,6 +14,7 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     const slugs = SYSTEM_TEMPLATE_SEEDS.map((seed) => seed.slug).sort();
     expect(slugs).toEqual([
       "ab-experiment",
+      "adr",
       "blank",
       "insight",
       "meeting-notes",
@@ -24,6 +25,8 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "report",
       "scientific-experiment",
       "sop",
+      "technical-requirements-document",
+      "workflow-definition",
     ]);
   });
 
@@ -75,6 +78,33 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     expect(
       abExperiment?.metadata.schema_fields.find((f) => f.field_key === "origin")?.field_type,
     ).toBe("relation");
+  });
+
+  it("Product Architecture templates ship impact_area and their own status keys without colliding with essentials", () => {
+    for (const slug of ["adr", "technical-requirements-document"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const impactArea = seed?.metadata.schema_fields.find((f) => f.field_key === "impact_area");
+      expect(impactArea, `${slug} missing impact_area`).toBeTruthy();
+      expect(impactArea?.field_type).toBe("multi_select");
+    }
+
+    const adr = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "adr");
+    const essentialStatus = adr?.metadata.schema_fields.find((f) => f.field_key === "status");
+    expect(essentialStatus?.field_type).toBe("select");
+
+    const decisionStatus = adr?.metadata.schema_fields.find((f) => f.field_key === "decision_status");
+    expect(decisionStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(decisionStatus?.options)?.length).toBeGreaterThan(0);
+
+    const workflowDefinition = SYSTEM_TEMPLATE_SEEDS.find(
+      (entry) => entry.slug === "workflow-definition",
+    );
+    const workflowStatus = workflowDefinition?.metadata.schema_fields.find(
+      (f) => f.field_key === "workflow_status",
+    );
+    expect(workflowStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(workflowStatus?.options)?.length).toBeGreaterThan(0);
   });
 
   it("ships essentials with field_type and AI fill", () => {
