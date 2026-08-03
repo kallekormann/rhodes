@@ -52,17 +52,12 @@ do not attempt to seed it as a bundle view preset yet.
 
 ## Template bundles (wizard pre-check)
 
-When user selects additional views at scope creation, pre-select templates:
-
-| View selection | Recommended templates |
-|----------------|----------------------|
-| `kanban` | Project kickoff, Sprint retro |
-| `calendar` | Editorial calendar, Meeting notes |
-| `gantt` | Product roadmap, Research plan |
-| `wiki` | Knowledge base starter, Glossary |
-| `dashboard` | Weekly status |
-
-User can add/remove before create. System templates from seed migrations apply when `workspace_id` is null.
+When a user selects additional views at scope creation, the wizard pre-selects templates that support that
+view (bidirectionally: picking templates can also infer views). Full view↔template affinity data lives in
+[`view-template-affinity.ts`](../packages/shared/src/view-template-affinity.ts) (`VIEW_TEMPLATE_AFFINITY`,
+`TEMPLATE_SUPPORTED_VIEWS`) — see [31-scope-bundles-catalog.md](31-scope-bundles-catalog.md) for the full list
+of shipped bundles and templates. User can add/remove before create. System templates from seed migrations
+apply when `workspace_id` is null.
 
 ## Scope-type defaults
 

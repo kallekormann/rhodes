@@ -1,6 +1,6 @@
 # 31 — Scope bundles catalog
 
-**Status:** scaffold (M2.5.0)
+**Status:** complete — all 10 planned bundles shipped (M2.5.3–M2.5.12)
 
 Authoritative bundle definitions live in [`packages/shared/src/scope-bundles.ts`](../packages/shared/src/scope-bundles.ts) (`BUNDLE_CATALOG`). This doc tracks product copy and rollout status.
 
@@ -32,7 +32,15 @@ Reordered from the original brief so Growth & Experimentation (a foundational, c
 case flowing Insight/Problem → Experiment) ships right after Knowledge Base & Ops, ahead of the more
 niche discovery/GTM bundles.
 
-Full bundle specs (templates, metadata, view presets) to be transcribed from product brief into `BUNDLE_CATALOG` entries per wave.
+Every bundle ships: a set of system templates (TipTap body + Properties-native `schema_fields`, seeded via a
+dedicated `packages/db/migrations/000NN_*.sql`), one or more view presets tuned to that bundle's status/date
+fields, and shared bundle-level metadata fields wired through `seed_scope_metadata_fields`. Custom `status`-type
+fields are always keyed distinctly from the essential `status` (e.g. `experiment_status`, `decision_status`,
+`workflow_status`, `feature_status`, `flow_status`, `gtm_status`, `launch_status`, `campaign_status`,
+`content_status`, `seo_status`, `batch_status`, `audit_status`, `pdp_status`, `review_status`, `legal_status`,
+`compliance_status`, `paper_status`, `thesis_status`, `essay_status`) to avoid collisions with `withEssentials`
+deduplication. Cross-document traceability uses the `relation` field type (e.g. A/B Experiment → Insight/Problem
+`origin`, Content Calendar/SEO Brief/Social Post Batch → Campaign Brief `campaign`).
 
 ## Related
 
