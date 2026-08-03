@@ -25,7 +25,7 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
     minForView: 1,
   },
   wiki: {
-    recommended: ["sop", "onboarding-guide", "blank"],
+    recommended: ["sop", "onboarding-guide", "policy-document", "blank"],
     minForView: 1,
   },
   dashboard: {
@@ -40,6 +40,9 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   "meeting-notes": ["calendar", "kanban"],
   report: ["dashboard", "calendar", "gantt"],
   "product-spec": ["kanban", "gantt", "dashboard"],
+  sop: ["wiki", "dashboard"],
+  "onboarding-guide": ["wiki", "calendar"],
+  "policy-document": ["wiki", "dashboard"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

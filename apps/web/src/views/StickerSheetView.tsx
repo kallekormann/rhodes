@@ -615,6 +615,14 @@ export function StickerSheetView() {
         <h2 className="type-sticker-heading">Form controls</h2>
         <div className="sticker-stack sticker-stack--narrow">
           <Checkbox label="Email me when insights are ready" defaultChecked />
+          <Checkbox
+            label="Doc graph"
+            description="Link pages into a lightweight knowledge base"
+            checked
+            disabled
+            onChange={() => {}}
+            trailing={<NeutralPill>Via Knowledge Base &amp; Ops</NeutralPill>}
+          />
           <RadioGroup
             name="theme-demo"
             value={themeRadio}

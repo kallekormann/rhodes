@@ -67,7 +67,63 @@ export const WIZARD_STARTER_BUNDLE: BundleDefinition = {
   metadataFields: [],
 };
 
-export const BUNDLE_CATALOG: readonly BundleDefinition[] = [WIZARD_STARTER_BUNDLE];
+export const KNOWLEDGE_BASE_OPS_BUNDLE: BundleDefinition = {
+  id: "knowledge-base-ops",
+  label: "Knowledge Base & Operations",
+  description: "SOPs, onboarding, and policy docs kept fresh with owners and review cycles.",
+  audience: ["operations", "people-ops", "general"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "kb-doc-graph",
+      baseViewType: "wiki",
+      label: "Doc graph",
+      description: "Link SOPs, guides, and policies into a browsable knowledge base",
+      config: { layout: "graph" },
+    },
+    {
+      id: "kb-freshness-radar",
+      baseViewType: "dashboard",
+      label: "Freshness radar",
+      description: "Surface docs that are overdue for review at a glance",
+      config: { verification_status: true, review_cycle: true, last_audited: true },
+    },
+  ],
+  templateSlugs: ["sop", "onboarding-guide", "policy-document"],
+  metadataFields: [
+    {
+      field_key: "owner",
+      field_label: "Owner",
+      field_type: "text",
+      ai_fill_enabled: true,
+    },
+    {
+      field_key: "verification_status",
+      field_label: "Verification status",
+      field_type: "select",
+      options: ["verified", "needs_review", "outdated"],
+      ai_fill_enabled: true,
+    },
+    {
+      field_key: "last_audited",
+      field_label: "Last audited",
+      field_type: "date",
+      ai_fill_enabled: true,
+    },
+    {
+      field_key: "review_cycle",
+      field_label: "Review cycle",
+      field_type: "select",
+      options: ["monthly", "quarterly", "biannual", "annual"],
+      ai_fill_enabled: false,
+    },
+  ],
+};
+
+export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
+  WIZARD_STARTER_BUNDLE,
+  KNOWLEDGE_BASE_OPS_BUNDLE,
+];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {
   return BUNDLE_CATALOG.find((bundle) => bundle.id === bundleId);

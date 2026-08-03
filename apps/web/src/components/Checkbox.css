@@ -44,8 +44,18 @@
   opacity: 0.4;
 }
 
+.checkbox:has(.checkbox__input:disabled) {
+  cursor: default;
+}
+
+.checkbox__input:disabled ~ .checkbox__text {
+  opacity: 0.7;
+}
+
 .checkbox__text {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
@@ -60,4 +70,9 @@
   font-size: 13px;
   color: var(--color-text-secondary);
   line-height: 1.4;
+}
+
+.checkbox__trailing {
+  flex-shrink: 0;
+  margin-left: var(--space-sm);
 }

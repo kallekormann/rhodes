@@ -26,6 +26,21 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Report",
     description: "Executive summary, findings, analysis, and next steps",
   },
+  {
+    slug: "sop",
+    label: "SOP",
+    description: "Purpose, scope, procedure, roles, and exceptions",
+  },
+  {
+    slug: "onboarding-guide",
+    label: "Onboarding Guide",
+    description: "Welcome, first week, tools & access, and checkpoints",
+  },
+  {
+    slug: "policy-document",
+    label: "Policy Document",
+    description: "Statement, applicability, requirements, enforcement, and review",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

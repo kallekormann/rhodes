@@ -61,8 +61,8 @@ export function ScopeCompositionSettings({
   return (
     <div className="scope-composition-settings">
       <p className="caption settings-section__intro">
-        Pick views, templates, and bundles for this scope. Rhodes suggests matches but never
-        locks you in — remove anything you do not want.
+        Pick views, templates, and bundles for this scope. Items labeled &ldquo;Via&rdquo; come
+        from a selected bundle — drop the bundle to release them individually.
       </p>
       <ScopeCompositionWorkspace
         draft={draft}

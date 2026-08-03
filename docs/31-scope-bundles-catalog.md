@@ -17,6 +17,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | ID | Label | Status | Wave |
 |----|-------|--------|------|
 | `wizard-starter` | Starter pack | available | M2.5.1 (wizard test) |
+| `knowledge-base-ops` | Knowledge Base & Operations | available | M2.5.3 |
 | `product-discovery-ux` | Product Discovery & UX | pending | M2.5.4 |
 | `gtm-project-execution` | GTM & Project Execution | pending | M2.5.5 |
 | `product-architecture` | Product Architecture & Decisions | pending | M2.5.6 |

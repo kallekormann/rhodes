@@ -11,7 +11,28 @@ import {
 describe("SYSTEM_TEMPLATE_SEEDS", () => {
   it("includes all wizard catalog slugs", () => {
     const slugs = SYSTEM_TEMPLATE_SEEDS.map((seed) => seed.slug).sort();
-    expect(slugs).toEqual(["blank", "meeting-notes", "product-spec", "report"]);
+    expect(slugs).toEqual([
+      "blank",
+      "meeting-notes",
+      "onboarding-guide",
+      "policy-document",
+      "product-spec",
+      "report",
+      "sop",
+    ]);
+  });
+
+  it("Knowledge Base & Ops templates ship freshness fields", () => {
+    const kbSlugs = ["sop", "onboarding-guide", "policy-document"];
+    for (const slug of kbSlugs) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      for (const key of ["verification_status", "last_audited", "review_cycle"]) {
+        const field = seed?.metadata.schema_fields.find((f) => f.field_key === key);
+        expect(field, `${slug} missing ${key}`).toBeTruthy();
+      }
+      expect(seed?.metadata.supported_views).toContain("wiki");
+    }
   });
 
   it("ships essentials with field_type and AI fill", () => {

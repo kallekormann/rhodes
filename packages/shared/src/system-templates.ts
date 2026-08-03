@@ -5,7 +5,14 @@
 
 import type { MetadataFieldSeed } from "./scope-bundles";
 
-export type SystemTemplateSlug = "blank" | "meeting-notes" | "product-spec" | "report";
+export type SystemTemplateSlug =
+  | "blank"
+  | "meeting-notes"
+  | "product-spec"
+  | "report"
+  | "sop"
+  | "onboarding-guide"
+  | "policy-document";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -38,6 +45,9 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   meeting_notes: "Meeting Notes",
   product_spec: "Product Spec",
   report: "Report",
+  sop: "SOP",
+  onboarding_guide: "Onboarding Guide",
+  policy: "Policy",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -65,6 +75,30 @@ const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_label: "Summary",
     field_type: "textarea",
     ai_fill_enabled: true,
+  },
+];
+
+/** Knowledge Base & Ops use-case fields — shared by SOP / Onboarding Guide / Policy Document. */
+const KB_OPS_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "verification_status",
+    field_label: "Verification status",
+    field_type: "select",
+    options: ["verified", "needs_review", "outdated"],
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "last_audited",
+    field_label: "Last audited",
+    field_type: "date",
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "review_cycle",
+    field_label: "Review cycle",
+    field_type: "select",
+    options: ["monthly", "quarterly", "biannual", "annual"],
+    ai_fill_enabled: false,
   },
 ];
 
@@ -313,6 +347,126 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       ]),
       default_properties: {
         status: "draft",
+      },
+    },
+  },
+  {
+    slug: "sop",
+    name: "SOP",
+    description: "Purpose, scope, procedure, roles, and exceptions",
+    structure_json: doc(
+      heading(2, "Purpose"),
+      tip("Why this procedure exists and what it prevents or ensures."),
+      paragraph(text("[The outcome this SOP guarantees when followed.]")),
+      heading(2, "Scope"),
+      tip("Who and what this applies to — and what it explicitly excludes."),
+      bullet(["[Applies to: team, system, or situation]", "[Does not cover: …]"]),
+      heading(2, "Procedure"),
+      tip("Numbered steps, in the exact order they should be performed."),
+      ordered([
+        "[Step 1 — action and expected result]",
+        "[Step 2 — action and expected result]",
+        "[Step 3 — action and expected result]",
+      ]),
+      heading(2, "Roles & Responsibilities"),
+      tip("Who owns each step, and who to contact if it breaks."),
+      bullet(["[Role] — [Responsibility]", "[Role] — [Responsibility]"]),
+      heading(2, "Exceptions"),
+      tip("Known edge cases and what to do when the standard steps don't apply."),
+      bullet(["[Situation] — [What to do instead]"]),
+    ),
+    metadata: {
+      document_type: "sop",
+      use_cases: [
+        "Standard operating procedures",
+        "Runbooks",
+        "Repeatable processes",
+        "Incident playbooks",
+      ],
+      supported_views: ["wiki", "dashboard"],
+      schema_fields: withEssentials(KB_OPS_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+        verification_status: "needs_review",
+      },
+    },
+  },
+  {
+    slug: "onboarding-guide",
+    name: "Onboarding Guide",
+    description: "Welcome, first week, tools & access, and checkpoints",
+    structure_json: doc(
+      heading(2, "Welcome"),
+      tip("Set the tone — what this role owns and why it matters."),
+      paragraph(text("[Welcome note and a one-line summary of the role's mission.]")),
+      heading(2, "First Week"),
+      tip("Day-by-day goals — enough structure to remove first-week anxiety."),
+      bullet([
+        "Day 1: [Setup, intros, orientation]",
+        "Day 2–3: [Shadowing, reading, first small task]",
+        "Day 4–5: [First real contribution]",
+      ]),
+      heading(2, "Tools & Access"),
+      tip("Every account, tool, and permission needed — and who grants it."),
+      bullet(["[Tool/System] — [Requested from]", "[Tool/System] — [Requested from]"]),
+      heading(2, "Checkpoints"),
+      tip("30/60/90-day markers so progress is visible to both sides."),
+      ordered([
+        "30 days: [What success looks like]",
+        "60 days: [What success looks like]",
+        "90 days: [What success looks like]",
+      ]),
+    ),
+    metadata: {
+      document_type: "onboarding_guide",
+      use_cases: [
+        "New hire onboarding",
+        "Role transitions",
+        "Team ramp-up",
+        "Contractor kickoff",
+      ],
+      supported_views: ["wiki", "calendar"],
+      schema_fields: withEssentials(KB_OPS_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+        verification_status: "needs_review",
+      },
+    },
+  },
+  {
+    slug: "policy-document",
+    name: "Policy Document",
+    description: "Statement, applicability, requirements, enforcement, and review",
+    structure_json: doc(
+      heading(2, "Policy Statement"),
+      tip("One or two sentences stating the rule — no ambiguity."),
+      paragraph(text("[The policy, stated plainly.]")),
+      heading(2, "Applicability"),
+      tip("Who must follow this, and any exclusions."),
+      bullet(["[Applies to: team, role, or system]", "[Excludes: …]"]),
+      heading(2, "Requirements"),
+      tip("Concrete, checkable requirements — not intentions."),
+      bullet(["[Requirement 1]", "[Requirement 2]"]),
+      heading(2, "Enforcement"),
+      tip("What happens when this policy isn't followed."),
+      paragraph(text("[Consequences and who is responsible for enforcing them.]")),
+      heading(2, "Review"),
+      tip("How often this policy is revisited, and by whom."),
+      paragraph(text("[Review cadence and owner.]")),
+    ),
+    metadata: {
+      document_type: "policy",
+      use_cases: [
+        "Company policies",
+        "Compliance requirements",
+        "Acceptable use",
+        "Data handling rules",
+      ],
+      supported_views: ["wiki", "dashboard"],
+      schema_fields: withEssentials(KB_OPS_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+        verification_status: "needs_review",
       },
     },
   },

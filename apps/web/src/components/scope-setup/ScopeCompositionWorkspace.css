@@ -52,6 +52,30 @@
   padding: var(--space-sm) var(--space-sm);
 }
 
+.scope-composition__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.scope-composition__group-label {
+  margin: 0;
+  padding: 0 var(--space-sm);
+}
+
+.scope-composition__option--bundle {
+  display: flex;
+  flex-direction: column;
+}
+
+.scope-composition__bundle-includes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 var(--space-sm) calc(18px + var(--space-sm) * 2);
+  padding: 0 var(--space-sm);
+}
+
 .scope-composition-settings {
   display: flex;
   flex-direction: column;

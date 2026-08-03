@@ -96,7 +96,7 @@ Sub-phases (see plan `m2.5_scopesetupwizard`):
 | M2.5.0 Foundation | **done** | `scope-bundles`, `view-template-affinity`, `scope-composition`, DB migration, `applyScopeComposition`, API |
 | M2.5.1 Wizard shell | **done** | Composition workspace UI |
 | M2.5.2 Core templates | **done** | Properties-native templates + hydrate fix + authoring guideline ([docs/34](../docs/34-template-authoring.md)) |
-| M2.5.3 Pilot bundle KB | pending | Knowledge Base & Operations |
+| M2.5.3 Pilot bundle KB | **done** | Knowledge Base & Operations |
 | M2.5.4 Pilot bundle PDX | pending | Product Discovery & UX |
 
 - Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`
