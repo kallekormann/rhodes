@@ -205,11 +205,46 @@ export const PRODUCT_ARCHITECTURE_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const PRODUCT_DISCOVERY_UX_BUNDLE: BundleDefinition = {
+  id: "product-discovery-ux",
+  label: "Product Discovery & UX",
+  description: "PRDs, feature specs, and user flows — from requirement to shipped feature.",
+  audience: ["product", "ux-design", "ux-research", "founders", "startups"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "product-feature-board",
+      baseViewType: "kanban",
+      label: "Feature board",
+      description: "Idea → Planned → Building → Shipped",
+      config: { groupBy: "feature_status" },
+    },
+    {
+      id: "product-roadmap-gantt",
+      baseViewType: "gantt",
+      label: "Roadmap",
+      description: "PRDs and features by target release",
+      config: { groupBy: "target_release" },
+    },
+  ],
+  templateSlugs: ["prd", "product-feature", "user-flow-definition", "swot-analysis"],
+  metadataFields: [
+    {
+      field_key: "product_area",
+      field_label: "Product area",
+      field_type: "select",
+      options: ["core_app", "browser_extension", "admin_panel", "api"],
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
   GROWTH_EXPERIMENTATION_BUNDLE,
   PRODUCT_ARCHITECTURE_BUNDLE,
+  PRODUCT_DISCOVERY_UX_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

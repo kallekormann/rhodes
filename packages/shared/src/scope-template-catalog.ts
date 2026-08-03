@@ -76,6 +76,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Workflow Definition",
     description: "A repeatable process — trigger, steps, roles, and exceptions",
   },
+  {
+    slug: "prd",
+    label: "Product Requirements Document",
+    description: "Problem, scope, requirements, and what's explicitly out",
+  },
+  {
+    slug: "product-feature",
+    label: "Product Feature",
+    description: "Problem, proposed solution, acceptance criteria, and success metrics",
+  },
+  {
+    slug: "user-flow-definition",
+    label: "User Flow Definition",
+    description: "Goal, steps, edge cases, and success state for a user journey",
+  },
+  {
+    slug: "swot-analysis",
+    label: "SWOT Analysis",
+    description: "Strengths, weaknesses, opportunities, and threats for a product or strategy",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

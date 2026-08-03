@@ -23,6 +23,9 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "adr",
       "technical-requirements-document",
       "workflow-definition",
+      "prd",
+      "product-feature",
+      "user-flow-definition",
     ],
     minForView: 1,
   },
@@ -31,7 +34,15 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
     minForView: 1,
   },
   gantt: {
-    recommended: ["project-charter", "product-spec", "report", "ab-experiment", "scientific-experiment"],
+    recommended: [
+      "project-charter",
+      "product-spec",
+      "report",
+      "ab-experiment",
+      "scientific-experiment",
+      "prd",
+      "product-feature",
+    ],
     minForView: 1,
   },
   wiki: {
@@ -46,6 +57,10 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "adr",
       "technical-requirements-document",
       "workflow-definition",
+      "prd",
+      "product-feature",
+      "user-flow-definition",
+      "swot-analysis",
     ],
     minForView: 1,
   },
@@ -71,6 +86,10 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   adr: ["wiki", "kanban"],
   "technical-requirements-document": ["wiki", "kanban"],
   "workflow-definition": ["wiki", "kanban"],
+  prd: ["wiki", "kanban", "gantt"],
+  "product-feature": ["kanban", "wiki", "gantt"],
+  "user-flow-definition": ["wiki", "kanban"],
+  "swot-analysis": ["wiki"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

@@ -19,7 +19,11 @@ export type SystemTemplateSlug =
   | "scientific-experiment"
   | "adr"
   | "technical-requirements-document"
-  | "workflow-definition";
+  | "workflow-definition"
+  | "prd"
+  | "product-feature"
+  | "user-flow-definition"
+  | "swot-analysis";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -62,6 +66,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   adr: "Architecture Decision Record",
   technical_requirements_document: "Technical Requirements Document",
   workflow_definition: "Workflow Definition",
+  prd: "Product Requirements Document",
+  product_feature: "Product Feature",
+  user_flow_definition: "User Flow Definition",
+  swot_analysis: "SWOT Analysis",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -160,6 +168,23 @@ const PRODUCT_ARCHITECTURE_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_type: "multi_select",
     options: ["frontend", "backend", "database", "infrastructure"],
     ai_fill_enabled: true,
+  },
+];
+
+/** Product Discovery & UX fields — shared by PRD / Product Feature / User Flow Definition. */
+const PRODUCT_DISCOVERY_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "product_area",
+    field_label: "Product area",
+    field_type: "select",
+    options: ["core_app", "browser_extension", "admin_panel", "api"],
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "target_release",
+    field_label: "Target release",
+    field_type: "text",
+    ai_fill_enabled: false,
   },
 ];
 
@@ -922,6 +947,178 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         workflow_status: "draft",
+      },
+    },
+  },
+  {
+    slug: "prd",
+    name: "Product Requirements Document",
+    description: "Problem, scope, requirements, and what's explicitly out",
+    structure_json: doc(
+      heading(2, "Problem Statement & Insight"),
+      tip("The problem this feature solves, and the evidence behind it."),
+      paragraph(text("[Problem statement and supporting insight.]")),
+      heading(2, "User Stories / How Might We"),
+      tip("Frame the opportunity from the user's perspective."),
+      bullet(["[As a ... I want to ... so that ...]", "[How might we ...?]"]),
+      heading(2, "Scope & Requirements"),
+      tip("Every requirement, prioritized with MoSCoW and an effort estimate."),
+      table(
+        ["Req ID", "Description", "MoSCoW", "Effort", "Status"],
+        [
+          ["REQ-1", "[Requirement description]", "Must", "[S/M/L]", "[Not started]"],
+          ["REQ-2", "[Requirement description]", "Should", "[S/M/L]", "[Not started]"],
+        ],
+      ),
+      heading(2, "Out of Scope"),
+      tip("What this explicitly does not cover — prevents scope creep."),
+      bullet(["[Out of scope item]"]),
+    ),
+    metadata: {
+      document_type: "prd",
+      use_cases: ["Product requirements", "Feature specs", "Cross-functional alignment"],
+      supported_views: ["wiki", "kanban", "gantt"],
+      schema_fields: withEssentials([
+        {
+          field_key: "priority",
+          field_label: "Priority",
+          field_type: "select",
+          options: ["low", "medium", "high", "critical"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "strategic_alignment",
+          field_label: "Strategic alignment",
+          field_type: "select",
+          options: ["user_growth", "retention", "tech_debt", "compliance"],
+          ai_fill_enabled: true,
+        },
+        ...PRODUCT_DISCOVERY_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        priority: "medium",
+      },
+    },
+  },
+  {
+    slug: "product-feature",
+    name: "Product Feature",
+    description: "Problem, proposed solution, acceptance criteria, and success metrics",
+    structure_json: doc(
+      heading(2, "Problem & Opportunity"),
+      tip("What's the gap or opportunity this feature addresses?"),
+      paragraph(text("[Problem and opportunity.]")),
+      heading(2, "Proposed Solution"),
+      tip("What you're building, at a level a non-engineer can follow."),
+      paragraph(text("[Proposed solution.]")),
+      heading(2, "Acceptance Criteria"),
+      tip("The testable conditions that define 'done'."),
+      bullet(["[Given ... when ... then ...]", "[Given ... when ... then ...]"]),
+      heading(2, "Success Metrics"),
+      tip("How you'll know this feature worked after shipping."),
+      bullet(["[Metric and target]"]),
+    ),
+    metadata: {
+      document_type: "product_feature",
+      use_cases: ["Feature specs", "Backlog items", "Sprint planning"],
+      supported_views: ["kanban", "wiki", "gantt"],
+      schema_fields: withEssentials([
+        {
+          field_key: "feature_status",
+          field_label: "Feature status",
+          field_type: "status",
+          options: [
+            { value: "idea", label: "Idea", category: "unstarted" },
+            { value: "planned", label: "Planned", category: "unstarted" },
+            { value: "building", label: "Building", category: "started" },
+            { value: "shipped", label: "Shipped", category: "completed" },
+            { value: "deprecated", label: "Deprecated", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...PRODUCT_DISCOVERY_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        feature_status: "idea",
+      },
+    },
+  },
+  {
+    slug: "user-flow-definition",
+    name: "User Flow Definition",
+    description: "Goal, steps, edge cases, and success state for a user journey",
+    structure_json: doc(
+      heading(2, "Goal & Entry Point"),
+      tip("What the user is trying to accomplish, and where the flow begins."),
+      paragraph(text("[Goal and entry point.]")),
+      heading(2, "Steps"),
+      tip("The ordered steps a user takes from entry to completion."),
+      ordered(["[Step 1]", "[Step 2]", "[Step 3]"]),
+      heading(2, "Edge Cases & Error States"),
+      tip("What can go wrong, and what the user sees when it does."),
+      bullet(["[Edge case] — [What happens]"]),
+      heading(2, "Success State"),
+      tip("What the user sees and can do once the flow completes."),
+      paragraph(text("[Success state.]")),
+    ),
+    metadata: {
+      document_type: "user_flow_definition",
+      use_cases: ["UX flows", "Interaction design", "Feature handoff to engineering"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "flow_status",
+          field_label: "Flow status",
+          field_type: "status",
+          options: [
+            { value: "draft", label: "Draft", category: "unstarted" },
+            { value: "in_review", label: "In review", category: "started" },
+            { value: "approved", label: "Approved", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...PRODUCT_DISCOVERY_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        flow_status: "draft",
+      },
+    },
+  },
+  {
+    slug: "swot-analysis",
+    name: "SWOT Analysis",
+    description: "Strengths, weaknesses, opportunities, and threats for a product or strategy",
+    structure_json: doc(
+      heading(2, "Strengths"),
+      tip("Internal advantages you can build on."),
+      bullet(["[Strength]"]),
+      heading(2, "Weaknesses"),
+      tip("Internal gaps or limitations to address."),
+      bullet(["[Weakness]"]),
+      heading(2, "Opportunities"),
+      tip("External factors you could capitalize on."),
+      bullet(["[Opportunity]"]),
+      heading(2, "Threats"),
+      tip("External factors that could work against you."),
+      bullet(["[Threat]"]),
+    ),
+    metadata: {
+      document_type: "swot_analysis",
+      use_cases: ["Strategic planning", "Competitive analysis", "Business reviews"],
+      supported_views: ["wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "analysis_scope",
+          field_label: "Analysis scope",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
       },
     },
   },

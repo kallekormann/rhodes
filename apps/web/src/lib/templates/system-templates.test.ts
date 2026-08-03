@@ -20,12 +20,16 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "meeting-notes",
       "onboarding-guide",
       "policy-document",
+      "prd",
       "problem",
+      "product-feature",
       "product-spec",
       "report",
       "scientific-experiment",
       "sop",
+      "swot-analysis",
       "technical-requirements-document",
+      "user-flow-definition",
       "workflow-definition",
     ]);
   });
@@ -105,6 +109,34 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     );
     expect(workflowStatus?.field_type).toBe("status");
     expect(parseStatusOptions(workflowStatus?.options)?.length).toBeGreaterThan(0);
+  });
+
+  it("Product Discovery & UX templates ship product_area and their own status keys without colliding with essentials", () => {
+    for (const slug of ["prd", "product-feature", "user-flow-definition"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const productArea = seed?.metadata.schema_fields.find((f) => f.field_key === "product_area");
+      expect(productArea, `${slug} missing product_area`).toBeTruthy();
+    }
+
+    const productFeature = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "product-feature");
+    const essentialStatus = productFeature?.metadata.schema_fields.find((f) => f.field_key === "status");
+    expect(essentialStatus?.field_type).toBe("select");
+
+    const featureStatus = productFeature?.metadata.schema_fields.find(
+      (f) => f.field_key === "feature_status",
+    );
+    expect(featureStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(featureStatus?.options)?.length).toBeGreaterThan(0);
+
+    const userFlow = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "user-flow-definition");
+    const flowStatus = userFlow?.metadata.schema_fields.find((f) => f.field_key === "flow_status");
+    expect(flowStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(flowStatus?.options)?.length).toBeGreaterThan(0);
+
+    const swot = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "swot-analysis");
+    expect(swot, "missing swot-analysis").toBeTruthy();
+    expect(swot?.metadata.supported_views).toContain("wiki");
   });
 
   it("ships essentials with field_type and AI fill", () => {

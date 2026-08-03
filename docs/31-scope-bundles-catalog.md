@@ -20,7 +20,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | `knowledge-base-ops` | Knowledge Base & Operations | available | M2.5.3 |
 | `growth-experimentation` | Growth & Experimentation | available | M2.5.4 |
 | `product-architecture` | Product Architecture & Decisions | available | M2.5.5 |
-| `product-discovery-ux` | Product Discovery & UX | pending | M2.5.6 |
+| `product-discovery-ux` | Product Discovery & UX | available | M2.5.6 |
 | `gtm-project-execution` | GTM & Project Execution | pending | M2.5.7 |
 | `content-marketing` | Content & Campaign Marketing | pending | M2.5.8 |
 | `strategy-consulting` | Strategy & Consulting | pending | M2.5.9 |
