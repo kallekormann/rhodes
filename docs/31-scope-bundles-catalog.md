@@ -18,15 +18,19 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 |----|-------|--------|------|
 | `wizard-starter` | Starter pack | available | M2.5.1 (wizard test) |
 | `knowledge-base-ops` | Knowledge Base & Operations | available | M2.5.3 |
-| `product-discovery-ux` | Product Discovery & UX | pending | M2.5.4 |
-| `gtm-project-execution` | GTM & Project Execution | pending | M2.5.5 |
-| `product-architecture` | Product Architecture & Decisions | pending | M2.5.6 |
-| `growth-experimentation` | Strategic Growth & Experimentation | pending | M2.5.7 |
+| `growth-experimentation` | Growth & Experimentation | available | M2.5.4 |
+| `product-architecture` | Product Architecture & Decisions | pending | M2.5.5 |
+| `product-discovery-ux` | Product Discovery & UX | pending | M2.5.6 |
+| `gtm-project-execution` | GTM & Project Execution | pending | M2.5.7 |
 | `content-marketing` | Content & Campaign Marketing | pending | M2.5.8 |
 | `strategy-consulting` | Strategy & Consulting | pending | M2.5.9 |
 | `people-ops` | People Operations & HR | pending | M2.5.10 |
 | `legal-compliance-finance` | Legal, Compliance & Finance | pending | M2.5.11 |
 | `academic-research` | Academic & Scientific Research | pending | M2.5.12 (post-M7) |
+
+Reordered from the original brief so Growth & Experimentation (a foundational, cross-audience use
+case flowing Insight/Problem → Experiment) ships right after Knowledge Base & Ops, ahead of the more
+niche discovery/GTM bundles.
 
 Full bundle specs (templates, metadata, view presets) to be transcribed from product brief into `BUNDLE_CATALOG` entries per wave.
 

@@ -12,7 +12,11 @@ export type SystemTemplateSlug =
   | "report"
   | "sop"
   | "onboarding-guide"
-  | "policy-document";
+  | "policy-document"
+  | "ab-experiment"
+  | "insight"
+  | "problem"
+  | "scientific-experiment";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -48,6 +52,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   sop: "SOP",
   onboarding_guide: "Onboarding Guide",
   policy: "Policy",
+  ab_experiment: "A/B Experiment",
+  insight: "Insight",
+  problem: "Problem",
+  scientific_experiment: "Scientific Experiment",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -74,6 +82,42 @@ const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_key: "summary",
     field_label: "Summary",
     field_type: "textarea",
+    ai_fill_enabled: true,
+  },
+];
+
+/** Growth discovery fields — shared by Insight / Problem. */
+const GROWTH_DISCOVERY_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "state",
+    field_label: "State",
+    field_type: "status",
+    options: [
+      { value: "raw", label: "Raw", category: "unstarted" },
+      { value: "validating", label: "Validating", category: "started" },
+      { value: "actioned", label: "Actioned", category: "completed" },
+      { value: "discarded", label: "Discarded", category: "canceled" },
+    ],
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "source_type",
+    field_label: "Source type",
+    field_type: "select",
+    options: ["user_interview", "quantitative_analytics", "market_research", "support_tickets"],
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "confidence_level",
+    field_label: "Confidence level",
+    field_type: "select",
+    options: ["low", "medium", "high"],
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "product_area",
+    field_label: "Product area",
+    field_type: "text",
     ai_fill_enabled: true,
   },
 ];
@@ -149,6 +193,24 @@ function ordered(items: string[]): TipTapNode {
 
 function doc(...nodes: TipTapNode[]): Record<string, unknown> {
   return { type: "doc", content: nodes };
+}
+
+function tableRow(cells: string[], header = false): TipTapNode {
+  return {
+    type: "tableRow",
+    content: cells.map((cell) => ({
+      type: header ? "tableHeader" : "tableCell",
+      content: [paragraph(text(cell))],
+    })),
+  };
+}
+
+/** TipTap table — @tiptap/extension-table node shape (table > tableRow > tableHeader|tableCell). */
+function table(headers: string[], rows: string[][]): TipTapNode {
+  return {
+    type: "table",
+    content: [tableRow(headers, true), ...rows.map((row) => tableRow(row))],
+  };
 }
 
 function withEssentials(
@@ -467,6 +529,230 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         verification_status: "needs_review",
+      },
+    },
+  },
+  {
+    slug: "ab-experiment",
+    name: "A/B Experiment",
+    description: "Hypothesis, target segment, success metrics, and variations",
+    structure_json: doc(
+      heading(2, "Hypothesis & Rationale"),
+      tip("If we [do X], then [Y] will happen, because [underlying reasoning]."),
+      paragraph(
+        text("If we "),
+        text("[build/change this]", true),
+        text(", then "),
+        text("[this behavior will happen]", true),
+        text(", because "),
+        text("[underlying reasoning].", true),
+      ),
+      heading(2, "Target Audience & Segment"),
+      tip("Who this experiment is shown to — be specific enough to segment on."),
+      bullet(["[New users]", "[Power users]", "[Churn risk]"]),
+      heading(2, "Success Metrics"),
+      tip("One primary metric and any secondary metrics, with baseline and target."),
+      table(
+        ["Metric", "Type", "Baseline", "Target"],
+        [
+          ["[Conversion rate]", "Primary", "[Current %]", "[Target %]"],
+          ["[Guardrail metric]", "Secondary", "[Current value]", "[Must not fall below]"],
+        ],
+      ),
+      heading(2, "Variations & Implementation Notes"),
+      tip("What changes in each variant, and anything engineering needs to know."),
+      bullet(["[Variant A — control]", "[Variant B — treatment]"]),
+    ),
+    metadata: {
+      document_type: "ab_experiment",
+      use_cases: ["A/B tests", "Growth experiments", "Feature rollout validation"],
+      supported_views: ["kanban", "dashboard", "gantt"],
+      schema_fields: withEssentials([
+        {
+          field_key: "experiment_status",
+          field_label: "Experiment status",
+          field_type: "status",
+          options: [
+            { value: "backlog", label: "Backlog", category: "unstarted" },
+            { value: "design", label: "Design", category: "unstarted" },
+            { value: "engineering", label: "Engineering", category: "started" },
+            { value: "live", label: "Live", category: "started" },
+            { value: "analyzing", label: "Analyzing", category: "started" },
+            { value: "concluded", label: "Concluded", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "date_active",
+          field_label: "Timeline",
+          field_type: "date_range",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "target_sprint",
+          field_label: "Target sprint/quarter",
+          field_type: "text",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "funnel_stage",
+          field_label: "Funnel stage",
+          field_type: "select",
+          options: ["acquisition", "activation", "retention", "referral", "revenue"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "target_segment",
+          field_label: "Target segment",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "impact",
+          field_label: "Impact (1-10)",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "confidence",
+          field_label: "Confidence (1-10)",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "ease",
+          field_label: "Ease (1-10)",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "cost_of_experimentation",
+          field_label: "Cost of experimentation",
+          field_type: "number",
+          options: { unit: "days" },
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "erosion_risk",
+          field_label: "Long-term erosion risk",
+          field_type: "checkbox",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "origin",
+          field_label: "Origin",
+          field_type: "relation",
+          ai_fill_enabled: false,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        experiment_status: "backlog",
+        funnel_stage: "activation",
+      },
+    },
+  },
+  {
+    slug: "insight",
+    name: "Insight",
+    description: "Core insight, evidence, and confidence — feeds the experiment backlog",
+    structure_json: doc(
+      heading(2, "The Core Insight"),
+      tip("State the insight in one or two sentences — what did you learn?"),
+      paragraph(text("[The insight, stated plainly.]")),
+      heading(2, "User Quotes / Data Evidence"),
+      tip("The evidence that backs this up — quotes, numbers, or links to sources."),
+      bullet(["[Quote or data point 1]", "[Quote or data point 2]"]),
+      heading(2, "Recommended Action"),
+      tip("What should happen next — an idea to validate, or an experiment to design."),
+      paragraph(text("[Proposed next step.]")),
+    ),
+    metadata: {
+      document_type: "insight",
+      use_cases: ["User research findings", "Discovery notes", "Experiment backlog input"],
+      supported_views: ["kanban", "wiki"],
+      schema_fields: withEssentials(GROWTH_DISCOVERY_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+        state: "raw",
+      },
+    },
+  },
+  {
+    slug: "problem",
+    name: "Problem",
+    description: "Problem statement, impact, and evidence — feeds the experiment backlog",
+    structure_json: doc(
+      heading(2, "Problem Statement"),
+      tip("What's broken or underperforming, for whom, and how do you know?"),
+      paragraph(text("[The problem, stated plainly.]")),
+      heading(2, "Impact"),
+      tip("Who is affected, how often, and what it costs if left unsolved."),
+      bullet(["[Who is affected]", "[Frequency / severity]", "[Cost of inaction]"]),
+      heading(2, "User Quotes / Data Evidence"),
+      tip("The evidence that this is real — quotes, numbers, or links to sources."),
+      bullet(["[Quote or data point 1]", "[Quote or data point 2]"]),
+    ),
+    metadata: {
+      document_type: "problem",
+      use_cases: ["Problem statements", "Discovery notes", "Experiment backlog input"],
+      supported_views: ["kanban", "wiki"],
+      schema_fields: withEssentials(GROWTH_DISCOVERY_SCHEMA_FIELDS),
+      default_properties: {
+        status: "draft",
+        state: "raw",
+      },
+    },
+  },
+  {
+    slug: "scientific-experiment",
+    name: "Scientific Experiment",
+    description: "Hypothesis, methodology, variables, results, and conclusion",
+    structure_json: doc(
+      heading(2, "Hypothesis"),
+      tip("The falsifiable statement this experiment tests."),
+      paragraph(text("[Hypothesis, stated as a testable claim.]")),
+      heading(2, "Methodology"),
+      tip("How the experiment is run — design, sample, and procedure."),
+      paragraph(text("[Experimental design and procedure.]")),
+      heading(2, "Variables"),
+      tip("What you're changing (independent) and what you're measuring (dependent)."),
+      bullet(["Independent: [what you manipulate]", "Dependent: [what you measure]", "Controlled: [what you hold constant]"]),
+      heading(2, "Results"),
+      tip("What happened — data, observations, and any anomalies."),
+      paragraph(text("[Results and observations.]")),
+      heading(2, "Conclusion"),
+      tip("Was the hypothesis supported? What follows from this?"),
+      paragraph(text("[Conclusion and next steps.]")),
+    ),
+    metadata: {
+      document_type: "scientific_experiment",
+      use_cases: ["Scientific research", "Lab experiments", "Hypothesis testing"],
+      supported_views: ["kanban", "gantt", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "experiment_status",
+          field_label: "Experiment status",
+          field_type: "status",
+          options: [
+            { value: "planned", label: "Planned", category: "unstarted" },
+            { value: "running", label: "Running", category: "started" },
+            { value: "analyzing", label: "Analyzing", category: "started" },
+            { value: "concluded", label: "Concluded", category: "completed" },
+            { value: "abandoned", label: "Abandoned", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "date_active",
+          field_label: "Timeline",
+          field_type: "date_range",
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        experiment_status: "planned",
       },
     },
   },

@@ -27,7 +27,7 @@ export type MetadataFieldSeed = {
     | "checkbox"
     | "status"
     | "relation";
-  options?: string[] | StatusOptionSeed[] | null;
+  options?: string[] | StatusOptionSeed[] | { unit: string } | null;
   ai_fill_enabled?: boolean;
 };
 
@@ -131,9 +131,50 @@ export const KNOWLEDGE_BASE_OPS_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const GROWTH_EXPERIMENTATION_BUNDLE: BundleDefinition = {
+  id: "growth-experimentation",
+  label: "Growth & Experimentation",
+  description: "Insights and problems flow into A/B experiments — tracked from idea to readout.",
+  audience: ["growth", "product", "founders", "ab-testing"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "growth-experiment-board",
+      baseViewType: "kanban",
+      label: "Experiment board",
+      description: "Backlog → Design → Engineering → Live → Analyzing → Concluded",
+      config: { groupBy: "experiment_status" },
+    },
+    {
+      id: "growth-funnel-dashboard",
+      baseViewType: "dashboard",
+      label: "Funnel dashboard",
+      description: "Experiments grouped by funnel stage (Acquisition → Revenue)",
+      config: { groupBy: "funnel_stage" },
+    },
+  ],
+  templateSlugs: ["ab-experiment", "insight", "problem", "scientific-experiment"],
+  metadataFields: [
+    {
+      field_key: "funnel_stage",
+      field_label: "Funnel stage",
+      field_type: "select",
+      options: ["acquisition", "activation", "retention", "referral", "revenue"],
+      ai_fill_enabled: true,
+    },
+    {
+      field_key: "origin",
+      field_label: "Origin",
+      field_type: "relation",
+      ai_fill_enabled: false,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
+  GROWTH_EXPERIMENTATION_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

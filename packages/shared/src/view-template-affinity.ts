@@ -13,7 +13,7 @@ export type ViewTemplateAffinityMap = Record<string, ViewTemplateAffinity>;
  */
 export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
   kanban: {
-    recommended: ["project-kickoff", "sprint-retro", "meeting-notes"],
+    recommended: ["project-kickoff", "sprint-retro", "meeting-notes", "ab-experiment", "insight", "problem"],
     minForView: 1,
   },
   calendar: {
@@ -21,15 +21,15 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
     minForView: 1,
   },
   gantt: {
-    recommended: ["project-charter", "product-spec", "report"],
+    recommended: ["project-charter", "product-spec", "report", "ab-experiment", "scientific-experiment"],
     minForView: 1,
   },
   wiki: {
-    recommended: ["sop", "onboarding-guide", "policy-document", "blank"],
+    recommended: ["sop", "onboarding-guide", "policy-document", "blank", "insight", "problem", "scientific-experiment"],
     minForView: 1,
   },
   dashboard: {
-    recommended: ["weekly-status", "report", "product-spec"],
+    recommended: ["weekly-status", "report", "product-spec", "ab-experiment"],
     minForView: 1,
   },
 };
@@ -43,6 +43,10 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   sop: ["wiki", "dashboard"],
   "onboarding-guide": ["wiki", "calendar"],
   "policy-document": ["wiki", "dashboard"],
+  "ab-experiment": ["kanban", "dashboard", "gantt"],
+  insight: ["kanban", "wiki"],
+  problem: ["kanban", "wiki"],
+  "scientific-experiment": ["kanban", "gantt", "wiki"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

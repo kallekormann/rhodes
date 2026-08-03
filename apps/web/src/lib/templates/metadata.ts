@@ -87,7 +87,11 @@ function parseSchemaFields(raw: unknown): TemplateSchemaFieldSeed[] | undefined 
         : record.options.filter((item): item is string => typeof item === "string")
       : record.options === null
         ? null
-        : undefined;
+        : record.options &&
+            typeof record.options === "object" &&
+            typeof (record.options as { unit?: unknown }).unit === "string"
+          ? { unit: (record.options as { unit: string }).unit }
+          : undefined;
 
     fields.push({
       field_key,

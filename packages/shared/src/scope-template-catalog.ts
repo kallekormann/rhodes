@@ -41,6 +41,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Policy Document",
     description: "Statement, applicability, requirements, enforcement, and review",
   },
+  {
+    slug: "ab-experiment",
+    label: "A/B Experiment",
+    description: "Hypothesis, target segment, success metrics, and variations",
+  },
+  {
+    slug: "insight",
+    label: "Insight",
+    description: "Core insight, evidence, and confidence — feeds the experiment backlog",
+  },
+  {
+    slug: "problem",
+    label: "Problem",
+    description: "Problem statement, impact, and evidence — feeds the experiment backlog",
+  },
+  {
+    slug: "scientific-experiment",
+    label: "Scientific Experiment",
+    description: "Hypothesis, methodology, variables, results, and conclusion",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

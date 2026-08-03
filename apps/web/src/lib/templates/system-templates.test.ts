@@ -3,6 +3,7 @@ import {
   ESSENTIAL_TEMPLATE_FIELD_KEYS,
   SYSTEM_TEMPLATE_SEEDS,
 } from "@rhodes/shared/system-templates";
+import { parseStatusOptions } from "@/lib/metadata/schemas";
 import {
   documentMetadataFromTemplate,
   parseTemplateMetadata,
@@ -12,12 +13,16 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
   it("includes all wizard catalog slugs", () => {
     const slugs = SYSTEM_TEMPLATE_SEEDS.map((seed) => seed.slug).sort();
     expect(slugs).toEqual([
+      "ab-experiment",
       "blank",
+      "insight",
       "meeting-notes",
       "onboarding-guide",
       "policy-document",
+      "problem",
       "product-spec",
       "report",
+      "scientific-experiment",
       "sop",
     ]);
   });
@@ -33,6 +38,43 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       }
       expect(seed?.metadata.supported_views).toContain("wiki");
     }
+  });
+
+  it("Growth & Experimentation templates ship discovery/experiment fields without colliding with essentials", () => {
+    const discoverySlugs = ["insight", "problem"];
+    for (const slug of discoverySlugs) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      for (const key of ["state", "source_type", "confidence_level", "product_area"]) {
+        const field = seed?.metadata.schema_fields.find((f) => f.field_key === key);
+        expect(field, `${slug} missing ${key}`).toBeTruthy();
+      }
+      const state = seed?.metadata.schema_fields.find((f) => f.field_key === "state");
+      expect(state?.field_type).toBe("status");
+      expect(parseStatusOptions(state?.options)?.length).toBeGreaterThan(0);
+    }
+
+    for (const slug of ["ab-experiment", "scientific-experiment"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+
+      // Regression: a custom `status`-type field must not collide with (and get
+      // silently dropped by) the essential `status` select field — it needs its own key.
+      const essentialStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "status");
+      expect(essentialStatus?.field_type).toBe("select");
+
+      const experimentStatus = seed?.metadata.schema_fields.find(
+        (f) => f.field_key === "experiment_status",
+      );
+      expect(experimentStatus, `${slug} missing experiment_status`).toBeTruthy();
+      expect(experimentStatus?.field_type).toBe("status");
+      expect(parseStatusOptions(experimentStatus?.options)?.length).toBeGreaterThan(0);
+    }
+
+    const abExperiment = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "ab-experiment");
+    expect(
+      abExperiment?.metadata.schema_fields.find((f) => f.field_key === "origin")?.field_type,
+    ).toBe("relation");
   });
 
   it("ships essentials with field_type and AI fill", () => {
