@@ -35,7 +35,11 @@ export type SystemTemplateSlug =
   | "digital-maturity-audit"
   | "general-audit"
   | "business-plan"
-  | "professional-business-letter";
+  | "professional-business-letter"
+  | "one-on-one-notes"
+  | "personal-development-plan"
+  | "job-description"
+  | "performance-review";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -94,6 +98,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   general_audit: "General Audit",
   business_plan: "Business Plan",
   professional_business_letter: "Professional Business Letter",
+  one_on_one_notes: "1:1 Notes",
+  personal_development_plan: "Personal Development Plan",
+  job_description: "Job Description",
+  performance_review: "Performance Review",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -255,6 +263,22 @@ const AUDIT_STATUS_FIELD: TemplateSchemaFieldSeed = {
   ],
   ai_fill_enabled: true,
 };
+
+/** People Operations & HR fields — shared by Personal Development Plan / Performance Review. */
+const PEOPLE_OPS_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "employee",
+    field_label: "Employee",
+    field_type: "text",
+    ai_fill_enabled: true,
+  },
+  {
+    field_key: "review_period",
+    field_label: "Review period",
+    field_type: "text",
+    ai_fill_enabled: false,
+  },
+];
 
 type TipTapText = { type: "text"; text: string; marks?: { type: string }[] };
 type TipTapNode = { type: string; attrs?: Record<string, unknown>; content?: TipTapNode[] };
@@ -1786,6 +1810,215 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       ]),
       default_properties: {
         status: "draft",
+      },
+    },
+  },
+  {
+    slug: "one-on-one-notes",
+    name: "1:1 Notes",
+    description: "Check-in, topics discussed, action items, and notes for next time",
+    structure_json: doc(
+      heading(2, "Check-in & General Well-being"),
+      tip("How things are going, beyond the task list — start here, not with status."),
+      paragraph(text("[Check-in notes.]")),
+      heading(2, "Topics Discussed"),
+      tip("Whatever came up — career, blockers, feedback, or anything else."),
+      bullet(["[Topic]"]),
+      heading(2, "Action Items"),
+      tip("Concrete follow-ups from this conversation, with an owner and due date."),
+      table(
+        ["Task", "Owner", "Due Date", "Status"],
+        [["[Task]", "[Owner]", "[Date]", "[Not started]"]],
+      ),
+      heading(2, "Notes for Next Meeting"),
+      tip("What to pick back up next time."),
+      paragraph(text("[Notes for next meeting.]")),
+    ),
+    metadata: {
+      document_type: "one_on_one_notes",
+      use_cases: ["Manager 1:1s", "Skip-levels", "Mentor check-ins"],
+      supported_views: ["calendar", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "meeting_date",
+          field_label: "Meeting date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "participant",
+          field_label: "Participant",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "manager",
+          field_label: "Manager",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "requires_hr_followup",
+          field_label: "Requires HR follow-up",
+          field_type: "checkbox",
+          ai_fill_enabled: false,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+      },
+    },
+  },
+  {
+    slug: "personal-development-plan",
+    name: "Personal Development Plan",
+    description: "Career goals, skill development areas, and a check-in schedule",
+    structure_json: doc(
+      heading(2, "Career Goals"),
+      tip("Where this person wants to grow, in their own words."),
+      paragraph(text("[Career goals.]")),
+      heading(2, "Development Areas"),
+      tip("The specific skills or competencies to build, with a concrete action per area."),
+      table(
+        ["Skill / Competency", "Current Level", "Target Level", "Action"],
+        [["[Skill]", "[Current]", "[Target]", "[Action]"]],
+      ),
+      heading(2, "Support Needed"),
+      tip("What has to be true — budget, mentorship, time — for this plan to work."),
+      bullet(["[Support needed]"]),
+      heading(2, "Check-in Schedule"),
+      tip("When you'll revisit this plan together."),
+      paragraph(text("[Check-in cadence.]")),
+    ),
+    metadata: {
+      document_type: "personal_development_plan",
+      use_cases: ["Career development", "Performance coaching", "Skill growth planning"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "pdp_status",
+          field_label: "Plan status",
+          field_type: "status",
+          options: [
+            { value: "draft", label: "Draft", category: "unstarted" },
+            { value: "active", label: "Active", category: "started" },
+            { value: "completed", label: "Completed", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...PEOPLE_OPS_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        pdp_status: "draft",
+      },
+    },
+  },
+  {
+    slug: "job-description",
+    name: "Job Description",
+    description: "Role summary, responsibilities, requirements, and compensation",
+    structure_json: doc(
+      heading(2, "Role Summary"),
+      tip("What this role owns, and why it exists, in two or three sentences."),
+      paragraph(text("[Role summary.]")),
+      heading(2, "Responsibilities"),
+      tip("What this person will actually do, day to day."),
+      bullet(["[Responsibility]"]),
+      heading(2, "Requirements"),
+      tip("The must-haves — keep this list short and genuinely required."),
+      bullet(["[Requirement]"]),
+      heading(2, "Nice to Have"),
+      tip("Not required, but a plus."),
+      bullet(["[Nice to have]"]),
+      heading(2, "Compensation & Benefits"),
+      tip("Salary range and key benefits, where you can share them."),
+      paragraph(text("[Compensation and benefits.]")),
+    ),
+    metadata: {
+      document_type: "job_description",
+      use_cases: ["Hiring", "Role definition", "Org design"],
+      supported_views: ["wiki", "kanban"],
+      schema_fields: withEssentials([
+        {
+          field_key: "department",
+          field_label: "Department",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "seniority",
+          field_label: "Seniority",
+          field_type: "select",
+          options: ["junior", "mid", "senior", "lead", "principal"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "employment_type",
+          field_label: "Employment type",
+          field_type: "select",
+          options: ["full_time", "part_time", "contract", "intern"],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+      },
+    },
+  },
+  {
+    slug: "performance-review",
+    name: "Performance Review",
+    description: "Summary, goals and achievements, strengths, growth areas, and next-period goals",
+    structure_json: doc(
+      heading(2, "Summary"),
+      tip("The overall takeaway — lead with this, not the details."),
+      paragraph(text("[Summary.]")),
+      heading(2, "Goals & Achievements"),
+      tip("What was agreed on this period, and how it went."),
+      table(
+        ["Goal", "Result", "Rating"],
+        [["[Goal]", "[Result]", "[Exceeds/Meets/Below]"]],
+      ),
+      heading(2, "Strengths"),
+      tip("What's working well — be specific, not generic."),
+      bullet(["[Strength]"]),
+      heading(2, "Areas for Growth"),
+      tip("What would make the next period even better."),
+      bullet(["[Area for growth]"]),
+      heading(2, "Next Period Goals"),
+      tip("What's agreed for the upcoming period."),
+      bullet(["[Goal]"]),
+    ),
+    metadata: {
+      document_type: "performance_review",
+      use_cases: ["Performance cycles", "Promotion cases", "Manager feedback"],
+      supported_views: ["wiki", "kanban", "calendar"],
+      schema_fields: withEssentials([
+        {
+          field_key: "review_status",
+          field_label: "Review status",
+          field_type: "status",
+          options: [
+            { value: "self_review", label: "Self review", category: "started" },
+            { value: "manager_review", label: "Manager review", category: "started" },
+            { value: "calibration", label: "Calibration", category: "started" },
+            { value: "finalized", label: "Finalized", category: "completed" },
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "rating",
+          field_label: "Overall rating",
+          field_type: "select",
+          options: ["exceeds", "meets", "below", "unsatisfactory"],
+          ai_fill_enabled: false,
+        },
+        ...PEOPLE_OPS_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        review_status: "self_review",
       },
     },
   },

@@ -23,9 +23,13 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "general-audit",
       "gtm-plan",
       "insight",
+      "job-description",
       "launch-checklist",
       "meeting-notes",
       "onboarding-guide",
+      "one-on-one-notes",
+      "performance-review",
+      "personal-development-plan",
       "policy-document",
       "prd",
       "problem",
@@ -239,6 +243,38 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     );
     expect(letter, "missing professional-business-letter").toBeTruthy();
     expect(letter?.metadata.schema_fields.find((f) => f.field_key === "recipient")).toBeTruthy();
+  });
+
+  it("People Operations & HR templates ship employee field and status workflows without colliding with essentials", () => {
+    for (const slug of ["personal-development-plan", "performance-review"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const employee = seed?.metadata.schema_fields.find((f) => f.field_key === "employee");
+      expect(employee, `${slug} missing employee`).toBeTruthy();
+      const essentialStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "status");
+      expect(essentialStatus?.field_type).toBe("select");
+    }
+
+    const pdp = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "personal-development-plan");
+    const pdpStatus = pdp?.metadata.schema_fields.find((f) => f.field_key === "pdp_status");
+    expect(pdpStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(pdpStatus?.options)?.length).toBeGreaterThan(0);
+
+    const review = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "performance-review");
+    const reviewStatus = review?.metadata.schema_fields.find((f) => f.field_key === "review_status");
+    expect(reviewStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(reviewStatus?.options)?.length).toBeGreaterThan(0);
+
+    const oneOnOne = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "one-on-one-notes");
+    expect(oneOnOne, "missing one-on-one-notes").toBeTruthy();
+    expect(
+      oneOnOne?.metadata.schema_fields.find((f) => f.field_key === "requires_hr_followup")
+        ?.field_type,
+    ).toBe("checkbox");
+
+    const jobDescription = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "job-description");
+    expect(jobDescription, "missing job-description").toBeTruthy();
+    expect(jobDescription?.metadata.schema_fields.find((f) => f.field_key === "seniority")).toBeTruthy();
   });
 
   it("ships essentials with field_type and AI fill", () => {

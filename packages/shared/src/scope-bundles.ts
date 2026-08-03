@@ -336,6 +336,44 @@ export const STRATEGY_CONSULTING_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const PEOPLE_OPS_HR_BUNDLE: BundleDefinition = {
+  id: "people-ops",
+  label: "People Operations & HR",
+  description: "1:1s, development plans, job descriptions, and reviews — the people management cycle.",
+  audience: ["hr", "people-manager", "team-manager", "founders"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "one-on-one-calendar",
+      baseViewType: "calendar",
+      label: "1:1 & review calendar",
+      description: "1:1 notes and performance reviews by meeting/review date",
+      config: { dateField: "meeting_date" },
+    },
+    {
+      id: "people-ops-board",
+      baseViewType: "kanban",
+      label: "People ops board",
+      description: "Development plans and reviews by status",
+      config: { groupBy: "pdp_status" },
+    },
+  ],
+  templateSlugs: [
+    "one-on-one-notes",
+    "personal-development-plan",
+    "job-description",
+    "performance-review",
+  ],
+  metadataFields: [
+    {
+      field_key: "employee",
+      field_label: "Employee",
+      field_type: "text",
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
@@ -345,6 +383,7 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   GTM_PROJECT_EXECUTION_BUNDLE,
   CONTENT_MARKETING_BUNDLE,
   STRATEGY_CONSULTING_BUNDLE,
+  PEOPLE_OPS_HR_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

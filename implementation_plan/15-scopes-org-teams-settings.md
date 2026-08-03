@@ -103,6 +103,7 @@ Sub-phases (see plan `m2.5_scopesetupwizard`):
 | M2.5.7 Bundle: GTM & Project Execution | **done** | Project Charter, GTM Plan, Launch Checklist, Status Report — launch timeline Gantt + status dashboard |
 | M2.5.8 Bundle: Content & Campaign Marketing | **done** | Campaign Brief, Content Calendar Item, SEO Brief, Social Post Batch — content calendar + pipeline Kanban |
 | M2.5.9 Bundle: Strategy & Consulting | **done** | Digital Maturity Audit, General Audit, Business Plan, Professional Business Letter — engagement tracker dashboard |
+| M2.5.10 Bundle: People Operations & HR | **done** | 1:1 Notes, Personal Development Plan, Job Description, Performance Review — 1:1/review calendar + people ops board |
 
 - Modes: `onboarding_personal`, `onboarding_org`, `onboarding_org_upgrade`, `create_*`, `settings_reconfigure`
 - Bidirectional view↔template inference; multi-bundle; non-limiting composition

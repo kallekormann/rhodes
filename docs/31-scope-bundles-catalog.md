@@ -24,7 +24,7 @@ Users can combine multiple bundles, pick views only, pick templates only, or mix
 | `gtm-project-execution` | GTM & Project Execution | available | M2.5.7 |
 | `content-marketing` | Content & Campaign Marketing | available | M2.5.8 |
 | `strategy-consulting` | Strategy & Consulting | available | M2.5.9 |
-| `people-ops` | People Operations & HR | pending | M2.5.10 |
+| `people-ops` | People Operations & HR | available | M2.5.10 |
 | `legal-compliance-finance` | Legal, Compliance & Finance | pending | M2.5.11 |
 | `academic-research` | Academic & Scientific Research | pending | M2.5.12 (post-M7) |
 

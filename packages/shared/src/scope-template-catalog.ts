@@ -156,6 +156,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Professional Business Letter",
     description: "Salutation, body, and closing for a formal business letter",
   },
+  {
+    slug: "one-on-one-notes",
+    label: "1:1 Notes",
+    description: "Check-in, topics discussed, action items, and notes for next time",
+  },
+  {
+    slug: "personal-development-plan",
+    label: "Personal Development Plan",
+    description: "Career goals, skill development areas, and a check-in schedule",
+  },
+  {
+    slug: "job-description",
+    label: "Job Description",
+    description: "Role summary, responsibilities, requirements, and compensation",
+  },
+  {
+    slug: "performance-review",
+    label: "Performance Review",
+    description: "Summary, goals and achievements, strengths, growth areas, and next-period goals",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {
