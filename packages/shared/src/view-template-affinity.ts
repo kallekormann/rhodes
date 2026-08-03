@@ -83,6 +83,10 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "editorial-calendar",
       "seo-brief",
       "social-post-batch",
+      "digital-maturity-audit",
+      "general-audit",
+      "business-plan",
+      "professional-business-letter",
     ],
     minForView: 1,
   },
@@ -94,6 +98,9 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
       "ab-experiment",
       "gtm-plan",
       "campaign-brief",
+      "digital-maturity-audit",
+      "general-audit",
+      "business-plan",
     ],
     minForView: 1,
   },
@@ -127,6 +134,10 @@ export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
   "editorial-calendar": ["calendar", "kanban", "wiki"],
   "seo-brief": ["kanban", "wiki"],
   "social-post-batch": ["calendar", "kanban", "wiki"],
+  "digital-maturity-audit": ["wiki", "dashboard"],
+  "general-audit": ["wiki", "dashboard"],
+  "business-plan": ["wiki", "dashboard"],
+  "professional-business-letter": ["wiki"],
 };
 
 export function getRecommendedTemplatesForView(viewId: string): string[] {

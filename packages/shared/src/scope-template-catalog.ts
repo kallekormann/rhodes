@@ -136,6 +136,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Social Post Batch",
     description: "A batch of scheduled posts across platforms, with copy and performance notes",
   },
+  {
+    slug: "digital-maturity-audit",
+    label: "Digital Maturity Audit",
+    description: "Score maturity dimensions, surface findings, and recommend a roadmap",
+  },
+  {
+    slug: "general-audit",
+    label: "General Audit",
+    description: "Scope, findings by risk level, executive summary, and action plan",
+  },
+  {
+    slug: "business-plan",
+    label: "Business Plan",
+    description: "Executive summary, market analysis, business model, and financial projections",
+  },
+  {
+    slug: "professional-business-letter",
+    label: "Professional Business Letter",
+    description: "Salutation, body, and closing for a formal business letter",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {

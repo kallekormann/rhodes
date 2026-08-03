@@ -16,8 +16,11 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "ab-experiment",
       "adr",
       "blank",
+      "business-plan",
       "campaign-brief",
+      "digital-maturity-audit",
       "editorial-calendar",
+      "general-audit",
       "gtm-plan",
       "insight",
       "launch-checklist",
@@ -28,6 +31,7 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "problem",
       "product-feature",
       "product-spec",
+      "professional-business-letter",
       "project-charter",
       "report",
       "scientific-experiment",
@@ -208,6 +212,33 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       (f) => f.field_key === "batch_status",
     );
     expect(batchStatus?.field_type).toBe("status");
+  });
+
+  it("Strategy & Consulting templates ship client field and shared audit_status without colliding with essentials", () => {
+    for (const slug of ["digital-maturity-audit", "general-audit", "business-plan"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+    }
+
+    for (const slug of ["digital-maturity-audit", "general-audit"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      const client = seed?.metadata.schema_fields.find((f) => f.field_key === "client");
+      expect(client, `${slug} missing client`).toBeTruthy();
+      const essentialStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "status");
+      expect(essentialStatus?.field_type).toBe("select");
+      const auditStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "audit_status");
+      expect(auditStatus?.field_type).toBe("status");
+      expect(parseStatusOptions(auditStatus?.options)?.length).toBeGreaterThan(0);
+    }
+
+    const businessPlan = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "business-plan");
+    expect(businessPlan?.metadata.schema_fields.find((f) => f.field_key === "stage")).toBeTruthy();
+
+    const letter = SYSTEM_TEMPLATE_SEEDS.find(
+      (entry) => entry.slug === "professional-business-letter",
+    );
+    expect(letter, "missing professional-business-letter").toBeTruthy();
+    expect(letter?.metadata.schema_fields.find((f) => f.field_key === "recipient")).toBeTruthy();
   });
 
   it("ships essentials with field_type and AI fill", () => {

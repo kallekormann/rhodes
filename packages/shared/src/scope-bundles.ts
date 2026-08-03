@@ -305,6 +305,37 @@ export const CONTENT_MARKETING_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const STRATEGY_CONSULTING_BUNDLE: BundleDefinition = {
+  id: "strategy-consulting",
+  label: "Strategy & Consulting",
+  description: "Audits, business plans, and client letters — built for engagement-based work.",
+  audience: ["consultants", "business-consultants", "digital-strategy-consultants", "analysts", "founders"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "engagement-tracker",
+      baseViewType: "dashboard",
+      label: "Engagement tracker",
+      description: "Audits and plans grouped by client and status",
+      config: { groupBy: "client" },
+    },
+  ],
+  templateSlugs: [
+    "digital-maturity-audit",
+    "general-audit",
+    "business-plan",
+    "professional-business-letter",
+  ],
+  metadataFields: [
+    {
+      field_key: "client",
+      field_label: "Client",
+      field_type: "text",
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
@@ -313,6 +344,7 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   PRODUCT_DISCOVERY_UX_BUNDLE,
   GTM_PROJECT_EXECUTION_BUNDLE,
   CONTENT_MARKETING_BUNDLE,
+  STRATEGY_CONSULTING_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

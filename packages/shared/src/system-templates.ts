@@ -31,7 +31,11 @@ export type SystemTemplateSlug =
   | "campaign-brief"
   | "editorial-calendar"
   | "seo-brief"
-  | "social-post-batch";
+  | "social-post-batch"
+  | "digital-maturity-audit"
+  | "general-audit"
+  | "business-plan"
+  | "professional-business-letter";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -86,6 +90,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   editorial_calendar: "Content Calendar Item",
   seo_brief: "SEO Brief",
   social_post_batch: "Social Post Batch",
+  digital_maturity_audit: "Digital Maturity Audit",
+  general_audit: "General Audit",
+  business_plan: "Business Plan",
+  professional_business_letter: "Professional Business Letter",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -223,6 +231,30 @@ const CONTENT_MARKETING_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     ai_fill_enabled: false,
   },
 ];
+
+/** Strategy & Consulting fields — shared by the two audit templates and Business Plan. */
+const STRATEGY_CONSULTING_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "client",
+    field_label: "Client",
+    field_type: "text",
+    ai_fill_enabled: true,
+  },
+];
+
+/** Shared audit lifecycle — Digital Maturity Audit / General Audit. */
+const AUDIT_STATUS_FIELD: TemplateSchemaFieldSeed = {
+  field_key: "audit_status",
+  field_label: "Audit status",
+  field_type: "status",
+  options: [
+    { value: "scoping", label: "Scoping", category: "unstarted" },
+    { value: "in_progress", label: "In progress", category: "started" },
+    { value: "report_drafted", label: "Report drafted", category: "started" },
+    { value: "delivered", label: "Delivered", category: "completed" },
+  ],
+  ai_fill_enabled: true,
+};
 
 type TipTapText = { type: "text"; text: string; marks?: { type: string }[] };
 type TipTapNode = { type: string; attrs?: Record<string, unknown>; content?: TipTapNode[] };
@@ -1569,6 +1601,191 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         batch_status: "planning",
+      },
+    },
+  },
+  {
+    slug: "digital-maturity-audit",
+    name: "Digital Maturity Audit",
+    description: "Score maturity dimensions, surface findings, and recommend a roadmap",
+    structure_json: doc(
+      heading(2, "Scope & Methodology"),
+      tip("What was assessed, and how — interviews, tooling review, data analysis, etc."),
+      paragraph(text("[Scope and methodology.]")),
+      heading(2, "Maturity Dimensions"),
+      tip("Score each dimension against a target — this becomes the roadmap's backbone."),
+      table(
+        ["Dimension", "Current Score", "Target Score", "Notes"],
+        [
+          ["Strategy", "[1-5]", "[1-5]", "[Notes]"],
+          ["Technology", "[1-5]", "[1-5]", "[Notes]"],
+          ["Data", "[1-5]", "[1-5]", "[Notes]"],
+          ["Culture", "[1-5]", "[1-5]", "[Notes]"],
+          ["Process", "[1-5]", "[1-5]", "[Notes]"],
+        ],
+      ),
+      heading(2, "Key Findings"),
+      tip("The most important patterns across dimensions — 3-5 findings, not thirty."),
+      bullet(["[Finding]"]),
+      heading(2, "Recommendations & Roadmap"),
+      tip("Prioritized recommendations, sequenced into a roadmap."),
+      bullet(["[Recommendation]"]),
+    ),
+    metadata: {
+      document_type: "digital_maturity_audit",
+      use_cases: ["Digital transformation", "Consulting engagements", "Technology assessments"],
+      supported_views: ["wiki", "dashboard"],
+      schema_fields: withEssentials([
+        AUDIT_STATUS_FIELD,
+        {
+          field_key: "maturity_score",
+          field_label: "Overall maturity score",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        ...STRATEGY_CONSULTING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        audit_status: "scoping",
+      },
+    },
+  },
+  {
+    slug: "general-audit",
+    name: "General Audit",
+    description: "Scope, findings by risk level, executive summary, and action plan",
+    structure_json: doc(
+      heading(2, "Scope & Objectives"),
+      tip("What's being audited, and what the audit needs to answer."),
+      paragraph(text("[Scope and objectives.]")),
+      heading(2, "Findings"),
+      tip("Every finding, rated by risk level, with a concrete recommendation."),
+      table(
+        ["Area", "Observation", "Risk Level", "Recommendation"],
+        [["[Area]", "[Observation]", "[Low/Medium/High/Critical]", "[Recommendation]"]],
+      ),
+      heading(2, "Executive Summary"),
+      tip("The two-minute version for people who won't read the findings table."),
+      paragraph(text("[Executive summary.]")),
+      heading(2, "Action Plan"),
+      tip("What happens next, who owns it, and by when."),
+      bullet(["[Action] — [Owner] — [Due date]"]),
+    ),
+    metadata: {
+      document_type: "general_audit",
+      use_cases: ["Financial audits", "Operational reviews", "Compliance and security audits"],
+      supported_views: ["wiki", "dashboard"],
+      schema_fields: withEssentials([
+        AUDIT_STATUS_FIELD,
+        {
+          field_key: "audit_type",
+          field_label: "Audit type",
+          field_type: "select",
+          options: ["financial", "operational", "compliance", "security", "quality"],
+          ai_fill_enabled: true,
+        },
+        ...STRATEGY_CONSULTING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        audit_status: "scoping",
+      },
+    },
+  },
+  {
+    slug: "business-plan",
+    name: "Business Plan",
+    description: "Executive summary, market analysis, business model, and financial projections",
+    structure_json: doc(
+      heading(2, "Executive Summary"),
+      tip("The whole plan in a paragraph — what, why, and why now."),
+      paragraph(text("[Executive summary.]")),
+      heading(2, "Market Analysis"),
+      tip("The market size, target customer, and competitive landscape."),
+      paragraph(text("[Market analysis.]")),
+      heading(2, "Business Model"),
+      tip("How this makes money — pricing, channels, and unit economics."),
+      paragraph(text("[Business model.]")),
+      heading(2, "Financial Projections"),
+      tip("Revenue, costs, and profit over the planning horizon."),
+      table(
+        ["Year", "Revenue", "Costs", "Profit"],
+        [
+          ["Year 1", "[Revenue]", "[Costs]", "[Profit]"],
+          ["Year 2", "[Revenue]", "[Costs]", "[Profit]"],
+          ["Year 3", "[Revenue]", "[Costs]", "[Profit]"],
+        ],
+      ),
+      heading(2, "Team & Operations"),
+      tip("Who's running this, and how it actually operates day to day."),
+      bullet(["[Team member/role]"]),
+      heading(2, "Funding Ask"),
+      tip("What you're raising, and what it buys."),
+      paragraph(text("[Funding ask.]")),
+    ),
+    metadata: {
+      document_type: "business_plan",
+      use_cases: ["Startup planning", "Fundraising", "Strategic planning"],
+      supported_views: ["wiki", "dashboard"],
+      schema_fields: withEssentials([
+        {
+          field_key: "stage",
+          field_label: "Stage",
+          field_type: "select",
+          options: ["idea", "pre_seed", "seed", "series_a", "growth"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "industry",
+          field_label: "Industry",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        ...STRATEGY_CONSULTING_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        stage: "idea",
+      },
+    },
+  },
+  {
+    slug: "professional-business-letter",
+    name: "Professional Business Letter",
+    description: "Salutation, body, and closing for a formal business letter",
+    structure_json: doc(
+      heading(2, "Salutation & Opening"),
+      tip("Who you're addressing, and the reason for writing, stated up front."),
+      paragraph(text("[Dear ..., I am writing to ...]")),
+      heading(2, "Body"),
+      tip("The substance of the letter — context, details, and any requests."),
+      paragraph(text("[Body of the letter.]")),
+      heading(2, "Closing & Signature"),
+      tip("A clear next step or call to action, followed by a formal sign-off."),
+      paragraph(text("[Sincerely, / Best regards,]")),
+    ),
+    metadata: {
+      document_type: "professional_business_letter",
+      use_cases: ["Cover letters", "Client proposals", "Formal notices and references"],
+      supported_views: ["wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "letter_type",
+          field_label: "Letter type",
+          field_type: "select",
+          options: ["cover_letter", "reference", "proposal", "complaint", "notice"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "recipient",
+          field_label: "Recipient",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
       },
     },
   },
