@@ -374,6 +374,44 @@ export const PEOPLE_OPS_HR_BUNDLE: BundleDefinition = {
   ],
 };
 
+export const LEGAL_COMPLIANCE_FINANCE_BUNDLE: BundleDefinition = {
+  id: "legal-compliance-finance",
+  label: "Legal, Compliance & Finance",
+  description: "Contracts, compliance frameworks, and financial reporting in one traceable place.",
+  audience: ["legal", "lawyer", "finance", "cfo", "compliance"],
+  status: "available",
+  viewPresets: [
+    {
+      id: "contract-pipeline",
+      baseViewType: "kanban",
+      label: "Contract pipeline",
+      description: "Intake → Legal review → Negotiation → Approved/Rejected",
+      config: { groupBy: "review_status" },
+    },
+    {
+      id: "compliance-dashboard",
+      baseViewType: "dashboard",
+      label: "Compliance dashboard",
+      description: "Compliance checklists grouped by framework and status",
+      config: { groupBy: "compliance_status" },
+    },
+  ],
+  templateSlugs: [
+    "legal-document",
+    "contract-review",
+    "compliance-checklist",
+    "financial-report",
+  ],
+  metadataFields: [
+    {
+      field_key: "jurisdiction",
+      field_label: "Jurisdiction",
+      field_type: "text",
+      ai_fill_enabled: true,
+    },
+  ],
+};
+
 export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   WIZARD_STARTER_BUNDLE,
   KNOWLEDGE_BASE_OPS_BUNDLE,
@@ -384,6 +422,7 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
   CONTENT_MARKETING_BUNDLE,
   STRATEGY_CONSULTING_BUNDLE,
   PEOPLE_OPS_HR_BUNDLE,
+  LEGAL_COMPLIANCE_FINANCE_BUNDLE,
 ];
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {

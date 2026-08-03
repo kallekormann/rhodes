@@ -39,7 +39,11 @@ export type SystemTemplateSlug =
   | "one-on-one-notes"
   | "personal-development-plan"
   | "job-description"
-  | "performance-review";
+  | "performance-review"
+  | "legal-document"
+  | "contract-review"
+  | "compliance-checklist"
+  | "financial-report";
 
 export type TemplateSchemaFieldSeed = MetadataFieldSeed & {
   ai_fill_enabled?: boolean;
@@ -102,6 +106,10 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   personal_development_plan: "Personal Development Plan",
   job_description: "Job Description",
   performance_review: "Performance Review",
+  legal_document: "Legal Document",
+  contract_review: "Contract Review",
+  compliance_checklist: "Compliance Checklist",
+  financial_report: "Financial Report",
 };
 
 const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
@@ -277,6 +285,16 @@ const PEOPLE_OPS_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_label: "Review period",
     field_type: "text",
     ai_fill_enabled: false,
+  },
+];
+
+/** Legal, Compliance & Finance fields — shared by Legal Document / Contract Review. */
+const LEGAL_FINANCE_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
+  {
+    field_key: "jurisdiction",
+    field_label: "Jurisdiction",
+    field_type: "text",
+    ai_fill_enabled: true,
   },
 ];
 
@@ -2019,6 +2037,220 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
       default_properties: {
         status: "draft",
         review_status: "self_review",
+      },
+    },
+  },
+  {
+    slug: "legal-document",
+    name: "Legal Document",
+    description: "Parties, terms, obligations, and signatures for a formal legal document",
+    structure_json: doc(
+      heading(2, "Parties"),
+      tip("Who is bound by this document, with full legal names."),
+      bullet(["[Party A]", "[Party B]"]),
+      heading(2, "Terms & Conditions"),
+      tip("The substantive terms both parties are agreeing to."),
+      paragraph(text("[Terms and conditions.]")),
+      heading(2, "Obligations"),
+      tip("What each party is responsible for delivering or doing."),
+      bullet(["[Party A obligation]", "[Party B obligation]"]),
+      heading(2, "Signatures"),
+      tip("Signature blocks for each party, with date."),
+      paragraph(text("[Signature blocks.]")),
+    ),
+    metadata: {
+      document_type: "legal_document",
+      use_cases: ["Agreements", "NDAs", "Formal legal correspondence"],
+      supported_views: ["wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "effective_date",
+          field_label: "Effective date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "legal_status",
+          field_label: "Legal status",
+          field_type: "status",
+          options: [
+            { value: "draft", label: "Draft", category: "unstarted" },
+            { value: "under_review", label: "Under review", category: "started" },
+            { value: "executed", label: "Executed", category: "completed" },
+            { value: "expired", label: "Expired", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...LEGAL_FINANCE_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        legal_status: "draft",
+      },
+    },
+  },
+  {
+    slug: "contract-review",
+    name: "Contract Review",
+    description: "Contract summary, key terms, risks, and a review recommendation",
+    structure_json: doc(
+      heading(2, "Contract Summary"),
+      tip("What this contract is for, and who the counterparty is."),
+      paragraph(text("[Contract summary.]")),
+      heading(2, "Key Terms"),
+      tip("The terms that matter most, with a clause reference for each."),
+      table(
+        ["Term", "Clause Reference", "Notes"],
+        [["[Term]", "[Clause]", "[Notes]"]],
+      ),
+      heading(2, "Risks & Redlines"),
+      tip("What's risky as written, and what you'd want changed."),
+      bullet(["[Risk or redline]"]),
+      heading(2, "Recommendation"),
+      tip("Approve, negotiate, or reject — and why."),
+      paragraph(text("[Recommendation.]")),
+    ),
+    metadata: {
+      document_type: "contract_review",
+      use_cases: ["Vendor contracts", "Customer agreements", "Legal review workflows"],
+      supported_views: ["kanban", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "counterparty",
+          field_label: "Counterparty",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "contract_value",
+          field_label: "Contract value",
+          field_type: "number",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "renewal_date",
+          field_label: "Renewal date",
+          field_type: "date",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "review_status",
+          field_label: "Review status",
+          field_type: "status",
+          options: [
+            { value: "intake", label: "Intake", category: "unstarted" },
+            { value: "legal_review", label: "Legal review", category: "started" },
+            { value: "negotiation", label: "Negotiation", category: "started" },
+            { value: "approved", label: "Approved", category: "completed" },
+            { value: "rejected", label: "Rejected", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+        ...LEGAL_FINANCE_SCHEMA_FIELDS,
+      ]),
+      default_properties: {
+        status: "draft",
+        review_status: "intake",
+      },
+    },
+  },
+  {
+    slug: "compliance-checklist",
+    name: "Compliance Checklist",
+    description: "Requirements, evidence, and a remediation plan for a compliance framework",
+    structure_json: doc(
+      heading(2, "Requirements"),
+      tip("Every requirement under this framework, with an owner and evidence."),
+      table(
+        ["Requirement", "Owner", "Evidence", "Status"],
+        [["[Requirement]", "[Owner]", "[Evidence]", "[Not started]"]],
+      ),
+      heading(2, "Gaps & Remediation Plan"),
+      tip("Where you're not yet compliant, and the plan to close the gap."),
+      bullet(["[Gap] — [Remediation plan]"]),
+      heading(2, "Next Audit Date"),
+      tip("When this needs to be reassessed."),
+      paragraph(text("[Next audit date.]")),
+    ),
+    metadata: {
+      document_type: "compliance_checklist",
+      use_cases: ["Regulatory compliance", "Security certifications", "Internal audits"],
+      supported_views: ["kanban", "wiki", "dashboard"],
+      schema_fields: withEssentials([
+        {
+          field_key: "framework",
+          field_label: "Framework",
+          field_type: "select",
+          options: ["gdpr", "soc2", "hipaa", "iso27001", "pci_dss", "other"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "compliance_status",
+          field_label: "Compliance status",
+          field_type: "status",
+          options: [
+            { value: "not_started", label: "Not started", category: "unstarted" },
+            { value: "in_progress", label: "In progress", category: "started" },
+            { value: "compliant", label: "Compliant", category: "completed" },
+            { value: "non_compliant", label: "Non-compliant", category: "canceled" },
+          ],
+          ai_fill_enabled: true,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
+        compliance_status: "not_started",
+      },
+    },
+  },
+  {
+    slug: "financial-report",
+    name: "Financial Report",
+    description: "Summary, key figures with variance, and outlook for a reporting period",
+    structure_json: doc(
+      heading(2, "Summary"),
+      tip("The headline story of this period's numbers."),
+      paragraph(text("[Summary.]")),
+      heading(2, "Key Figures"),
+      tip("This period vs. last, with the variance called out explicitly."),
+      table(
+        ["Line Item", "This Period", "Last Period", "Variance"],
+        [["[Line item]", "[Value]", "[Value]", "[+/- %]"]],
+      ),
+      heading(2, "Notable Variances"),
+      tip("Anything that moved more than expected, and why."),
+      bullet(["[Variance and explanation]"]),
+      heading(2, "Outlook"),
+      tip("What you expect next period, and any risks to that outlook."),
+      paragraph(text("[Outlook.]")),
+    ),
+    metadata: {
+      document_type: "financial_report",
+      use_cases: ["Board reporting", "Investor updates", "Internal finance reviews"],
+      supported_views: ["dashboard", "calendar", "wiki"],
+      schema_fields: withEssentials([
+        {
+          field_key: "report_period",
+          field_label: "Report period",
+          field_type: "text",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "report_type",
+          field_label: "Report type",
+          field_type: "select",
+          options: ["p_and_l", "balance_sheet", "cash_flow", "budget_vs_actual"],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "currency",
+          field_label: "Currency",
+          field_type: "text",
+          ai_fill_enabled: false,
+        },
+      ]),
+      default_properties: {
+        status: "draft",
       },
     },
   },

@@ -18,13 +18,17 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
       "blank",
       "business-plan",
       "campaign-brief",
+      "compliance-checklist",
+      "contract-review",
       "digital-maturity-audit",
       "editorial-calendar",
+      "financial-report",
       "general-audit",
       "gtm-plan",
       "insight",
       "job-description",
       "launch-checklist",
+      "legal-document",
       "meeting-notes",
       "onboarding-guide",
       "one-on-one-notes",
@@ -275,6 +279,44 @@ describe("SYSTEM_TEMPLATE_SEEDS", () => {
     const jobDescription = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "job-description");
     expect(jobDescription, "missing job-description").toBeTruthy();
     expect(jobDescription?.metadata.schema_fields.find((f) => f.field_key === "seniority")).toBeTruthy();
+  });
+
+  it("Legal, Compliance & Finance templates ship jurisdiction and status workflows without colliding with essentials", () => {
+    for (const slug of ["legal-document", "contract-review"]) {
+      const seed = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === slug);
+      expect(seed, `missing ${slug}`).toBeTruthy();
+      const jurisdiction = seed?.metadata.schema_fields.find((f) => f.field_key === "jurisdiction");
+      expect(jurisdiction, `${slug} missing jurisdiction`).toBeTruthy();
+      const essentialStatus = seed?.metadata.schema_fields.find((f) => f.field_key === "status");
+      expect(essentialStatus?.field_type).toBe("select");
+    }
+
+    const legalDocument = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "legal-document");
+    const legalStatus = legalDocument?.metadata.schema_fields.find((f) => f.field_key === "legal_status");
+    expect(legalStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(legalStatus?.options)?.length).toBeGreaterThan(0);
+
+    const contractReview = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "contract-review");
+    const reviewStatus = contractReview?.metadata.schema_fields.find(
+      (f) => f.field_key === "review_status",
+    );
+    expect(reviewStatus?.field_type).toBe("status");
+    expect(parseStatusOptions(reviewStatus?.options)?.length).toBeGreaterThan(0);
+
+    const complianceChecklist = SYSTEM_TEMPLATE_SEEDS.find(
+      (entry) => entry.slug === "compliance-checklist",
+    );
+    expect(complianceChecklist, "missing compliance-checklist").toBeTruthy();
+    const complianceStatus = complianceChecklist?.metadata.schema_fields.find(
+      (f) => f.field_key === "compliance_status",
+    );
+    expect(complianceStatus?.field_type).toBe("status");
+
+    const financialReport = SYSTEM_TEMPLATE_SEEDS.find((entry) => entry.slug === "financial-report");
+    expect(financialReport, "missing financial-report").toBeTruthy();
+    expect(
+      financialReport?.metadata.schema_fields.find((f) => f.field_key === "report_type"),
+    ).toBeTruthy();
   });
 
   it("ships essentials with field_type and AI fill", () => {

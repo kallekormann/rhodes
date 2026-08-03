@@ -176,6 +176,26 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     label: "Performance Review",
     description: "Summary, goals and achievements, strengths, growth areas, and next-period goals",
   },
+  {
+    slug: "legal-document",
+    label: "Legal Document",
+    description: "Parties, terms, obligations, and signatures for a formal legal document",
+  },
+  {
+    slug: "contract-review",
+    label: "Contract Review",
+    description: "Contract summary, key terms, risks, and a review recommendation",
+  },
+  {
+    slug: "compliance-checklist",
+    label: "Compliance Checklist",
+    description: "Requirements, evidence, and a remediation plan for a compliance framework",
+  },
+  {
+    slug: "financial-report",
+    label: "Financial Report",
+    description: "Summary, key figures with variance, and outlook for a reporting period",
+  },
 ];
 
 export function getScopeTemplateLabel(slug: string): string {
