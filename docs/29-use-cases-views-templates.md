@@ -29,9 +29,12 @@ Populate `ADDITIONAL_SCOPE_VIEW_CATALOG` incrementally. M2 ships catalog metadat
 | `gantt` | Gantt | pro | coming_soon | Long-form planning |
 | `wiki` | Wiki / links | basic | coming_soon | Internal doc graph (M6) |
 | `dashboard` | Dashboard | pro | coming_soon | Scope metrics |
-| `graph` | Mind-map / dependencies | pro | coming_soon | Visualize `relation`-linked documents (M6) |
+| `mindmap` | Mind-Map | pro | coming_soon | Author document maps; connections write `relation` values |
+| `graph` | Knowledge Graph | pro | coming_soon | Read-only exploration of relation-linked docs (graphify-like) |
 
 Tier limits (`maxAdditionalScopeViews`): free 1, basic 3, pro 5, team 5.
+
+Architecture for renderers, `ScopeViewInstance`, and typed configs: [35-view-engine-architecture.md](35-view-engine-architecture.md).
 
 ### Design principle: presets, not new engines
 
@@ -47,7 +50,7 @@ every existing base type.
 A North-Star-metric-down-to-drivers tree (see metric tree / semantic layer practice) requires aggregating
 a `number` field's values **across many documents**, not just displaying one document's fields — a materially
 harder problem than any view above (it needs a rollup/aggregation layer, not just a config slot). Treat this
-as a `dashboard` v2 concept once the `graph`/`relation` foundation and a real M6 rendering engine exist;
+as a `dashboard` v2 concept once the Mind-Map / Knowledge Graph foundation and a real M6 rendering engine exist;
 do not attempt to seed it as a bundle view preset yet.
 
 ## Template bundles (wizard pre-check)

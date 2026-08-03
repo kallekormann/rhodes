@@ -72,9 +72,16 @@ export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [
     minTier: "pro",
   },
   {
+    id: "mindmap",
+    label: "Mind-Map",
+    description: "Author a map of documents; connections become relations",
+    status: "coming_soon",
+    minTier: "pro",
+  },
+  {
     id: "graph",
-    label: "Mind-map / dependencies",
-    description: "Visualize relation-linked documents",
+    label: "Knowledge Graph",
+    description: "Explore relation-linked documents across the scope",
     status: "coming_soon",
     minTier: "pro",
   },

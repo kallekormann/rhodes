@@ -31,7 +31,8 @@ export type MetadataFieldSeed = {
   ai_fill_enabled?: boolean;
 };
 
-/** Bundle-specific configured instance of a base scope view (ships in M6). */
+/** Bundle-specific configured instance of a base scope view (ships in M6).
+ * `config` should match the typed shapes in `@rhodes/shared/view-engine` for the baseViewType. */
 export type ViewPreset = {
   id: string;
   baseViewType: AdditionalScopeViewId;
@@ -462,6 +463,32 @@ export const BUNDLE_CATALOG: readonly BundleDefinition[] = [
 
 export function getBundleById(bundleId: string): BundleDefinition | undefined {
   return BUNDLE_CATALOG.find((bundle) => bundle.id === bundleId);
+}
+
+export function getViewPresetById(
+  presetId: string,
+  bundles: readonly BundleDefinition[] = BUNDLE_CATALOG,
+): ViewPreset | undefined {
+  for (const bundle of bundles) {
+    const preset = bundle.viewPresets.find((entry) => entry.id === presetId);
+    if (preset) return preset;
+  }
+  return undefined;
+}
+
+export function getViewPresetsByIds(
+  presetIds: string[],
+  bundles: readonly BundleDefinition[] = BUNDLE_CATALOG,
+): ViewPreset[] {
+  const presets: ViewPreset[] = [];
+  const seen = new Set<string>();
+  for (const id of presetIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const preset = getViewPresetById(id, bundles);
+    if (preset) presets.push(preset);
+  }
+  return presets;
 }
 
 export function getBundlesByIds(bundleIds: string[]): BundleDefinition[] {

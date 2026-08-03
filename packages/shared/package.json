@@ -10,6 +10,7 @@
     "./team-roles": "./src/team-roles.ts",
     "./features": "./src/features.ts",
     "./scope-views": "./src/scope-views.ts",
+    "./view-engine": "./src/view-engine.ts",
     "./scope-policies": "./src/scope-policies.ts",
     "./scope-bundles": "./src/scope-bundles.ts",
     "./scope-template-catalog": "./src/scope-template-catalog.ts",

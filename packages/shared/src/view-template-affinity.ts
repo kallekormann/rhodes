@@ -130,6 +130,31 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
     ],
     minForView: 1,
   },
+  mindmap: {
+    recommended: [
+      "insight",
+      "problem",
+      "prd",
+      "adr",
+      "swot-analysis",
+      "workflow-definition",
+      "literature-review",
+    ],
+    minForView: 1,
+  },
+  graph: {
+    recommended: [
+      "insight",
+      "problem",
+      "prd",
+      "adr",
+      "technical-requirements-document",
+      "workflow-definition",
+      "literature-review",
+      "sop",
+    ],
+    minForView: 1,
+  },
 };
 
 /** System template slugs and which additional views they support (M2.5.0 seeds). */

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BillingTier } from "@rhodes/shared/tiers";
 import type { MetadataFieldSeed } from "@rhodes/shared/scope-bundles";
+import { getViewPresetsByIds } from "@rhodes/shared/scope-bundles";
 import {
   resolveScopeComposition,
   type ScopeCompositionInput,
@@ -49,6 +50,70 @@ export type ApplyScopeCompositionParams = {
   wizardMode?: string;
 };
 
+async function seedScopeViewInstances(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  viewPresetIds: string[],
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (viewPresetIds.length === 0) return { ok: true };
+
+  const presets = getViewPresetsByIds(viewPresetIds);
+  if (presets.length === 0) return { ok: true };
+
+  for (let index = 0; index < presets.length; index += 1) {
+    const preset = presets[index]!;
+    const payload = {
+      workspace_id: workspaceId,
+      base_view_type: preset.baseViewType,
+      label: preset.label,
+      config: preset.config ?? {},
+      layout: null as null,
+      created_from_preset_id: preset.id,
+      position: index,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existing, error: lookupError } = await supabase
+      .from("scope_view_instances")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("created_from_preset_id", preset.id)
+      .maybeSingle();
+
+    if (lookupError) {
+      return { ok: false, message: lookupError.message };
+    }
+
+    if (existing?.id) {
+      const { error: updateError } = await supabase
+        .from("scope_view_instances")
+        .update({
+          base_view_type: payload.base_view_type,
+          label: payload.label,
+          config: payload.config,
+          position: payload.position,
+          updated_at: payload.updated_at,
+        })
+        .eq("id", existing.id);
+
+      if (updateError) {
+        return { ok: false, message: updateError.message };
+      }
+      continue;
+    }
+
+    const { error: insertError } = await supabase
+      .from("scope_view_instances")
+      .insert(payload);
+
+    if (insertError) {
+      return { ok: false, message: insertError.message };
+    }
+  }
+
+  return { ok: true };
+}
+
 export async function applyScopeComposition(
   supabase: SupabaseClient,
   params: ApplyScopeCompositionParams,
@@ -81,6 +146,15 @@ export async function applyScopeComposition(
     if (seedError) {
       return { ok: false, message: seedError.message };
     }
+  }
+
+  const instanceSeed = await seedScopeViewInstances(
+    supabase,
+    params.workspaceId,
+    params.composition.viewPresetIds,
+  );
+  if (!instanceSeed.ok) {
+    return instanceSeed;
   }
 
   return { ok: true };

@@ -42,19 +42,20 @@ export function ScopeCompositionWorkspace({
   onToggleTemplate,
   onToggleBundle,
 }: ScopeCompositionWorkspaceProps) {
-  const availableViews = ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
+  const selectableViews = ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
     (view) => view.status === "available",
   );
-  const comingSoonViewCount = ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
+  const comingSoonViews = ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
     (view) => view.status !== "available",
-  ).length;
+  );
 
   const bundlePresets = BUNDLE_CATALOG.flatMap((bundle) =>
     bundle.viewPresets.map((preset) => ({ bundleId: bundle.id, bundleLabel: bundle.label, preset })),
   );
 
   const resolvedViews = resolved.ok ? resolved.enabledViews : [];
-  const hasSelectableViews = availableViews.length > 0 || bundlePresets.length > 0;
+  const hasViewRows =
+    selectableViews.length > 0 || comingSoonViews.length > 0 || bundlePresets.length > 0;
 
   // Bundles the user has explicitly selected — their templates/presets are locked "on"
   // elsewhere in the workspace, so those rows read as included, not independently toggleable.
@@ -84,9 +85,9 @@ export function ScopeCompositionWorkspace({
 
       {tab === "views" && (
         <>
-          {hasSelectableViews ? (
+          {hasViewRows ? (
             <ul className="scope-composition__options">
-              {availableViews.map((view) => (
+              {selectableViews.map((view) => (
                 <li key={view.id} className="scope-composition__option">
                   <Checkbox
                     className="scope-composition__checkbox"
@@ -120,17 +121,25 @@ export function ScopeCompositionWorkspace({
                   </li>
                 );
               })}
+              {comingSoonViews.map((view) => (
+                <li key={view.id} className="scope-composition__option">
+                  <Checkbox
+                    className="scope-composition__checkbox"
+                    label={view.label}
+                    description={view.description}
+                    checked={false}
+                    disabled
+                    onChange={() => {}}
+                    trailing={<NeutralPill>Coming soon</NeutralPill>}
+                  />
+                </li>
+              ))}
             </ul>
           ) : (
             <p className="scope-composition__empty-panel">
               You&apos;re ready to go with the essentials. More views are on the way.
             </p>
           )}
-          {comingSoonViewCount > 0 ? (
-            <p className="scope-composition__footnote">
-              More views like Kanban and Calendar are coming soon.
-            </p>
-          ) : null}
         </>
       )}
 
