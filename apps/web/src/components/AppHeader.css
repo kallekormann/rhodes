@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   height: var(--header-height);
-  padding: 0 var(--space-md);
+  padding: 0 var(--app-chrome-inline);
   background: var(--color-bg-elevated);
   box-shadow: var(--shadow-header);
   flex-shrink: 0;
@@ -131,7 +131,7 @@
 
 .app-header__zone--right {
   flex-shrink: 0;
-  gap: 2px;
+  gap: var(--app-header-action-gap);
 }
 
 .app-header__action--collapsible {
@@ -222,7 +222,7 @@
 
 @media (max-width: 480px) {
   .app-header {
-    padding: 0 var(--space-sm);
+    padding: 0 var(--app-chrome-inline);
   }
 
   .app-header__sep:not(:first-of-type) {

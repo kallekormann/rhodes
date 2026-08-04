@@ -20,7 +20,6 @@ import { OrgPolicySettings } from "@/components/settings/OrgPolicySettings";
 import { ScopeCompositionSettings } from "@/components/settings/ScopeCompositionSettings";
 import { ScopeSettingsPlaceholder } from "@/components/settings/ScopeSettingsPlaceholder";
 import { ScopeSharingSettings } from "@/components/settings/ScopeSharingSettings";
-import { ScopeViewsSettings } from "@/components/settings/ScopeViewsSettings";
 import { useScopePolicy } from "@/hooks/useScopePolicy";
 import { canManageOrgTeams, type Organization } from "@/data/organizations";
 import { TeamMembersTable } from "@/components/settings/TeamMembersTable";
@@ -47,10 +46,8 @@ import type { ThemeMode } from "@/context/AppContext";
 import "./SettingsView.css";
 
 const SCOPE_SECTION_IDS = [
-  "Scopes",
   "Sharing",
   "Views",
-  "Templates",
   "Team",
   "Collaborators",
   "Organization",
@@ -60,6 +57,7 @@ const USER_SECTIONS = [
   "Profile",
   "Security",
   "Preferences",
+  "Scopes",
   "Storage",
   "Billing",
   "Privacy",
@@ -75,7 +73,7 @@ function scopeSectionsFor(
   activeScope: Scope,
   organizations: Organization[],
 ): ScopeSection[] {
-  const sections: ScopeSection[] = ["Scopes", "Sharing", "Views", "Templates"];
+  const sections: ScopeSection[] = ["Sharing", "Views"];
   if (activeScope.type === "team") {
     sections.push("Team", "Collaborators");
   }
@@ -104,7 +102,13 @@ function defaultSectionForMode(
   if (mode === "user") return "Profile";
   const visible = scopeSectionsFor(activeScope, organizations);
   if (activeScope.type === "team" && visible.includes("Team")) return "Team";
-  return "Scopes";
+  return "Sharing";
+}
+
+function activeScopeModeLabel(scope: Scope): string {
+  const name = scope.name.trim() || "Scope";
+  // Keep the segmented control readable for long names.
+  return name.length > 18 ? `${name.slice(0, 16)}…` : name;
 }
 type CreateKind = "personal" | "team" | null;
 
@@ -246,19 +250,28 @@ export function SettingsView() {
 
   useEffect(() => {
     const { mode: urlMode, section: urlSection } = readBrowserSettingsUrlState();
-    const fallback = defaultSectionForMode(urlMode, activeScope, organizations);
-    setMode(urlMode);
-    if (urlMode === "user" && urlSection && isUserSection(urlSection)) {
-      setSection(urlSection);
+    // All-scopes list moved under Account; old scope+Scopes links follow it there.
+    // Former "Templates" section was merged into Views (composition workspace).
+    let modeHint = urlMode;
+    let sectionHint = urlSection === "Templates" ? "Views" : urlSection;
+    if (urlMode === "scope" && sectionHint === "Scopes") {
+      modeHint = "user";
+      sectionHint = "Scopes";
+    }
+
+    const fallback = defaultSectionForMode(modeHint, activeScope, organizations);
+    setMode(modeHint);
+    if (modeHint === "user" && sectionHint && isUserSection(sectionHint)) {
+      setSection(sectionHint);
       return;
     }
     if (
-      urlMode === "scope" &&
-      urlSection &&
-      isScopeSection(urlSection) &&
-      scopeSectionsFor(activeScope, organizations).includes(urlSection)
+      modeHint === "scope" &&
+      sectionHint &&
+      isScopeSection(sectionHint) &&
+      scopeSectionsFor(activeScope, organizations).includes(sectionHint)
     ) {
-      setSection(urlSection);
+      setSection(sectionHint);
       return;
     }
     setSection(fallback);
@@ -337,7 +350,6 @@ export function SettingsView() {
     error: scopePolicyError,
     saving: scopePolicySaving,
     savePolicy,
-    saveEnabledViews,
     saveScopeComposition,
   } = useScopePolicy(scopePolicyWorkspaceId);
 
@@ -735,7 +747,7 @@ export function SettingsView() {
             <SegmentedControl
               options={[
                 { value: "user", label: "Account" },
-                { value: "scope", label: "Scope" },
+                { value: "scope", label: activeScopeModeLabel(activeScope) },
               ]}
               value={mode}
               onChange={navigateMode}
@@ -743,7 +755,8 @@ export function SettingsView() {
           </div>
           {mode === "scope" ? (
             <p className="settings-nav__scope caption">
-              {activeScope.type === "private" ? "Personal" : "Team"} · {activeScope.name}
+              Settings for this {activeScope.type === "private" ? "personal" : "team"}{" "}
+              scope
             </p>
           ) : null}
           {visibleSections.map((item) => (
@@ -767,7 +780,7 @@ export function SettingsView() {
                 section === "Views" ||
                 section === "Organization")
                 ? "settings-content--wide"
-                : section === "Team"
+                : section === "Team" || section === "Scopes"
                   ? "settings-content--wide"
                   : ""
             }`}
@@ -919,19 +932,20 @@ export function SettingsView() {
               <GroupLabel>Current scope</GroupLabel>
               <p className="caption settings-field__hint">
                 {activeScope.type === "private" ? "Personal" : "Team"} scope ·{" "}
-                {activeScope.name}
+                {activeScope.name}. Manage all scopes under Account → Scopes.
               </p>
               <Button variant="secondary" onClick={() => navigateMode("scope")}>
-                Manage scope settings
+                Open {activeScopeModeLabel(activeScope)} settings
               </Button>
             </div>
           )}
 
-          {section === "Scopes" && (
+          {section === "Scopes" && mode === "user" && (
             <div className="settings-section">
               <SectionHeader title="Scopes" />
               <p className="caption settings-section__intro">
-                Personal scopes are private to you. Team scopes are shared with members.
+                Create and switch between your personal and team scopes. Views, sharing,
+                and templates are configured on each scope under its own settings tab.
               </p>
 
               <SectionHeader
@@ -1011,36 +1025,11 @@ export function SettingsView() {
             <div className="settings-section">
               <SectionHeader title="Views" />
               <p className="caption settings-section__intro">
-                Choose which optional surfaces appear in this scope&apos;s navigation.
+                Views, templates, and bundles for{" "}
+                <strong>{activeScope.name}</strong> only — not your other scopes.
               </p>
               {scopePolicyPending ? (
                 <p className="caption settings-section__empty">Loading views…</p>
-              ) : scopePolicyError ? (
-                <p className="caption settings-section__empty">{scopePolicyError}</p>
-              ) : scopePolicyData ? (
-                <ScopeViewsSettings
-                  scopeName={activeScope.name}
-                  enabledViews={scopePolicyData.enabled_views}
-                  canEdit={canEditScopePolicy}
-                  saving={scopePolicySaving}
-                  onSave={(views) => {
-                    void saveEnabledViews(views).then((ok) => {
-                      if (ok) {
-                        showToast("Views updated", "success");
-                        void refreshScopes();
-                      }
-                    });
-                  }}
-                />
-              ) : null}
-            </div>
-          )}
-
-          {section === "Templates" && (
-            <div className="settings-section">
-              <SectionHeader title="Templates & composition" />
-              {scopePolicyPending ? (
-                <p className="caption settings-section__empty">Loading composition…</p>
               ) : scopePolicyError ? (
                 <p className="caption settings-section__empty">{scopePolicyError}</p>
               ) : scopePolicyData ? (
@@ -1085,8 +1074,8 @@ export function SettingsView() {
             <div className="settings-section">
               {activeScope.type !== "team" ? (
                 <p className="caption">
-                  Team settings apply to team scopes. Switch to a team scope under Scopes, or
-                  create one.
+                  Team settings apply to team scopes. Switch to a team scope under Account
+                  → Scopes, or create one.
                 </p>
               ) : (
                 <>

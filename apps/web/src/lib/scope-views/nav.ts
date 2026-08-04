@@ -10,6 +10,27 @@ export const DOCUMENTS_SCOPE_NAV_VIEW: ScopeNavView = {
   label: "Documents",
 };
 
+/** Optional engines that share the documents app chrome and have their own routes. */
+export const SCOPE_ENGINE_NAV_IDS = [
+  "kanban",
+  "dashboard",
+  "calendar",
+  "gantt",
+  "mindmap",
+  "graph",
+] as const;
+
+export type ScopeEngineNavId = (typeof SCOPE_ENGINE_NAV_IDS)[number];
+
+export function isScopeEngineNavId(id: string): id is ScopeEngineNavId {
+  return (SCOPE_ENGINE_NAV_IDS as readonly string[]).includes(id);
+}
+
+/** Documents + enabled engines — surfaces that use ScopeViewNav. */
+export function isScopeSurfaceNavId(id: string): boolean {
+  return id === DOCUMENTS_SCOPE_NAV_VIEW.id || isScopeEngineNavId(id);
+}
+
 /** Top-level scope views that have a shipped UI surface. */
 export function servableScopeNavViews(enabledViews: string[] = []): ScopeNavView[] {
   const additional = ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
@@ -24,6 +45,11 @@ export function scopeNavViewLabel(viewId: string): string {
     return DOCUMENTS_SCOPE_NAV_VIEW.label;
   }
   return (
-    ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === viewId)?.label ?? viewId
+    ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === viewId)?.label ??
+    viewId
   );
+}
+
+export function scopeEnginePath(viewId: ScopeEngineNavId): string {
+  return `/${viewId}`;
 }

@@ -127,7 +127,7 @@ export function ScopeSwitcher() {
             onCreateOrgTeam={(org) => openCreate("org-team", org)}
             onManage={() => {
               setOpen(false);
-              let section = "Scopes";
+              let section = "Sharing";
               if (activeScope.orgId) {
                 section = "Organization";
               } else if (activeScope.type === "team") {

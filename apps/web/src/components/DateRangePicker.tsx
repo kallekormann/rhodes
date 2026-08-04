@@ -31,12 +31,21 @@ function between(date: Date, start: Date, end: Date) {
 export type DateRange = { start: Date | null; end: Date | null };
 
 export function formatDateRange(range: DateRange) {
-  const fmt = (d: Date | null) =>
-    d
-      ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-      : "";
-  if (range.start && range.end) return `${fmt(range.start)} → ${fmt(range.end)}`;
-  if (range.start) return fmt(range.start);
+  if (!range.start && !range.end) return "";
+  const fmt = (d: Date, withYear: boolean) =>
+    d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(withYear ? { year: "numeric" as const } : {}),
+    });
+  if (range.start && range.end) {
+    const sameYear = range.start.getFullYear() === range.end.getFullYear();
+    if (sameYear) {
+      return `${fmt(range.start, false)} – ${fmt(range.end, false)}, ${range.end.getFullYear()}`;
+    }
+    return `${fmt(range.start, true)} – ${fmt(range.end, true)}`;
+  }
+  if (range.start) return fmt(range.start, true);
   return "";
 }
 
@@ -180,7 +189,7 @@ export function DateRangeField({
   className = "",
 }: DateRangeFieldProps) {
   const { open, setOpen, rootRef, panelRef, align, placement, panelCoords } =
-    useFieldPanel();
+    useFieldPanel({ calendar: true });
   const isPlain = variant === "plain";
   const display = value ? formatDateRange(value) : "";
 

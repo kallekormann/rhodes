@@ -19,7 +19,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { useEditorRouteActive } from "@/hooks/useEditorRouteActive";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 import { ScopeViewNav } from "./ScopeViewNav";
-import { DOCUMENTS_SCOPE_NAV_VIEW, scopeNavViewLabel } from "@/lib/scope-views/nav";
+import { DOCUMENTS_SCOPE_NAV_VIEW, isScopeSurfaceNavId, scopeNavViewLabel } from "@/lib/scope-views/nav";
 import { ConnectivityIndicator } from "./ConnectivityIndicator";
 import { IconButton } from "./IconButton";
 import "./AppHeader.css";
@@ -29,14 +29,22 @@ function HeaderTrail({
   documentTitle,
   onNavigate,
   scopeNavViewId,
+  scopeInstanceLabel,
 }: {
   view: AppView;
   documentTitle: string;
   onNavigate: (view: AppView) => void;
   scopeNavViewId: string;
+  scopeInstanceLabel: string | null;
 }) {
   if (scopeNavViewId !== DOCUMENTS_SCOPE_NAV_VIEW.id) {
-    return <span className="app-header__context-label">{scopeNavViewLabel(scopeNavViewId)}</span>;
+    const label =
+      scopeInstanceLabel?.trim() || scopeNavViewLabel(scopeNavViewId);
+    return (
+      <span className="app-header__context-label" title={label}>
+        {label}
+      </span>
+    );
   }
 
   if (view === "documents") {
@@ -172,6 +180,7 @@ export function AppHeader() {
     activeScopeNavViewId,
     setActiveScopeNavViewId,
     scopeNavViews,
+    scopeInstanceLabel,
   } = useApp();
   const router = useRouter();
   const hydrated = useClientHydrated();
@@ -191,11 +200,8 @@ export function AppHeader() {
   const isEditor = useEditorRouteActive();
   const isHidden = isEditor && headerHidden;
   const isDocumentsShell =
-    view === "documents" || view === "templates" || view === "editor";
-  const isDocumentsSection =
-    isDocumentsShell &&
-    (activeScopeNavViewId === DOCUMENTS_SCOPE_NAV_VIEW.id ||
-      activeScopeNavViewId === "kanban");
+    isScopeSurfaceNavId(view) || view === "templates" || view === "editor";
+  const isDocumentsSection = isScopeSurfaceNavId(view);
   const showScopeTrail =
     isDocumentsSection ||
     view === "library" ||
@@ -269,6 +275,7 @@ export function AppHeader() {
                     documentTitle={documentTitle}
                     onNavigate={setView}
                     scopeNavViewId={activeScopeNavViewId}
+                    scopeInstanceLabel={scopeInstanceLabel}
                   />
                 </div>
               </>

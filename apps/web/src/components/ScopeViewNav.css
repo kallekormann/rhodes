@@ -10,8 +10,19 @@
   border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text);
+  color: var(--color-accent);
+  background: transparent;
+}
+
+.scope-view-nav .dropdown__trigger:hover,
+.scope-view-nav .dropdown__trigger--open {
   background: var(--color-surface-hover);
+  color: var(--color-accent);
+}
+
+.scope-view-nav .dropdown__chevron {
+  color: var(--color-accent);
+  opacity: 0.7;
 }
 
 .scope-view-nav--single {

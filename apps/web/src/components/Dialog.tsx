@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 
@@ -8,7 +9,8 @@ type DialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
-  onConfirm: () => void;
+  /** Return a promise to keep the dialog open until the action finishes. */
+  onConfirm: () => void | Promise<void>;
   onClose: () => void;
 };
 
@@ -22,24 +24,45 @@ export function Dialog({
   onConfirm,
   onClose,
 }: DialogProps) {
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) setBusy(false);
+  }, [open]);
+
+  const handleConfirm = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onConfirm();
+      onClose();
+    } catch {
+      // Caller surfaces errors; keep dialog open for retry/cancel.
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Modal
       open={open}
       title={title}
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" disabled={busy} onClick={onClose}>
             {cancelLabel}
           </Button>
           <Button
             variant={destructive ? "danger" : "primary"}
+            disabled={busy}
             onClick={() => {
-              onConfirm();
-              onClose();
+              void handleConfirm();
             }}
           >
-            {confirmLabel}
+            {busy ? "Working…" : confirmLabel}
           </Button>
         </>
       }

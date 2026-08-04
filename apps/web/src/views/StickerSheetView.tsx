@@ -54,6 +54,7 @@ import { SlashMenuShowcase } from "@/components/SlashMenuShowcase";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { StatusPill } from "@/components/StatusPill";
 import { TabBar } from "@/components/TabBar";
+import { ViewInstanceTabBar } from "@/components/views/ViewInstanceTabBar";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
 import { TextArea } from "@/components/TextArea";
 import { Toast } from "@/components/Toast";
@@ -82,6 +83,11 @@ export function StickerSheetView() {
   const { showToast } = useApp();
   const [seg, setSeg] = useState<"a" | "b">("a");
   const [tab, setTab] = useState<"docs" | "lib" | "team">("docs");
+  const [viewInstanceTabs, setViewInstanceTabs] = useState([
+    { id: "experiment", label: "Experiment board" },
+    { id: "tasks", label: "Tasks" },
+  ]);
+  const [viewInstanceActive, setViewInstanceActive] = useState("experiment");
   const [themeRadio, setThemeRadio] = useState("light");
   const [modalOpen, setModalOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -659,6 +665,32 @@ export function StickerSheetView() {
             ]}
             value={seg}
             onChange={setSeg}
+          />
+        </div>
+        <div style={{ marginTop: "var(--space-lg)" }}>
+          <p className="type-caption sticker-section__desc">
+            View instance tabs — multiple boards inside one page type.
+          </p>
+          <ViewInstanceTabBar
+            tabs={viewInstanceTabs}
+            activeId={viewInstanceActive}
+            onSelect={setViewInstanceActive}
+            onCreate={(label) => {
+              const id = `demo-${Date.now()}`;
+              setViewInstanceTabs((current) => [...current, { id, label }]);
+              setViewInstanceActive(id);
+            }}
+            onDelete={(id) => {
+              setViewInstanceTabs((current) => {
+                const next = current.filter((entry) => entry.id !== id);
+                setViewInstanceActive((active) =>
+                  active === id ? (next[0]?.id ?? null) : active,
+                );
+                return next;
+              });
+            }}
+            createTitle="New board"
+            deleteNoun="board"
           />
         </div>
       </section>

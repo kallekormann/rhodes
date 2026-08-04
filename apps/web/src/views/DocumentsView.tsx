@@ -42,7 +42,12 @@ import { SharePopover } from "@/components/SharePopover";
 import { StatusPill } from "@/components/StatusPill";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { CalendarView } from "@/views/CalendarView";
+import { DashboardView } from "@/views/DashboardView";
+import { GanttView } from "@/views/GanttView";
 import { KanbanView } from "@/views/KanbanView";
+import { KnowledgeGraphView } from "@/views/KnowledgeGraphView";
+import { MindMapView } from "@/views/MindMapView";
 import "./DocumentsView.css";
 
 type DocTab = DocumentFilter;
@@ -50,9 +55,24 @@ type DocTab = DocumentFilter;
 const ANY_PROPERTY = "__any__";
 
 export function DocumentsView() {
-  const { activeScopeNavViewId } = useApp();
-  if (activeScopeNavViewId === "kanban") {
+  const { view } = useApp();
+  if (view === "kanban") {
     return <KanbanView />;
+  }
+  if (view === "dashboard") {
+    return <DashboardView />;
+  }
+  if (view === "calendar") {
+    return <CalendarView />;
+  }
+  if (view === "mindmap") {
+    return <MindMapView />;
+  }
+  if (view === "graph") {
+    return <KnowledgeGraphView />;
+  }
+  if (view === "gantt") {
+    return <GanttView />;
   }
   return <DocumentsListView />;
 }

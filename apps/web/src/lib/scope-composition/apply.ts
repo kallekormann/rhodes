@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BillingTier } from "@rhodes/shared/tiers";
 import type { MetadataFieldSeed } from "@rhodes/shared/scope-bundles";
 import { getViewPresetsByIds } from "@rhodes/shared/scope-bundles";
+import { ADDITIONAL_SCOPE_VIEW_CATALOG } from "@rhodes/shared/scope-views";
 import {
   resolveScopeComposition,
   type ScopeCompositionInput,
@@ -49,6 +50,12 @@ export type ApplyScopeCompositionParams = {
   composition: ScopeCompositionResult;
   wizardMode?: string;
 };
+
+const SEEDABLE_BASE_VIEW_TYPES = new Set(
+  ADDITIONAL_SCOPE_VIEW_CATALOG.filter(
+    (view) => view.status === "available",
+  ).map((view) => view.id),
+);
 
 async function seedScopeViewInstances(
   supabase: SupabaseClient,
@@ -114,6 +121,61 @@ async function seedScopeViewInstances(
   return { ok: true };
 }
 
+/**
+ * When a page type is enabled without any preset tabs, seed one default instance
+ * so the in-page tab bar is never blank.
+ */
+async function seedDefaultInstancesForEnabledViews(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  enabledViews: string[],
+  viewPresetIds: string[],
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const presets = getViewPresetsByIds(viewPresetIds);
+  const typesCoveredByPresets = new Set(
+    presets.map((preset) => preset.baseViewType),
+  );
+
+  for (const viewId of enabledViews) {
+    if (!SEEDABLE_BASE_VIEW_TYPES.has(viewId)) continue;
+    if (typesCoveredByPresets.has(viewId)) continue;
+
+    const { count, error: countError } = await supabase
+      .from("scope_view_instances")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("base_view_type", viewId);
+
+    if (countError) {
+      return { ok: false, message: countError.message };
+    }
+    if ((count ?? 0) > 0) continue;
+
+    const label =
+      ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === viewId)?.label ??
+      viewId;
+
+    const { error: insertError } = await supabase
+      .from("scope_view_instances")
+      .insert({
+        workspace_id: workspaceId,
+        base_view_type: viewId,
+        label,
+        config: {},
+        layout: null,
+        created_from_preset_id: null,
+        position: 0,
+        updated_at: new Date().toISOString(),
+      });
+
+    if (insertError) {
+      return { ok: false, message: insertError.message };
+    }
+  }
+
+  return { ok: true };
+}
+
 export async function applyScopeComposition(
   supabase: SupabaseClient,
   params: ApplyScopeCompositionParams,
@@ -155,6 +217,16 @@ export async function applyScopeComposition(
   );
   if (!instanceSeed.ok) {
     return instanceSeed;
+  }
+
+  const defaultSeed = await seedDefaultInstancesForEnabledViews(
+    supabase,
+    params.workspaceId,
+    params.composition.enabledViews,
+    params.composition.viewPresetIds,
+  );
+  if (!defaultSeed.ok) {
+    return defaultSeed;
   }
 
   return { ok: true };

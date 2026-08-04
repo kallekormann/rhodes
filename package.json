@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
+    "db:seed:kanban": "node scripts/seed-kanban-sample.js",
     "library:requeue": "node scripts/requeue-library.js",
     "library:reindex": "node scripts/reindex-library-metadata.mjs",
     "documents:reindex": "node scripts/reindex-document-chunks.mjs",

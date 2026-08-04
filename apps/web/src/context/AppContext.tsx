@@ -24,7 +24,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { TemplateRecord } from "@/hooks/useTemplates";
 import { useWorkspaceTemplates } from "@/hooks/useWorkspaceTemplates";
 import { buildFeatureGates } from "@/lib/features/gates";
-import { pathToView, viewToPath } from "@/lib/navigation";
+import { pathToView, scopeNavIdToAppView, viewToPath } from "@/lib/navigation";
 import {
   buildEditorPath,
   isBrowserOffline,
@@ -45,12 +45,19 @@ import type { ScopeCompositionBody } from "@/lib/scope-composition/apply";
 import type { PendingTeamInvite } from "@/components/ScopeSetupWizard";
 import {
   DOCUMENTS_SCOPE_NAV_VIEW,
+  isScopeSurfaceNavId,
   servableScopeNavViews,
 } from "@/lib/scope-views/nav";
 
 export type AppView =
   | "editor"
   | "documents"
+  | "kanban"
+  | "dashboard"
+  | "calendar"
+  | "gantt"
+  | "mindmap"
+  | "graph"
   | "templates"
   | "library"
   | "settings"
@@ -125,6 +132,9 @@ type AppContextValue = {
   setShowBubble: (show: boolean) => void;
   documentTitle: string;
   setDocumentTitle: (title: string) => void;
+  /** Active board/tab label for Kanban, Dashboard, etc. — shown in the header trail. */
+  scopeInstanceLabel: string | null;
+  setScopeInstanceLabel: (label: string | null) => void;
   documentId: string;
   setDocumentId: (id: string) => void;
   isFavorite: (id: string) => boolean;
@@ -223,8 +233,8 @@ export function AppProvider({
   const [showBubble, setShowBubble] = useState(false);
   const [documentTitle, setDocumentTitle] = useState("Untitled Document");
   const [documentId, setDocumentId] = useState("");
-  const [activeScopeNavViewId, setActiveScopeNavViewIdState] = useState(
-    DOCUMENTS_SCOPE_NAV_VIEW.id,
+  const [scopeInstanceLabel, setScopeInstanceLabel] = useState<string | null>(
+    null,
   );
   const [favorites, setFavorites] = useState<Set<string>>(
     () => new Set(initialFavoriteIds),
@@ -263,6 +273,10 @@ export function AppProvider({
     () => servableScopeNavViews(activeScope.enabledViews ?? []),
     [activeScope.enabledViews],
   );
+  const activeScopeNavViewId = useMemo(() => {
+    if (isScopeSurfaceNavId(view)) return view;
+    return DOCUMENTS_SCOPE_NAV_VIEW.id;
+  }, [view]);
   const featureGates = useMemo(
     () =>
       buildFeatureGates({
@@ -626,16 +640,18 @@ export function AppProvider({
   );
 
   useEffect(() => {
-    if (!scopeNavViews.some((navView) => navView.id === activeScopeNavViewId)) {
-      setActiveScopeNavViewIdState(DOCUMENTS_SCOPE_NAV_VIEW.id);
+    if (!scopesLoading && isScopeSurfaceNavId(view)) {
+      const stillEnabled = scopeNavViews.some((navView) => navView.id === view);
+      if (!stillEnabled) {
+        setView("documents");
+      }
     }
-  }, [activeScope.id, activeScopeNavViewId, scopeNavViews]);
+  }, [scopesLoading, scopeNavViews, view, setView]);
 
   const setActiveScopeNavViewId = useCallback(
     (viewId: string) => {
-      setActiveScopeNavViewIdState(viewId);
-      // Scope surfaces (Documents, Kanban, …) share the documents app shell.
-      setView("documents");
+      const next = scopeNavIdToAppView(viewId);
+      if (next) setView(next);
     },
     [setView],
   );
@@ -790,6 +806,8 @@ export function AppProvider({
       setShowBubble,
       documentTitle,
       setDocumentTitle,
+      scopeInstanceLabel,
+      setScopeInstanceLabel,
       documentId,
       setDocumentId,
       isFavorite,
@@ -844,6 +862,7 @@ export function AppProvider({
       headerHidden,
       showBubble,
       documentTitle,
+      scopeInstanceLabel,
       documentId,
       isFavorite,
       toggleFavorite,

@@ -97,36 +97,6 @@ export function useScopePolicy(workspaceId: string | null) {
     [resolvedId],
   );
 
-  const saveEnabledViews = useCallback(
-    async (enabledViews: string[]) => {
-      if (!resolvedId) return false;
-      setSaving(true);
-      setError(null);
-      try {
-        const response = await fetch(`/app/api/workspaces/${resolvedId}/policy`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enabled_views: enabledViews }),
-        });
-        const body = (await response.json().catch(() => ({}))) as ScopePolicyResponse & {
-          error?: string;
-        };
-        if (!response.ok) {
-          throw new Error(body.error ?? "Couldn't save views");
-        }
-        setData(body);
-        return true;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Couldn't save views";
-        setError(message);
-        return false;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [resolvedId],
-  );
-
   const saveScopeComposition = useCallback(
     async (scopeComposition: ScopeCompositionBody) => {
       if (!resolvedId) return false;
@@ -186,7 +156,6 @@ export function useScopePolicy(workspaceId: string | null) {
     saving,
     refresh,
     savePolicy,
-    saveEnabledViews,
     saveScopeComposition,
     ready: resolvedId !== null && !loading && data !== null,
   };

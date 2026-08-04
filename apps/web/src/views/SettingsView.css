@@ -42,6 +42,16 @@
   width: 100%;
 }
 
+.settings-nav__mode .segmented__item {
+  flex: 1;
+  min-width: 0;
+  padding-left: 8px;
+  padding-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-nav__scope {
   margin: 0 0 var(--space-sm);
   padding: 0 4px;

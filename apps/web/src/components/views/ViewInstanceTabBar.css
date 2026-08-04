@@ -1,0 +1,203 @@
+.view-instance-tabbar {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  gap: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.view-instance-tabbar__main {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Cap tab strip so trailing period/settings always stay on-screen. */
+  max-width: min(100%, calc(100% - 22rem));
+  gap: 0;
+}
+
+.view-instance-tabbar__add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 4px 0 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--duration-normal) ease,
+    color var(--duration-normal) ease;
+}
+
+.view-instance-tabbar__add:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.view-instance-tabbar__add:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.view-instance-tabbar__tabs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.view-instance-tabbar__scroll {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 2px;
+  scrollbar-width: none;
+}
+
+.view-instance-tabbar__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.view-instance-tabbar__scroll-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+  margin-left: 2px;
+}
+
+.view-instance-tabbar__scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.view-instance-tabbar__scroll-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.view-instance-tabbar__scroll-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.view-instance-tabbar__trailing {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.view-instance-tabbar__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  min-width: 72px;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--duration-normal) ease,
+    color var(--duration-normal) ease,
+    border-color var(--duration-normal) ease;
+}
+
+.view-instance-tabbar__tab--with-accessory {
+  max-width: none;
+  padding-right: 4px;
+}
+
+.view-instance-tabbar__tab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.view-instance-tabbar__tab--active {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+  box-shadow: inset 0 -1px 0 var(--color-surface);
+  z-index: 1;
+}
+
+.view-instance-tabbar__tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.view-instance-tabbar__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-instance-tabbar__accessory {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.view-instance-tabbar__close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.view-instance-tabbar__tab:hover .view-instance-tabbar__close,
+.view-instance-tabbar__tab--active .view-instance-tabbar__close {
+  opacity: 1;
+}
+
+.view-instance-tabbar__close:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.view-instance-tabbar__close:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.view-instance-tabbar__close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}

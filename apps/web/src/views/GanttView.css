@@ -1,0 +1,44 @@
+.gantt-view {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg) var(--app-chrome-inline);
+  gap: var(--space-md);
+}
+
+.gantt-view__error,
+.gantt-view__empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.gantt-view__tabs {
+  margin-top: 0;
+}
+
+.gantt-view__error {
+  color: var(--color-danger, var(--color-text-secondary));
+}
+
+.gantt-view__chart {
+  flex: 1;
+  min-height: 420px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.gantt-view__chart .wx-willow-theme,
+.gantt-view__chart .wx-gantt {
+  height: 100%;
+}
+
+/* Overlapping-siblings warning highlight (Roadmap collision detection). */
+.gantt-view__chart .wx-gantt .wx-bar.wx-task.collision {
+  background-color: color-mix(in srgb, var(--color-danger, #ef4444) 25%, transparent);
+  border: 1.5px solid var(--color-danger, #ef4444);
+}

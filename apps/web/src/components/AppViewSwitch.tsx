@@ -17,6 +17,12 @@ function renderAppView(view: AppView) {
     case "editor":
       return <EditorView />;
     case "documents":
+    case "kanban":
+    case "dashboard":
+    case "calendar":
+    case "gantt":
+    case "mindmap":
+    case "graph":
       return <DocumentsView />;
     case "templates":
       return <TemplatesView />;

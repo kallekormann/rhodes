@@ -107,6 +107,7 @@ export function Dropdown({
           </>
         ) : (
           <>
+            {selected?.icon}
             <span>{displayLabel}</span>
             <ChevronDown
               size={16}

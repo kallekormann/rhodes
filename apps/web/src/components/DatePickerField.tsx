@@ -20,7 +20,7 @@ export function DatePickerField({
   className = "",
 }: DatePickerFieldProps) {
   const { open, setOpen, rootRef, panelRef, align, placement, panelCoords } =
-    useFieldPanel();
+    useFieldPanel({ calendar: true });
   const isPlain = variant === "plain";
 
   const handleChange = (date: Date) => {

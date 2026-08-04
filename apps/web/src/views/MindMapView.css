@@ -1,0 +1,129 @@
+.mindmap-view {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-lg) var(--app-chrome-inline);
+  gap: var(--space-md);
+}
+
+.mindmap-view__error,
+.mindmap-view__empty {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.mindmap-view__tabs {
+  margin-top: 0;
+}
+
+.mindmap-view__error {
+  color: var(--color-danger, var(--color-text-secondary));
+}
+
+.mindmap-view__add-picker {
+  max-width: 320px;
+}
+
+.mindmap-view__canvas {
+  flex: 1;
+  min-height: 420px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mindmap-view__canvas .react-flow {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.mindmap-side-panel {
+  position: absolute;
+  top: 88px;
+  right: var(--space-lg);
+  width: 300px;
+  max-height: calc(100% - 120px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+  overflow: auto;
+}
+
+.mindmap-side-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.mindmap-side-panel__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.mindmap-side-panel__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.mindmap-side-panel__icon-button:hover {
+  background: var(--color-surface-hover);
+}
+
+.mindmap-side-panel__excerpt {
+  margin: 0;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+
+.mindmap-side-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.mindmap-side-panel__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  justify-content: center;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs, 4px);
+  background: var(--color-accent-subtle, var(--color-surface-hover));
+  color: var(--color-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mindmap-side-panel__button--ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.mindmap-side-panel__button:hover {
+  background: var(--color-surface-hover);
+}

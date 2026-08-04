@@ -37,6 +37,16 @@ export function shareContextLabel(
   return null;
 }
 
+/**
+ * True unless the document was merged into this list from another scope via sharing.
+ * Organizing views (Kanban, Calendar, Gantt, Mind-Map, Knowledge Graph, Dashboard) should
+ * only manage a scope's own documents — shared-in references stay visible in the plain
+ * Documents list, but don't belong on a board/timeline/graph that writes back to the doc.
+ */
+export function isDocumentNativeToScope(doc: DocumentWithShareContext): boolean {
+  return !doc.share_context?.is_incoming;
+}
+
 export function emptyShareContext(): DocumentShareContext {
   return {
     is_origin: false,

@@ -78,6 +78,9 @@
   --space-2xl: 64px;
 
   --header-height: 48px;
+  /* Shared with AppHeader padding — view settings/info icons align to this edge. */
+  --app-chrome-inline: var(--space-md);
+  --app-header-action-gap: 2px;
   --panel-width-sm: 352px;
   --panel-width-md: 420px;
   --panel-flyout-width: 320px;
@@ -216,5 +219,11 @@
     --duration-normal: 0ms;
     --duration-panel: 0ms;
     --duration-header: 0ms;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --app-chrome-inline: var(--space-sm);
   }
 }

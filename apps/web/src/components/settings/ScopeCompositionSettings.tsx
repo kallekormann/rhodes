@@ -62,7 +62,8 @@ export function ScopeCompositionSettings({
     <div className="scope-composition-settings">
       <p className="caption settings-section__intro">
         Pick views, templates, and bundles for this scope. Items labeled &ldquo;Via&rdquo; come
-        from a selected bundle — drop the bundle to release them individually.
+        from a selected bundle — drop the bundle to release them individually. Views or
+        templates enabled only by inference stay locked until you remove what requires them.
       </p>
       <ScopeCompositionWorkspace
         draft={draft}

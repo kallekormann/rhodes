@@ -1,0 +1,152 @@
+.view-dock-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md, -8px 0 24px rgba(0, 0, 0, 0.08));
+  overflow-y: auto;
+  z-index: 5;
+}
+
+.view-dock-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.view-dock-panel__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.view-dock-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  flex: 1;
+  min-height: 0;
+}
+
+.view-dock-panel__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.view-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.view-settings-field__label {
+  color: var(--color-text-secondary);
+}
+
+.view-settings-field__hint {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.view-dock-panel__button {
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-on-accent, #fff);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.view-dock-panel__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.view-info-panel__warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 35%, transparent);
+}
+
+.view-info-panel__warning {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.view-info-panel__description {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.view-info-panel__section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+}
+
+.view-info-panel__list {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.view-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.view-header-actions__extra {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+/* Match AppHeader trailing icon cluster (theme + design system). */
+.view-header-actions__chrome {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--app-header-action-gap, 2px);
+}
+
+.view-header-actions__extra + .view-header-actions__chrome::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  margin-right: 2px;
+  background: var(--color-border-subtle);
+}

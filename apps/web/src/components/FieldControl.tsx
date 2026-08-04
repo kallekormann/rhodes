@@ -9,10 +9,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  CALENDAR_PANEL_ESTIMATED_HEIGHT,
+  CALENDAR_PANEL_ESTIMATED_WIDTH,
+  clampPanelPosition,
   computeHorizontalAlign,
   computeVerticalPlacement,
   FIELD_PANEL_ESTIMATED_HEIGHT,
-  VIEWPORT_PADDING,
   type HorizontalAlign,
   type VerticalPlacement,
 } from "./popoverAlign";
@@ -27,10 +29,28 @@ export type FieldPanelCoords = {
 function measurePanelCoords(
   root: HTMLElement,
   panel: HTMLElement | null,
+  options?: { calendar?: boolean },
 ): FieldPanelCoords & { align: HorizontalAlign; placement: VerticalPlacement } {
   const triggerRect = root.getBoundingClientRect();
-  const panelWidth = Math.min(Math.max(triggerRect.width, 120), 320);
-  const panelHeight = panel?.offsetHeight ?? FIELD_PANEL_ESTIMATED_HEIGHT;
+  const calendar = options?.calendar ?? false;
+
+  // Prefer the real laid-out size. Fallbacks must match content (calendar is ~280px,
+  // not the narrow trigger), otherwise right-edge triggers overflow the viewport.
+  const measuredWidth = panel?.offsetWidth ?? 0;
+  const measuredHeight = panel?.offsetHeight ?? 0;
+  const panelWidth =
+    measuredWidth > 40
+      ? measuredWidth
+      : calendar
+        ? CALENDAR_PANEL_ESTIMATED_WIDTH
+        : Math.min(Math.max(triggerRect.width, 120), 320);
+  const panelHeight =
+    measuredHeight > 40
+      ? measuredHeight
+      : calendar
+        ? CALENDAR_PANEL_ESTIMATED_HEIGHT
+        : FIELD_PANEL_ESTIMATED_HEIGHT;
+
   const align = computeHorizontalAlign(triggerRect, panelWidth);
   const placement = computeVerticalPlacement(triggerRect, panelHeight);
 
@@ -38,27 +58,27 @@ function measurePanelCoords(
     placement === "below"
       ? triggerRect.bottom + 4
       : triggerRect.top - panelHeight - 4;
-  const left = align === "left" ? triggerRect.left : triggerRect.right - panelWidth;
+  const left =
+    align === "left" ? triggerRect.left : triggerRect.right - panelWidth;
 
-  const clampedLeft = Math.max(
-    VIEWPORT_PADDING,
-    Math.min(left, window.innerWidth - panelWidth - VIEWPORT_PADDING),
-  );
-  const clampedTop = Math.max(
-    VIEWPORT_PADDING,
-    Math.min(top, window.innerHeight - panelHeight - VIEWPORT_PADDING),
-  );
+  const clamped = clampPanelPosition({
+    top,
+    left,
+    panelWidth,
+    panelHeight,
+  });
 
   return {
-    top: clampedTop,
-    left: clampedLeft,
+    top: clamped.top,
+    left: clamped.left,
     minWidth: panelWidth,
     align,
     placement,
   };
 }
 
-export function useFieldPanel() {
+export function useFieldPanel(options?: { calendar?: boolean }) {
+  const calendar = options?.calendar ?? false;
   const [open, setOpen] = useState(false);
   const [align, setAlign] = useState<HorizontalAlign>("left");
   const [placement, setPlacement] = useState<VerticalPlacement>("below");
@@ -98,7 +118,7 @@ export function useFieldPanel() {
       const root = rootRef.current;
       if (!root) return;
 
-      const measured = measurePanelCoords(root, panelRef.current);
+      const measured = measurePanelCoords(root, panelRef.current, { calendar });
       setAlign(measured.align);
       setPlacement(measured.placement);
       setPanelCoords({
@@ -110,16 +130,29 @@ export function useFieldPanel() {
 
     updatePosition();
     const frame = requestAnimationFrame(updatePosition);
+    // Second frame: content (calendar grid) may finish layout after first paint.
+    const frame2 = requestAnimationFrame(() => {
+      requestAnimationFrame(updatePosition);
+    });
 
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
 
+    const panel = panelRef.current;
+    const observer =
+      panel && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => updatePosition())
+        : null;
+    if (panel && observer) observer.observe(panel);
+
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(frame2);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
+      observer?.disconnect();
     };
-  }, [open]);
+  }, [open, calendar]);
 
   return { open, setOpen, rootRef, panelRef, align, placement, panelCoords };
 }
@@ -155,6 +188,7 @@ export const FieldPanel = forwardRef<HTMLDivElement, FieldPanelProps>(function F
           top: coords.top,
           left: coords.left,
           zIndex: 1200,
+          maxWidth: `calc(100vw - 16px)`,
         }
       : {
           position: "fixed",
@@ -162,6 +196,7 @@ export const FieldPanel = forwardRef<HTMLDivElement, FieldPanelProps>(function F
           left: coords.left,
           width: coords.minWidth,
           zIndex: 1200,
+          maxWidth: `calc(100vw - 16px)`,
         }
     : {
         position: "fixed",
@@ -169,7 +204,8 @@ export const FieldPanel = forwardRef<HTMLDivElement, FieldPanelProps>(function F
         left: 0,
         visibility: "hidden",
         pointerEvents: "none",
-        width: 160,
+        // Let calendar panels size to content while measuring — do not force 160px.
+        ...(calendar ? {} : { width: 160 }),
         zIndex: -1,
       };
 
