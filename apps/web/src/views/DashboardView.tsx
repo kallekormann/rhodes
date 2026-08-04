@@ -248,7 +248,6 @@ function DashboardSettingsPanel({
 export function DashboardView() {
   const {
     workspaceId,
-    scopesLoading,
     canWriteActiveScope,
     showToast,
     openEditor,
@@ -256,7 +255,7 @@ export function DashboardView() {
     setDocumentId,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { schemas, loading: schemasLoading } = useMetadataSchemas(workspaceId);
   const {
     instances,

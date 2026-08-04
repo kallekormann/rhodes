@@ -248,12 +248,22 @@ export function AppProvider({
   }, [session.userId, session.userEmail, session.displayName, session.avatarUrl]);
 
   useEffect(() => {
-    void unlockOfflineVaults(session.userId).catch((error) => {
-      console.error("[AppContext] offline vault unlock failed", error);
-    });
-    void cleanupLegacyYjsIndexedDbDatabases().catch((error) => {
-      console.warn("[AppContext] legacy yjs IDB cleanup failed", error);
-    });
+    const run = () => {
+      void unlockOfflineVaults(session.userId).catch((error) => {
+        console.error("[AppContext] offline vault unlock failed", error);
+      });
+      void cleanupLegacyYjsIndexedDbDatabases().catch((error) => {
+        console.warn("[AppContext] legacy yjs IDB cleanup failed", error);
+      });
+    };
+
+    // Keep vault/crypto and legacy IDB cleanup off the critical first-paint path.
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(run, { timeout: 2500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timer = window.setTimeout(run, 0);
+    return () => window.clearTimeout(timer);
   }, [session.userId]);
 
   const {

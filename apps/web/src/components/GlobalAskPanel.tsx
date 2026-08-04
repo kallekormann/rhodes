@@ -1,14 +1,19 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { PanelRightClose } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import { AskPanel } from "@/components/AskPanel";
 import { IconButton } from "@/components/IconButton";
 import { OfflineUnavailable } from "@/components/OfflineUnavailable";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import "@/components/RightPanel.css";
 import "./GlobalAskPanel.css";
+
+const AskPanel = dynamic(
+  () => import("@/components/AskPanel").then((m) => ({ default: m.AskPanel })),
+  { ssr: false },
+);
 
 /**
  * Rhodes Ask shell for non-editor views (Documents, Library, future Dashboard).

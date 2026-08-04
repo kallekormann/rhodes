@@ -34,12 +34,24 @@ type UseScopeViewInstancesResult = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
+const viewInstanceCache = new Map<string, ScopeViewInstanceRecord[]>();
+
+function writeViewInstanceCache(
+  workspaceId: string,
+  instances: ScopeViewInstanceRecord[],
+) {
+  viewInstanceCache.set(workspaceId, instances);
+}
+
 export function useScopeViewInstances(
   workspaceId: string | null,
 ): UseScopeViewInstancesResult {
-  const [instances, setInstances] = useState<ScopeViewInstanceRecord[]>([]);
-  const [loading, setLoading] = useState(() => Boolean(workspaceId));
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const cached = workspaceId ? viewInstanceCache.get(workspaceId) : undefined;
+  const [instances, setInstances] = useState<ScopeViewInstanceRecord[]>(
+    () => cached ?? [],
+  );
+  const [loading, setLoading] = useState(() => Boolean(workspaceId) && !cached);
+  const [hasLoaded, setHasLoaded] = useState(() => Boolean(cached));
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -51,7 +63,8 @@ export function useScopeViewInstances(
       return;
     }
 
-    setLoading(true);
+    const hasCache = viewInstanceCache.has(workspaceId);
+    if (!hasCache) setLoading(true);
     setError(null);
     try {
       const response = await fetch(
@@ -63,13 +76,13 @@ export function useScopeViewInstances(
           typeof data.error === "string" ? data.error : "Failed to load views",
         );
       }
-      setInstances(
-        Array.isArray(data.instances)
-          ? (data.instances as ScopeViewInstanceRecord[])
-          : [],
-      );
+      const next = Array.isArray(data.instances)
+        ? (data.instances as ScopeViewInstanceRecord[])
+        : [];
+      viewInstanceCache.set(workspaceId, next);
+      setInstances(next);
     } catch (err) {
-      setInstances([]);
+      if (!hasCache) setInstances([]);
       setError(err instanceof Error ? err.message : "Failed to load views");
     } finally {
       setLoading(false);
@@ -78,10 +91,22 @@ export function useScopeViewInstances(
   }, [workspaceId]);
 
   useEffect(() => {
-    setHasLoaded(false);
-    setInstances([]);
+    if (!workspaceId) {
+      setHasLoaded(false);
+      setInstances([]);
+      return;
+    }
+    const existing = viewInstanceCache.get(workspaceId);
+    if (existing) {
+      setInstances(existing);
+      setHasLoaded(true);
+      setLoading(false);
+    } else {
+      setHasLoaded(false);
+      setInstances([]);
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, workspaceId]);
 
   const updateInstance = useCallback(
     async (
@@ -113,9 +138,13 @@ export function useScopeViewInstances(
       }
 
       const updated = data.instance as ScopeViewInstanceRecord;
-      setInstances((current) =>
-        current.map((instance) => (instance.id === updated.id ? updated : instance)),
-      );
+      setInstances((current) => {
+        const next = current.map((instance) =>
+          instance.id === updated.id ? updated : instance,
+        );
+        writeViewInstanceCache(workspaceId, next);
+        return next;
+      });
       return { ok: true as const, instance: updated };
     },
     [workspaceId],
@@ -151,7 +180,9 @@ export function useScopeViewInstances(
       const created = data.instance as ScopeViewInstanceRecord;
       setInstances((current) => {
         if (current.some((entry) => entry.id === created.id)) return current;
-        return [...current, created];
+        const next = [...current, created];
+        writeViewInstanceCache(workspaceId, next);
+        return next;
       });
       return { ok: true as const, instance: created };
     },
@@ -176,9 +207,11 @@ export function useScopeViewInstances(
         return { ok: false as const, error: message };
       }
 
-      setInstances((current) =>
-        current.filter((instance) => instance.id !== instanceId),
-      );
+      setInstances((current) => {
+        const next = current.filter((instance) => instance.id !== instanceId);
+        writeViewInstanceCache(workspaceId, next);
+        return next;
+      });
       return { ok: true as const };
     },
     [workspaceId],

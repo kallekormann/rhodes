@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Archive, ArchiveRestore, Search, Share2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
@@ -42,17 +43,43 @@ import { SharePopover } from "@/components/SharePopover";
 import { StatusPill } from "@/components/StatusPill";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { CalendarView } from "@/views/CalendarView";
-import { DashboardView } from "@/views/DashboardView";
-import { GanttView } from "@/views/GanttView";
-import { KanbanView } from "@/views/KanbanView";
-import { KnowledgeGraphView } from "@/views/KnowledgeGraphView";
-import { MindMapView } from "@/views/MindMapView";
 import "./DocumentsView.css";
 
 type DocTab = DocumentFilter;
 
 const ANY_PROPERTY = "__any__";
+
+const engineLoading = () => <LoaderState label="Loading…" />;
+
+const KanbanView = dynamic(
+  () => import("@/views/KanbanView").then((m) => ({ default: m.KanbanView })),
+  { loading: engineLoading, ssr: false },
+);
+const DashboardView = dynamic(
+  () =>
+    import("@/views/DashboardView").then((m) => ({ default: m.DashboardView })),
+  { loading: engineLoading, ssr: false },
+);
+const CalendarView = dynamic(
+  () =>
+    import("@/views/CalendarView").then((m) => ({ default: m.CalendarView })),
+  { loading: engineLoading, ssr: false },
+);
+const MindMapView = dynamic(
+  () => import("@/views/MindMapView").then((m) => ({ default: m.MindMapView })),
+  { loading: engineLoading, ssr: false },
+);
+const KnowledgeGraphView = dynamic(
+  () =>
+    import("@/views/KnowledgeGraphView").then((m) => ({
+      default: m.KnowledgeGraphView,
+    })),
+  { loading: engineLoading, ssr: false },
+);
+const GanttView = dynamic(
+  () => import("@/views/GanttView").then((m) => ({ default: m.GanttView })),
+  { loading: engineLoading, ssr: false },
+);
 
 export function DocumentsView() {
   const { view } = useApp();
@@ -80,7 +107,6 @@ export function DocumentsView() {
 function DocumentsListView() {
   const {
     workspaceId,
-    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -102,7 +128,7 @@ function DocumentsListView() {
     title: string;
   } | null>(null);
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
 
   const {
     documents,

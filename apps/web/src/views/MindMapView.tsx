@@ -138,7 +138,6 @@ function MindMapSettingsPanel({
 export function MindMapView() {
   const {
     workspaceId,
-    scopesLoading,
     canWriteActiveScope,
     showToast,
     openEditor,
@@ -147,7 +146,7 @@ export function MindMapView() {
     session,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { documents, loading, error, updateDocument } = useDocuments(
     workspaceId,
     "all",

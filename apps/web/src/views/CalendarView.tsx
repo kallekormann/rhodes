@@ -128,7 +128,6 @@ function CalendarSettingsPanel({
 export function CalendarView() {
   const {
     workspaceId,
-    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -137,7 +136,7 @@ export function CalendarView() {
     session,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { documents, loading, error } = useDocuments(
     workspaceId,
     "all",

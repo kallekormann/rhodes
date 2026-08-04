@@ -148,7 +148,6 @@ function KnowledgeGraphSettingsPanel({
 export function KnowledgeGraphView() {
   const {
     workspaceId,
-    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -157,7 +156,7 @@ export function KnowledgeGraphView() {
     session,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { documents, loading, error } = useDocuments(
     workspaceId,
     "all",

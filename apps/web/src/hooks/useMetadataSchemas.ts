@@ -36,10 +36,22 @@ function mapGroupFromApi(group: MetadataSchemaGroup): MetadataSchemaGroup {
   };
 }
 
+type SchemaCacheEntry = {
+  schemas: MetadataSchemaField[];
+  groups: MetadataSchemaGroup[];
+};
+
+const schemaCache = new Map<string, SchemaCacheEntry>();
+
 export function useMetadataSchemas(workspaceId: string | null) {
-  const [schemas, setSchemas] = useState<MetadataSchemaField[]>([]);
-  const [groups, setGroups] = useState<MetadataSchemaGroup[]>([]);
-  const [loading, setLoading] = useState(Boolean(workspaceId));
+  const cached = workspaceId ? schemaCache.get(workspaceId) : undefined;
+  const [schemas, setSchemas] = useState<MetadataSchemaField[]>(
+    () => cached?.schemas ?? [],
+  );
+  const [groups, setGroups] = useState<MetadataSchemaGroup[]>(
+    () => cached?.groups ?? [],
+  );
+  const [loading, setLoading] = useState(() => Boolean(workspaceId) && !cached);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -56,7 +68,8 @@ export function useMetadataSchemas(workspaceId: string | null) {
       return;
     }
 
-    setLoading(true);
+    const hasCache = schemaCache.has(workspaceId);
+    if (!hasCache) setLoading(true);
     setError(null);
 
     try {
@@ -67,27 +80,46 @@ export function useMetadataSchemas(workspaceId: string | null) {
       if (!response.ok) {
         const message = parseApiErrorMessage(data, "Failed to load metadata schemas");
         setError(message);
-        setSchemas([]);
-        setGroups([]);
+        if (!hasCache) {
+          setSchemas([]);
+          setGroups([]);
+        }
         return;
       }
 
-      setSchemas((data.schemas as MetadataSchemaField[]) ?? []);
-      setGroups(
-        ((data.groups as MetadataSchemaGroup[]) ?? []).map(mapGroupFromApi),
+      const nextSchemas = (data.schemas as MetadataSchemaField[]) ?? [];
+      const nextGroups = ((data.groups as MetadataSchemaGroup[]) ?? []).map(
+        mapGroupFromApi,
       );
+      schemaCache.set(workspaceId, { schemas: nextSchemas, groups: nextGroups });
+      setSchemas(nextSchemas);
+      setGroups(nextGroups);
     } catch {
       setError("Failed to load metadata schemas");
-      setSchemas([]);
-      setGroups([]);
+      if (!hasCache) {
+        setSchemas([]);
+        setGroups([]);
+      }
     } finally {
       setLoading(false);
     }
   }, [workspaceId]);
 
   useEffect(() => {
+    if (!workspaceId) {
+      setSchemas([]);
+      setGroups([]);
+      setLoading(false);
+      return;
+    }
+    const existing = schemaCache.get(workspaceId);
+    if (existing) {
+      setSchemas(existing.schemas);
+      setGroups(existing.groups);
+      setLoading(false);
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, workspaceId]);
 
   const createSchema = useCallback(
     async (input: {

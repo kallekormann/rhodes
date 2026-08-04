@@ -307,7 +307,6 @@ function KanbanSettingsPanel({
 export function KanbanView() {
   const {
     workspaceId,
-    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -316,7 +315,7 @@ export function KanbanView() {
     session,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { documents, loading, error, updateDocument } = useDocuments(
     workspaceId,
     "all",

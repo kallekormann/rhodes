@@ -1,6 +1,6 @@
 # App-wide load performance
 
-**Status:** planned — do this before further view polish  
+**Status:** in progress — P1–P3 landed in code; measure & lean docs still open  
 **Symptom:** 10–15s+ loads on every page/view despite little data
 
 ## Likely root causes (priority)

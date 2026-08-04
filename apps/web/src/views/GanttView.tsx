@@ -171,7 +171,6 @@ function GanttSettingsPanel({
 export function GanttView() {
   const {
     workspaceId,
-    scopesLoading,
     openEditor,
     setDocumentTitle,
     setDocumentId,
@@ -180,7 +179,7 @@ export function GanttView() {
     session,
   } = useApp();
 
-  const scopesPending = !workspaceId || scopesLoading;
+  const scopesPending = !workspaceId;
   const { documents, loading, error } = useDocuments(
     workspaceId,
     "all",

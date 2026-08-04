@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { History, Plus, Trash2 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
@@ -8,7 +9,6 @@ import { ChatMessageBubble } from "@/components/ChatMessageBubble";
 import { AskMarkdown } from "@/components/ask/AskMarkdown";
 import { AskReasoningTicker } from "@/components/ask/AskReasoningTicker";
 import { AskSourcesLine } from "@/components/ask/AskSourcesLine";
-import { AskChartBlock } from "@/components/charts/ChartFrame";
 import { IconButton } from "@/components/IconButton";
 import { hasAskEngagedToday } from "@/lib/ask/engagement";
 import { useAskChat } from "@/hooks/useAskChat";
@@ -16,9 +16,16 @@ import "@/components/AskComposer.css";
 import "@/components/ChatMessageBubble.css";
 import "@/components/ask/AskReasoningTicker.css";
 import "@/components/ask/AskSourcesLine.css";
-import "@/components/charts/ChartFrame.css";
 import "@/components/ask/AskMarkdown.css";
 import "./AskPanel.css";
+
+const AskChartBlock = dynamic(
+  () =>
+    import("@/components/charts/ChartFrame").then((m) => ({
+      default: m.AskChartBlock,
+    })),
+  { ssr: false },
+);
 
 type AskPanelProps = {
   workspaceId: string | null;

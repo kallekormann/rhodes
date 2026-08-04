@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Organization, OrganizationRole } from "@/data/organizations";
 import type { Scope } from "@/data/scopes";
 import { createClient } from "@/lib/supabase/client";
@@ -164,6 +164,19 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshGeneration = useRef(0);
+  const hydratedFromCache = useRef(false);
+
+  // Paint immediately from local scope cache before the network round-trip.
+  useLayoutEffect(() => {
+    if (hydratedFromCache.current) return;
+    hydratedFromCache.current = true;
+    const restored = resolveScopesFromCache();
+    if (!restored) return;
+    applyResolvedScopes(restored, setScopes, setActiveScopeIdState);
+    if (restored.scopes.length > 0) {
+      setLoading(false);
+    }
+  }, []);
 
   const loadScopes = useCallback(async (allowBootstrap: boolean) => {
     const supabase = createClient();
