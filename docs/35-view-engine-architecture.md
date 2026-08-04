@@ -66,8 +66,8 @@ Gantt collision detection (overlapping bars under the same hierarchy row) is cus
 
 ## Rollout order
 
-1. Foundations (this doc, types, catalog split, table, seed) — current
-2. Kanban
+1. Foundations (this doc, types, catalog split, table, seed) — done
+2. Kanban — available (DnD board grouped by status/select metadata)
 3. Dashboard (+ aggregation API)
 4. Roadmap / Gantt
 5. Calendar

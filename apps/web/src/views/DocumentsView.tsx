@@ -42,6 +42,7 @@ import { SharePopover } from "@/components/SharePopover";
 import { StatusPill } from "@/components/StatusPill";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { KanbanView } from "@/views/KanbanView";
 import "./DocumentsView.css";
 
 type DocTab = DocumentFilter;
@@ -49,6 +50,14 @@ type DocTab = DocumentFilter;
 const ANY_PROPERTY = "__any__";
 
 export function DocumentsView() {
+  const { activeScopeNavViewId } = useApp();
+  if (activeScopeNavViewId === "kanban") {
+    return <KanbanView />;
+  }
+  return <DocumentsListView />;
+}
+
+function DocumentsListView() {
   const {
     workspaceId,
     scopesLoading,
@@ -62,6 +71,7 @@ export function DocumentsView() {
     overviewTemplates,
     overviewTemplatesLoading,
   } = useApp();
+
   const { online } = useOnlineStatus(workspaceId);
   const [tab, setTab] = useState<DocTab>("recent");
   const [filter, setFilter] = useState("");

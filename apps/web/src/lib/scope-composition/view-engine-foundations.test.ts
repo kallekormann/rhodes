@@ -27,6 +27,11 @@ describe("view engine foundations", () => {
     expect(ids.filter((id) => id === "graph" || id === "mindmap")).toHaveLength(2);
   });
 
+  it("marks kanban as available in the catalog", () => {
+    const kanban = ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === "kanban");
+    expect(kanban?.status).toBe("available");
+  });
+
   it("accepts mindmap and graph in composition view selection", () => {
     const result = validateScopeCompositionViewSelection("pro", ["mindmap", "graph"]);
     expect(result).toEqual({ ok: true });

@@ -121,3 +121,34 @@ export const DATE_VIEW_FIELD_TYPES = ["date", "date_range"] as const;
 
 /** Fields that produce Knowledge Graph / Mind-Map edges. */
 export const RELATION_VIEW_FIELD_TYPES = ["relation"] as const;
+
+/**
+ * Normalize preset/instance config into KanbanViewConfig.
+ * Bundle seeds historically used `groupBy`; typed engine uses `groupByField`.
+ */
+export function resolveKanbanConfig(
+  config: Record<string, unknown> | null | undefined,
+): KanbanViewConfig | null {
+  if (!config) return null;
+  const groupByField =
+    typeof config.groupByField === "string" && config.groupByField.trim()
+      ? config.groupByField.trim()
+      : typeof config.groupBy === "string" && config.groupBy.trim()
+        ? config.groupBy.trim()
+        : null;
+  if (!groupByField) return null;
+
+  const cardFields = Array.isArray(config.cardFields)
+    ? config.cardFields.filter((value): value is string => typeof value === "string")
+    : undefined;
+  const sortBy =
+    typeof config.sortBy === "string" && config.sortBy.trim()
+      ? config.sortBy.trim()
+      : undefined;
+
+  return {
+    groupByField,
+    ...(cardFields && cardFields.length > 0 ? { cardFields } : {}),
+    ...(sortBy ? { sortBy } : {}),
+  };
+}

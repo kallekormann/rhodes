@@ -634,9 +634,8 @@ export function AppProvider({
   const setActiveScopeNavViewId = useCallback(
     (viewId: string) => {
       setActiveScopeNavViewIdState(viewId);
-      if (viewId === DOCUMENTS_SCOPE_NAV_VIEW.id) {
-        setView("documents");
-      }
+      // Scope surfaces (Documents, Kanban, …) share the documents app shell.
+      setView("documents");
     },
     [setView],
   );

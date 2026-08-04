@@ -190,9 +190,12 @@ export function AppHeader() {
 
   const isEditor = useEditorRouteActive();
   const isHidden = isEditor && headerHidden;
+  const isDocumentsShell =
+    view === "documents" || view === "templates" || view === "editor";
   const isDocumentsSection =
-    activeScopeNavViewId === DOCUMENTS_SCOPE_NAV_VIEW.id &&
-    (view === "documents" || view === "templates" || view === "editor");
+    isDocumentsShell &&
+    (activeScopeNavViewId === DOCUMENTS_SCOPE_NAV_VIEW.id ||
+      activeScopeNavViewId === "kanban");
   const showScopeTrail =
     isDocumentsSection ||
     view === "library" ||

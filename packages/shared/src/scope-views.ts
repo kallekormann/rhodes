@@ -40,7 +40,7 @@ export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [
     id: "kanban",
     label: "Kanban",
     description: "Task boards per project",
-    status: "coming_soon",
+    status: "available",
     minTier: "basic",
   },
   {

@@ -24,7 +24,7 @@ Populate `ADDITIONAL_SCOPE_VIEW_CATALOG` incrementally. M2 ships catalog metadat
 
 | ID | Label | min tier | Status | Use case |
 |----|-------|----------|--------|----------|
-| `kanban` | Kanban | basic | coming_soon | Task boards per project |
+| `kanban` | Kanban | basic | **available** | Task boards per project |
 | `calendar` | Calendar | basic | coming_soon | Deadlines, publishing schedule |
 | `gantt` | Gantt | pro | coming_soon | Long-form planning |
 | `wiki` | Wiki / links | basic | coming_soon | Internal doc graph (M6) |

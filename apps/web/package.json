@@ -14,6 +14,9 @@
     "test:e2e:offline": "node tests/e2e/load-env.mjs && playwright test tests/e2e/offline"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@rhodes/ai": "workspace:*",
     "@rhodes/db": "workspace:*",
     "@rhodes/shared": "workspace:*",
