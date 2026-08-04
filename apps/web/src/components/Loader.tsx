@@ -30,7 +30,8 @@ export function Loader({
 type LoaderStateProps = HTMLAttributes<HTMLDivElement> & {
   label?: string;
   size?: LoaderSize;
-  align?: "start" | "center";
+  /** `fill` centers in the remaining content area (page / view loaders). */
+  align?: "start" | "center" | "fill";
 };
 
 export function LoaderState({

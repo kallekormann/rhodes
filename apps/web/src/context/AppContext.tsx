@@ -724,7 +724,26 @@ export function AppProvider({
     }
 
     try {
-      const created = await createDocument(undefined, targetWorkspaceId);
+      const blankTemplate =
+        overviewTemplates.find(
+          (template) =>
+            template.is_system &&
+            (template.name === "Blank" ||
+              (typeof template.metadata?.slug === "string" &&
+                template.metadata.slug === "blank")),
+        ) ??
+        overviewTemplates.find((template) => template.name === "Blank");
+
+      const created = await createDocument(
+        blankTemplate
+          ? { template_id: blankTemplate.id, title: "Untitled Document" }
+          : undefined,
+        targetWorkspaceId,
+      );
+      if (!created) {
+        showToast("Couldn't create document", "error");
+        return;
+      }
       setDocumentId(created.id);
       setDocumentTitle(created.title);
       openEditor(created.id);
@@ -743,6 +762,7 @@ export function AppProvider({
     createDocument,
     openEditor,
     showToast,
+    overviewTemplates,
   ]);
 
   const setTheme = useCallback((next: Theme) => {

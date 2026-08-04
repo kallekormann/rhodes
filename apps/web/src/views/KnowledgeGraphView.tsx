@@ -237,9 +237,11 @@ export function KnowledgeGraphView() {
   const activeDocs = useMemo(
     () =>
       documents.filter(
-        (doc) => !isDocumentArchived(doc.metadata) && isDocumentNativeToScope(doc),
+        (doc) =>
+          !isDocumentArchived(doc.metadata) &&
+          isDocumentNativeToScope(doc, workspaceId),
       ),
-    [documents],
+    [documents, workspaceId],
   );
   const docsById = useMemo(() => {
     const map = new Map<string, DocumentRecord>();
@@ -406,7 +408,7 @@ export function KnowledgeGraphView() {
         {error ? <p className="caption knowledge-graph-view__error">{error}</p> : null}
 
         {graphLoading ? (
-          <LoaderState label="Loading knowledge graph…" />
+          <LoaderState label="Loading knowledge graph…" align="fill" />
         ) : edges.length === 0 ? (
           <p className="caption knowledge-graph-view__empty">
             No relation-linked documents yet. Add a &ldquo;Linked document&rdquo; property and
@@ -443,7 +445,7 @@ export function KnowledgeGraphView() {
             ) : null}
 
             {selectedDoc && panel === null ? (
-              <aside className="knowledge-graph-explain">
+              <aside className="knowledge-graph-explain overlay-scrollbar">
                 <header className="knowledge-graph-explain__header">
                   <h3 className="knowledge-graph-explain__title">
                     {selectedDoc.title || "Untitled"}

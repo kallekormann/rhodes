@@ -2,6 +2,7 @@
 
 import "@svar-ui/react-gantt/all.css";
 import { Gantt, Willow } from "@svar-ui/react-gantt";
+import { format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import {
   DATE_VIEW_FIELD_TYPES,
@@ -15,6 +16,7 @@ import { usePublishScopeInstanceLabel } from "@/hooks/usePublishScopeInstanceLab
 import { cacheDocumentTitle } from "@/lib/editor/editor-shell-session";
 import { isDocumentArchived } from "@/lib/documents/metadata";
 import { isDocumentNativeToScope } from "@/lib/documents/share-context";
+import { withUserMetadataValue } from "@/lib/metadata/schemas";
 import {
   buildGanttTasks,
   ganttConfigFromInstance,
@@ -24,7 +26,10 @@ import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
+import { NavLink } from "@/components/NavLink";
 import type { MetadataSchemaField } from "@/lib/metadata/schemas";
+import { ViewDocumentPanelHost } from "@/components/views/ViewDocumentPanelHost";
+import type { ViewDocumentPanelState } from "@/components/views/view-document-panel-types";
 import {
   ViewDockPanel,
   ViewSettingsField,
@@ -180,7 +185,7 @@ export function GanttView() {
   } = useApp();
 
   const scopesPending = !workspaceId;
-  const { documents, loading, error } = useDocuments(
+  const { documents, loading, error, refresh } = useDocuments(
     workspaceId,
     "all",
     session.userId,
@@ -205,12 +210,16 @@ export function GanttView() {
   usePublishScopeInstanceLabel(instance?.label);
 
   const [panel, setPanel] = useState<ViewPanelMode>(null);
+  const [docPanel, setDocPanel] = useState<ViewDocumentPanelState>({
+    mode: "closed",
+  });
   const [savingSettings, setSavingSettings] = useState(false);
 
   const config = useMemo(() => ganttConfigFromInstance(instance), [instance]);
 
   useEffect(() => {
     setPanel(null);
+    setDocPanel({ mode: "closed" });
   }, [workspaceId, activeInstanceId]);
 
   const dateFields = useMemo(
@@ -281,9 +290,11 @@ export function GanttView() {
   const activeDocs = useMemo(
     () =>
       documents.filter(
-        (doc) => !isDocumentArchived(doc.metadata) && isDocumentNativeToScope(doc),
+        (doc) =>
+          !isDocumentArchived(doc.metadata) &&
+          isDocumentNativeToScope(doc, workspaceId),
       ),
-    [documents],
+    [documents, workspaceId],
   );
 
   const tasks = useMemo(
@@ -314,16 +325,55 @@ export function GanttView() {
     return map;
   }, [activeDocs]);
 
+  const openDoc = (documentId: string) => {
+    setPanel(null);
+    setDocPanel({ mode: "editing", documentId });
+  };
+
+  const openFullPage = (documentId: string, title?: string) => {
+    if (title) {
+      cacheDocumentTitle(documentId, title);
+      setDocumentTitle(title);
+    }
+    setDocumentId(documentId);
+    setDocPanel({ mode: "closed" });
+    openEditor(documentId);
+  };
+
+  const startCreateEntry = () => {
+    if (!startField || !canWriteActiveScope) return;
+    const dayKey = format(new Date(), "yyyy-MM-dd");
+    let seedMetadata: Record<string, unknown> = {};
+    if (startField.field_type === "date_range") {
+      seedMetadata = withUserMetadataValue({}, startField.field_key, {
+        start: dayKey,
+        end: dayKey,
+      });
+    } else {
+      seedMetadata = withUserMetadataValue({}, startField.field_key, dayKey);
+      if (endField && endField.field_key !== startField.field_key) {
+        seedMetadata = withUserMetadataValue(
+          seedMetadata,
+          endField.field_key,
+          dayKey,
+        );
+      }
+    }
+    setPanel(null);
+    setDocPanel({
+      mode: "pick-template",
+      viewType: "gantt",
+      createContext: { kind: "seed", metadata: seedMetadata },
+    });
+  };
+
   const ganttInit = (api: {
     on: (event: string, handler: (payload: { id: string | number }) => void) => void;
   }) => {
     api.on("show-editor", ({ id }) => {
       const doc = docsById.get(String(id));
       if (!doc) return;
-      cacheDocumentTitle(doc.id, doc.title);
-      setDocumentTitle(doc.title);
-      setDocumentId(doc.id);
-      openEditor(doc.id);
+      openDoc(doc.id);
     });
   };
 
@@ -354,8 +404,18 @@ export function GanttView() {
           trailing={
             <ViewHeaderActions
               panel={panel}
-              onPanelChange={setPanel}
+              onPanelChange={(next) => {
+                setDocPanel({ mode: "closed" });
+                setPanel(next);
+              }}
               canEditSettings={canWriteActiveScope}
+              extra={
+                canWriteActiveScope && startField ? (
+                  <NavLink size="small" onClick={startCreateEntry}>
+                    New entry
+                  </NavLink>
+                ) : null
+              }
             />
           }
         />
@@ -366,7 +426,7 @@ export function GanttView() {
         {error ? <p className="caption gantt-view__error">{error}</p> : null}
 
         {ganttLoading ? (
-          <LoaderState label="Loading roadmap…" />
+          <LoaderState label="Loading roadmap…" align="fill" />
         ) : !startField ? (
           <p className="caption gantt-view__empty">
             This scope has no date or date-range properties yet. Add one in Settings to
@@ -374,7 +434,9 @@ export function GanttView() {
           </p>
         ) : tasks.length === 0 ? (
           <p className="caption gantt-view__empty">
-            No documents have a value for &ldquo;{startField.field_label}&rdquo; yet.
+            {canWriteActiveScope
+              ? `No documents have a value for “${startField.field_label}” yet. Use New entry to create one with today’s date.`
+              : `No documents have a value for “${startField.field_label}” yet.`}
           </p>
         ) : (
           <div className="gantt-view__chart">
@@ -410,6 +472,19 @@ export function GanttView() {
             onClose={() => setPanel(null)}
           />
         ) : null}
+
+        <ViewDocumentPanelHost
+          state={docPanel}
+          onClose={() => setDocPanel({ mode: "closed" })}
+          onOpenFullPage={openFullPage}
+          onDocumentCreated={(doc) => {
+            void refresh();
+            setDocPanel({ mode: "editing", documentId: doc.id });
+          }}
+          onDocumentUpdated={() => {
+            void refresh();
+          }}
+        />
       </div>
     </DocumentsSyncGate>
   );

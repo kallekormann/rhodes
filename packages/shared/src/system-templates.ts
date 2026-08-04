@@ -146,6 +146,12 @@ const ESSENTIAL_SCHEMA_FIELDS: TemplateSchemaFieldSeed[] = [
     field_type: "textarea",
     ai_fill_enabled: true,
   },
+  {
+    field_key: "origin",
+    field_label: "Origin",
+    field_type: "relation",
+    ai_fill_enabled: false,
+  },
 ];
 
 /** Growth discovery fields — shared by Insight / Problem. */
@@ -445,6 +451,38 @@ export const SYSTEM_TEMPLATE_SEEDS: readonly SystemTemplateSeed[] = [
           field_label: "Meeting date",
           field_type: "date",
           ai_fill_enabled: true,
+        },
+        {
+          field_key: "meeting_type",
+          field_label: "Meeting type",
+          field_type: "select",
+          options: [
+            "team_sync",
+            "client",
+            "planning",
+            "standup",
+            "retro",
+            "other",
+          ],
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "attendees",
+          field_label: "Attendees",
+          field_type: "textarea",
+          ai_fill_enabled: true,
+        },
+        {
+          field_key: "meeting_link",
+          field_label: "Meeting link",
+          field_type: "text",
+          ai_fill_enabled: false,
+        },
+        {
+          field_key: "location",
+          field_label: "Location",
+          field_type: "text",
+          ai_fill_enabled: false,
         },
       ]),
       default_properties: {
@@ -2519,4 +2557,36 @@ export function getSystemTemplateSeed(slug: string): SystemTemplateSeed | undefi
 
 export function isEssentialTemplateFieldKey(fieldKey: string): boolean {
   return (ESSENTIAL_TEMPLATE_FIELD_KEYS as readonly string[]).includes(fieldKey);
+}
+
+/**
+ * Field keys shipped by the document's template (Tier B), resolved from
+ * `template_slug` or `document_type`. Used to keep Properties view focused on
+ * that document type instead of every schema seeded in the scope.
+ */
+export function resolveTemplateSchemaFieldKeys(
+  metadata: Record<string, unknown> | null | undefined,
+): Set<string> | null {
+  if (!metadata || typeof metadata !== "object") return null;
+
+  const slug =
+    typeof metadata.template_slug === "string" && metadata.template_slug.trim()
+      ? metadata.template_slug.trim()
+      : null;
+  const documentType =
+    typeof metadata.document_type === "string" && metadata.document_type.trim()
+      ? metadata.document_type.trim()
+      : null;
+
+  const seed =
+    (slug ? getSystemTemplateSeed(slug) : undefined) ??
+    (documentType
+      ? SYSTEM_TEMPLATE_SEEDS.find(
+          (entry) => entry.metadata.document_type === documentType,
+        )
+      : undefined);
+
+  const fields = seed?.metadata.schema_fields;
+  if (!fields || fields.length === 0) return null;
+  return new Set(fields.map((field) => field.field_key));
 }

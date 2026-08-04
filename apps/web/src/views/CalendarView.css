@@ -1,5 +1,6 @@
 .calendar-view {
   position: relative;
+  flex: 1;
   width: 100%;
   min-width: 0;
   height: 100%;
@@ -12,12 +13,15 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .calendar-view__inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+  flex: 1;
   min-height: 100%;
   padding: var(--space-lg) var(--app-chrome-inline);
 }
@@ -30,6 +34,38 @@
 
 .calendar-view__tabs {
   margin-top: 0;
+}
+
+.calendar-view__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Pin Month/List to the top-right corner of the tab content area. */
+.calendar-view__mode {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+}
+
+.calendar-view__mode .segmented__item {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.calendar-view__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  /* Clear the absolutely positioned mode switch. */
+  padding-top: 40px;
 }
 
 .calendar-view__error {
@@ -122,15 +158,6 @@
   flex: 0 1 auto;
 }
 
-.calendar-view__tabs .view-instance-tabbar__accessory .segmented {
-  margin: 0;
-}
-
-.calendar-view__tabs .view-instance-tabbar__accessory .segmented__item {
-  padding: 2px 8px;
-  font-size: 12px;
-}
-
 .calendar-view__toolbar .view-header-actions {
   margin-left: 2px;
 }
@@ -181,6 +208,14 @@
   border-radius: 50%;
   background: var(--color-accent);
   color: var(--color-on-accent, #fff);
+}
+
+.calendar-cell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  min-height: 20px;
 }
 
 .calendar-cell__date {

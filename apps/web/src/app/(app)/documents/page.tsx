@@ -1,5 +1,5 @@
-import { DocumentsView } from "@/views/DocumentsView";
+import { DocumentsListView } from "@/views/DocumentsListView";
 
 export default function DocumentsPage() {
-  return <DocumentsView />;
+  return <DocumentsListView />;
 }

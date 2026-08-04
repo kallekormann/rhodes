@@ -1,6 +1,6 @@
 # App-wide load performance
 
-**Status:** in progress — P1–P3 landed in code; measure & lean docs still open  
+**Status:** in progress — P1–P4 partially landed; warm nav + Settings caching improved  
 **Symptom:** 10–15s+ loads on every page/view despite little data
 
 ## Likely root causes (priority)
@@ -43,6 +43,13 @@ Vault unlock / legacy Yjs cleanup / template fetch on every session; middleware 
 | **P3 Shared data cache** | One cache for docs/schemas/instances across remounts | Docs ↔ Calendar does not re-download everything |
 | **P4 Lean board fetch** | Limit/`fields` for board list; optional skip enrich | Smaller `/api/documents?filter=all` |
 | **P5 Defer AppProvider work** | Idle vault/cleanup | No multi-second main-thread block on login |
+
+## Landed (warm path)
+
+- Module SWR caches (~45s TTL) + in-flight dedupe: documents, schemas, view-instances, scope policy, members, org policy, library quota (`lib/cache/swr-cache.ts`)
+- Settings no longer clears policy on remount / no double members fetch on Team
+- Board `filter=all` + `include_body=false` skips share enrichment
+- Document list paints server rows before offline vault merge
 
 ## Success criteria
 - Cold navigate to Calendar or Documents: interactive chrome in **&lt;2s** on a normal laptop/dev network

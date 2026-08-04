@@ -5,6 +5,7 @@ import { DatePickerField } from "@/components/DatePickerField";
 import { DateRangeField, type DateRange } from "@/components/DateRangePicker";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
+import { Checkbox } from "@/components/Checkbox";
 import { TextArea } from "@/components/TextArea";
 import { RelationFieldEditor } from "@/components/properties/RelationFieldEditor";
 import {
@@ -188,12 +189,14 @@ export function SchemaFieldRow({
   onChange,
   aiSuggested = false,
   preview = false,
+  excludeDocumentId = null,
 }: {
   field: MetadataSchemaField;
   value: MetadataFieldValue;
   onChange: (value: MetadataFieldValue) => void;
   aiSuggested?: boolean;
   preview?: boolean;
+  excludeDocumentId?: string | null;
 }) {
   const options = parseSchemaOptions(field.options);
   const unit = parseSchemaUnit(field.options);
@@ -245,6 +248,7 @@ export function SchemaFieldRow({
           <RelationFieldEditor
             value={relation}
             onChange={(next) => onChange(next)}
+            excludeDocumentId={excludeDocumentId}
           />
         </dd>
       </div>
@@ -380,14 +384,11 @@ export function SchemaFieldRow({
       <div className={rowClass}>
         <dt>{label}</dt>
         <dd>
-          <label className="props-checkbox">
-            <input
-              type="checkbox"
-              checked={value === true}
-              onChange={(event) => onChange(event.target.checked)}
-            />
-            <span>{value === true ? "Yes" : "No"}</span>
-          </label>
+          <Checkbox
+            label={value === true ? "Yes" : "No"}
+            checked={value === true}
+            onChange={(event) => onChange(event.target.checked)}
+          />
         </dd>
       </div>
     );

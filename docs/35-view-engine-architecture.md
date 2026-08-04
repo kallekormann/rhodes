@@ -65,14 +65,26 @@ Widget config is persisted on the active `dashboard` `scope_view_instances` tab'
 | Dashboard | `recharts` (already installed) |
 | Gantt | `@svar-ui/react-gantt` (MIT core; PRO deferred) — nested summary rows built client-side from `hierarchyFields` (`apps/web/src/lib/views/gantt.ts`) |
 | Calendar | custom + `date-fns` |
-| Mind-Map | `@xyflow/react`; lightweight custom sidebar (title + excerpt + "Open full page"), not the full `RightPanel`/`useEditorSession` stack — revisit if inline editing becomes a priority |
+| Mind-Map | `@xyflow/react`; shared `ViewDocumentPanel` for in-context create/edit (template picker → TipTap + Origin); full-page editor remains an escape hatch |
 | Knowledge Graph | `@xyflow/react` + `d3-force`; degree sizing, search, **community detection + legend in v1** (synchronous label propagation, not Louvain/Leiden), explain panel then navigate |
 
 Gantt collision detection flags leaf tasks whose date span overlaps a sibling under the same summary row (`markCollisions` in `gantt.ts`) — rendered via a custom `collision` task type/CSS class on top of SVAR's `taskTypes`, since SVAR itself doesn't model resource/date conflicts.
 
 Both `MindMapView` and `KnowledgeGraphView` share `apps/web/src/components/graph/DocumentNode.tsx` (the React Flow node renderer + color palette) and `apps/web/src/lib/views/relation-graph.ts` (relation-field edge derivation, degree counts, community detection). Knowledge Graph additionally uses `apps/web/src/lib/views/force-layout.ts` (`d3-force`, run to completion once per data change — no live ticking since the view is read-only/derived).
 
-Mind-Map connections currently always write to the **first** `relation`-type schema field found in the workspace (there's no per-connection field picker yet); if no relation field exists, connecting is blocked with a toast pointing at Settings. Revisit if scopes need multiple distinct relation fields addressable from the canvas.
+### In-context document panel
+
+Kanban, Calendar, Mind-Map, and Roadmap/Gantt open/create documents in a shared `ViewDocumentPanel` (docked right) instead of navigating to `/editor` by default:
+
+1. **Create** → template picker (affinity-suggested templates first) → `createDocument` with optional seed metadata → lean TipTap editor in the panel.
+2. **Open** → load title + content + Origin in the panel; **Open full page** remains available.
+3. Seeded create contexts: Kanban column status/select; Calendar day date/`date_range`; Gantt today’s start (and end) date fields; Mind-Map child pre-fills **Origin** to the parent and places the node on the canvas (also writes the configured link relation when it is not Origin).
+
+### Universal Origin relation
+
+Every system template (including Blank) carries an essential `origin` relation field (`field_key: origin`, AI fill off). Scopes seed the schema field so any document can optionally link to a parent/source document. Relation search is scope-local for private/team scopes and org-wide (membership-constrained) for org workspaces.
+
+Mind-Map canvas connections prefer a dedicated relation field over Origin (`resolveMindMapRelationField`). If no non-Origin relation exists, connecting is blocked with a toast pointing at Settings.
 
 ## Rollout order
 

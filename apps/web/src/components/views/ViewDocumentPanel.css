@@ -1,0 +1,270 @@
+.view-document-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(100%, max(50vw, 420px));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--space-md) var(--space-md) var(--space-lg);
+  background: var(--color-editor-bg, var(--color-surface));
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md, -8px 0 24px rgba(0, 0, 0, 0.08));
+  overflow: hidden;
+  z-index: 6;
+}
+
+.view-document-panel--picker {
+  background: var(--color-surface);
+  gap: var(--space-sm);
+}
+
+.view-document-panel__chrome {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+  margin: 0 calc(-1 * var(--space-md));
+  padding: 0 var(--space-md) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.view-document-panel__chrome-label {
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.view-document-panel--picker .view-document-panel__chrome {
+  justify-content: space-between;
+  margin: 0;
+  padding: 0 0 var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.view-document-panel__picker-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.view-document-panel__intro {
+  margin: 0;
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+.view-document-panel__templates {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.view-document-panel__template {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.view-document-panel__template:hover {
+  border-color: var(--color-border-strong, var(--color-border));
+  background: var(--color-surface-hover, var(--color-bg-secondary));
+}
+
+.view-document-panel__template-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.view-document-panel__suggested {
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__template-desc {
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__error {
+  margin: 0;
+  flex-shrink: 0;
+  color: var(--color-danger, #b42318);
+}
+
+.view-document-panel__body {
+  --view-panel-content-top: var(--space-md);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+}
+
+.view-document-panel__editor-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Scoped editor chrome — do NOT import EditorView.css (it leaked into view engines). */
+.view-document-panel__article {
+  --editor-gutter-left: 8px;
+  --editor-gutter-right: 8px;
+  --editor-grid-gap: 8px;
+  max-width: none;
+  margin: 0;
+  /* Match properties scroll inset so title lines up with first property entry */
+  padding: var(--view-panel-content-top) var(--space-md) var(--space-xl);
+  position: relative;
+}
+
+.view-document-panel__article .editor-content__header,
+.view-document-panel__article .editor-content__body {
+  display: grid;
+  grid-template-columns: var(--editor-gutter-left) minmax(0, 1fr) var(--editor-gutter-right);
+  column-gap: var(--editor-grid-gap);
+  margin-bottom: 0;
+}
+
+.view-document-panel__article .editor-content__main {
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  justify-self: stretch;
+}
+
+.view-document-panel__article .editor-content__gutter {
+  pointer-events: none;
+}
+
+.view-document-panel__article .editor-content__title {
+  display: block;
+  width: 100%;
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text);
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  field-sizing: content;
+}
+
+.view-document-panel__article .editor-content__title::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__article .editor-content__title:focus-visible,
+.view-document-panel__article .editor-content__title:hover,
+.view-document-panel__article .editor-content__title:focus {
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.view-document-panel__article .editor-content__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 var(--space-md);
+  min-height: 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__article .editor-content__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-document-panel__tiptap {
+  min-height: 200px;
+}
+
+.view-document-panel .tiptap-editor-body {
+  min-height: 200px;
+}
+
+.view-document-panel .tiptap-editor-body p,
+.view-document-panel .tiptap-editor-body ul,
+.view-document-panel .tiptap-editor-body ol {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.view-document-panel .tiptap-editor-body h2 {
+  font-size: 18px;
+}
+
+.view-document-panel .tiptap-editor-body h3 {
+  font-size: 15px;
+}
+
+.view-document-panel .tiptap-editor-body table {
+  font-size: 13px;
+}
+
+/* Match RightPanel properties chrome: no outer padding; panel-shell owns scroll. */
+.view-document-panel__properties {
+  flex: 0 0 min(320px, 42%);
+  min-width: 240px;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg);
+  padding: 0;
+}
+
+.view-document-panel__properties .panel-shell {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  background: var(--color-bg);
+}
+
+.view-document-panel__properties .panel-shell__scroll {
+  padding: var(--view-panel-content-top) var(--space-md) var(--space-md);
+}
+
+/* First property label shares the same top edge as the document title */
+.view-document-panel__properties .props-list > .props-list__row:first-child {
+  padding-top: 0;
+}

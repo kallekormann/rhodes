@@ -208,6 +208,22 @@ export async function applyScopeComposition(
     if (seedError) {
       return { ok: false, message: seedError.message };
     }
+  } else {
+    // Still seed Origin when composition has no bundle metadata.
+    const { error: seedError } = await supabase.rpc("seed_scope_metadata_fields", {
+      ws_id: params.workspaceId,
+      fields: metadataFieldsToJson([
+        {
+          field_key: "origin",
+          field_label: "Origin",
+          field_type: "relation",
+          ai_fill_enabled: false,
+        },
+      ]),
+    });
+    if (seedError) {
+      return { ok: false, message: seedError.message };
+    }
   }
 
   const instanceSeed = await seedScopeViewInstances(

@@ -178,8 +178,7 @@
 }
 
 .editor-suspense-fallback {
-  flex: 1;
-  justify-content: center;
+  /* align="fill" already flex-centers; keep min height for empty shells */
   min-height: 200px;
 }
 

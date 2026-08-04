@@ -9,7 +9,7 @@ import { isBrowserOffline } from "@/lib/navigation/app-path";
 import { LoaderState } from "@/components/Loader";
 
 const viewLoading = (label: string) => (
-  <LoaderState label={label} />
+  <LoaderState label={label} align="fill" />
 );
 
 const DocumentsView = dynamic(

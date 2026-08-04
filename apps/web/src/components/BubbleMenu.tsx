@@ -94,18 +94,22 @@ export function BubbleMenu({
       role="toolbar"
       aria-label="Text formatting"
     >
-      <button
-        type="button"
-        className={`bubble-menu__ask ${askDisabled ? "bubble-menu__ask--disabled" : ""}`}
-        onClick={askDisabled ? undefined : onAsk}
-        disabled={askDisabled}
-        title={askDisabled ? askDisabledTitle : undefined}
-        aria-disabled={askDisabled}
-      >
-        <Sparkles size={16} strokeWidth={1.75} />
-        Ask
-      </button>
-      <span className="bubble-menu__divider" aria-hidden="true" />
+      {onAsk ? (
+        <>
+          <button
+            type="button"
+            className={`bubble-menu__ask ${askDisabled ? "bubble-menu__ask--disabled" : ""}`}
+            onClick={askDisabled ? undefined : onAsk}
+            disabled={askDisabled}
+            title={askDisabled ? askDisabledTitle : undefined}
+            aria-disabled={askDisabled}
+          >
+            <Sparkles size={16} strokeWidth={1.75} />
+            Ask
+          </button>
+          <span className="bubble-menu__divider" aria-hidden="true" />
+        </>
+      ) : null}
       {marks.map(({ id, icon: Icon, label }) => {
         if (id === "link") {
           return (

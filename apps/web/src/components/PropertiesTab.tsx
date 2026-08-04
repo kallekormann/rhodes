@@ -33,10 +33,8 @@ import {
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
-import {
-  DOCUMENT_TYPE_LABELS,
-  isEssentialTemplateFieldKey,
-} from "@rhodes/shared/system-templates";
+import { DOCUMENT_TYPE_LABELS, isEssentialTemplateFieldKey, resolveTemplateSchemaFieldKeys } from "@rhodes/shared/system-templates";
+import { isDocumentFresh } from "@/lib/documents/fresh-documents";
 import { upgradeCopyForFeature } from "@/lib/features/upgrade-copy";
 import { DocumentHistorySection, type ActivityNavigateTarget } from "@/components/DocumentHistorySection";
 import "./PropertiesTab.css";
@@ -113,6 +111,8 @@ type PropertiesTabProps = {
   documentId?: string | null;
   onVersionRestored?: () => void;
   onNavigateToActivity?: (target: ActivityNavigateTarget) => void;
+  /** When false, skip Activity/Versions UI and its network fetches. */
+  showHistory?: boolean;
 };
 
 function UseCasesEditor({
@@ -229,9 +229,12 @@ export function PropertiesTab({
   documentId = null,
   onVersionRestored,
   onNavigateToActivity,
+  showHistory,
 }: PropertiesTabProps) {
   const { showToast, featureGates } = useApp();
   const canManageProperties = featureGates.can("properties.manage");
+  const historyVisible =
+    showHistory ?? (documentId != null && !isDocumentFresh(documentId));
 
   const [internalStage, setInternalStage] = useState<PropertiesPanelStage>("view");
   const stage = stageProp ?? internalStage;
@@ -268,6 +271,17 @@ export function PropertiesTab({
   const editableSchemas = schemas.filter(
     (field) => field.field_key !== "document_type",
   );
+
+  // View mode: only Tier B fields for this document's template — not every
+  // schema seeded into the scope (e.g. hide experiment fields on Meeting Notes).
+  // Manage / Add keep the full scope list.
+  const templateFieldKeys = resolveTemplateSchemaFieldKeys(metadata);
+  const visibleSchemas =
+    stage === "view" && templateFieldKeys
+      ? editableSchemas.filter((field) => templateFieldKeys.has(field.field_key))
+      : editableSchemas;
+  const visibleGroups =
+    stage === "view" && templateFieldKeys ? [] : groups;
 
   const handleMetadataFieldChange = useCallback(
     (fieldKey: string, value: MetadataFieldValue) => {
@@ -532,19 +546,20 @@ export function PropertiesTab({
           </div>
         ) : (
           <dl className="props-list__fields">
-            {editableSchemas.map((field) => (
+            {visibleSchemas.map((field) => (
               <SchemaFieldRow
                 key={field.id}
                 field={field}
                 value={readMetadataFieldValue(metadata, field)}
                 onChange={(value) => handleMetadataFieldChange(field.field_key, value)}
                 aiSuggested={field.ai_fill_enabled === true && aiFilledKeys.has(field.field_key)}
+                excludeDocumentId={documentId}
               />
             ))}
           </dl>
         )}
 
-        {groups.map((group) =>
+        {(isManage ? groups : visibleGroups).map((group) =>
           isManage ? (
             <PropertyManageGroup
               key={group.id}
@@ -563,19 +578,20 @@ export function PropertiesTab({
           ),
         )}
 
-        {editableSchemas.length === 0 && groups.length === 0 && (
+        {(isManage ? editableSchemas : visibleSchemas).length === 0 &&
+          (isManage ? groups : visibleGroups).length === 0 && (
           <p className="caption property-panel__empty">
             No properties on this document yet. Use Manage to add fields or groups.
           </p>
         )}
 
-        {stage === "view" && (
+        {stage === "view" && historyVisible ? (
           <DocumentHistorySection
             documentId={documentId}
             onVersionRestored={onVersionRestored}
             onNavigateToActivity={onNavigateToActivity}
           />
-        )}
+        ) : null}
       </div>
     );
   };

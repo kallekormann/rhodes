@@ -12,8 +12,6 @@
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
-  /* Cap tab strip so trailing period/settings always stay on-screen. */
-  max-width: min(100%, calc(100% - 22rem));
   gap: 0;
 }
 
@@ -103,7 +101,9 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
+  margin-left: auto;
   white-space: nowrap;
 }
 

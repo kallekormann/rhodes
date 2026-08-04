@@ -757,7 +757,12 @@ export function EditorView() {
   return (
     <Suspense
       fallback={
-        <LoaderState label="Loading editor…" size="m" className="editor-suspense-fallback" />
+        <LoaderState
+          label="Loading editor…"
+          size="m"
+          align="fill"
+          className="editor-suspense-fallback"
+        />
       }
     >
       <EditorViewContent />

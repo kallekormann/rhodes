@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ScopeViewInstanceRecord } from "@rhodes/shared/view-engine";
+import { isCacheFresh } from "@/lib/cache/swr-cache";
 
 type UseScopeViewInstancesResult = {
   instances: ScopeViewInstanceRecord[];
@@ -34,13 +35,54 @@ type UseScopeViewInstancesResult = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
-const viewInstanceCache = new Map<string, ScopeViewInstanceRecord[]>();
+type ViewInstanceCacheEntry = {
+  instances: ScopeViewInstanceRecord[];
+  fetchedAt: number;
+};
+
+const viewInstanceCache = new Map<string, ViewInstanceCacheEntry>();
+const viewInstanceInFlight = new Map<string, Promise<ViewInstanceCacheEntry>>();
 
 function writeViewInstanceCache(
   workspaceId: string,
   instances: ScopeViewInstanceRecord[],
 ) {
-  viewInstanceCache.set(workspaceId, instances);
+  viewInstanceCache.set(workspaceId, {
+    instances,
+    fetchedAt: Date.now(),
+  });
+}
+
+async function fetchViewInstances(
+  workspaceId: string,
+): Promise<ViewInstanceCacheEntry> {
+  const pending = viewInstanceInFlight.get(workspaceId);
+  if (pending) return pending;
+
+  const job = (async () => {
+    const response = await fetch(
+      `/app/api/workspaces/${workspaceId}/view-instances`,
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        typeof data.error === "string" ? data.error : "Failed to load views",
+      );
+    }
+    const instances = Array.isArray(data.instances)
+      ? (data.instances as ScopeViewInstanceRecord[])
+      : [];
+    const entry = { instances, fetchedAt: Date.now() };
+    viewInstanceCache.set(workspaceId, entry);
+    return entry;
+  })();
+
+  viewInstanceInFlight.set(workspaceId, job);
+  try {
+    return await job;
+  } finally {
+    viewInstanceInFlight.delete(workspaceId);
+  }
 }
 
 export function useScopeViewInstances(
@@ -48,47 +90,47 @@ export function useScopeViewInstances(
 ): UseScopeViewInstancesResult {
   const cached = workspaceId ? viewInstanceCache.get(workspaceId) : undefined;
   const [instances, setInstances] = useState<ScopeViewInstanceRecord[]>(
-    () => cached ?? [],
+    () => cached?.instances ?? [],
   );
   const [loading, setLoading] = useState(() => Boolean(workspaceId) && !cached);
   const [hasLoaded, setHasLoaded] = useState(() => Boolean(cached));
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!workspaceId) {
-      setInstances([]);
-      setError(null);
-      setLoading(false);
-      setHasLoaded(false);
-      return;
-    }
-
-    const hasCache = viewInstanceCache.has(workspaceId);
-    if (!hasCache) setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/app/api/workspaces/${workspaceId}/view-instances`,
-      );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(
-          typeof data.error === "string" ? data.error : "Failed to load views",
-        );
+  const refresh = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!workspaceId) {
+        setInstances([]);
+        setError(null);
+        setLoading(false);
+        setHasLoaded(false);
+        return;
       }
-      const next = Array.isArray(data.instances)
-        ? (data.instances as ScopeViewInstanceRecord[])
-        : [];
-      viewInstanceCache.set(workspaceId, next);
-      setInstances(next);
-    } catch (err) {
-      if (!hasCache) setInstances([]);
-      setError(err instanceof Error ? err.message : "Failed to load views");
-    } finally {
-      setLoading(false);
-      setHasLoaded(true);
-    }
-  }, [workspaceId]);
+
+      const hit = viewInstanceCache.get(workspaceId);
+      if (hit && !options?.force && isCacheFresh(hit.fetchedAt)) {
+        setInstances(hit.instances);
+        setLoading(false);
+        setHasLoaded(true);
+        setError(null);
+        return;
+      }
+
+      if (!hit) setLoading(true);
+      setError(null);
+      try {
+        if (options?.force) viewInstanceInFlight.delete(workspaceId);
+        const entry = await fetchViewInstances(workspaceId);
+        setInstances(entry.instances);
+      } catch (err) {
+        if (!hit) setInstances([]);
+        setError(err instanceof Error ? err.message : "Failed to load views");
+      } finally {
+        setLoading(false);
+        setHasLoaded(true);
+      }
+    },
+    [workspaceId],
+  );
 
   useEffect(() => {
     if (!workspaceId) {
@@ -98,7 +140,7 @@ export function useScopeViewInstances(
     }
     const existing = viewInstanceCache.get(workspaceId);
     if (existing) {
-      setInstances(existing);
+      setInstances(existing.instances);
       setHasLoaded(true);
       setLoading(false);
     } else {
@@ -222,7 +264,7 @@ export function useScopeViewInstances(
     loading,
     hasLoaded,
     error,
-    refresh,
+    refresh: () => refresh({ force: true }),
     updateInstance,
     createInstance,
     deleteInstance,

@@ -394,12 +394,6 @@ export function SettingsView() {
   }, [canInviteTeam, effectiveTeamRole, teamFeatureGates]);
 
   useEffect(() => {
-    if (section === "Team" && teamScopeId) {
-      void refreshMembers();
-    }
-  }, [section, teamScopeId, refreshMembers]);
-
-  useEffect(() => {
     setDisplayName(session.displayName);
   }, [session.displayName]);
 
@@ -1035,6 +1029,7 @@ export function SettingsView() {
               ) : scopePolicyData ? (
                 <ScopeCompositionSettings
                   bundleIds={scopePolicyData.bundle_ids}
+                  enabledViews={scopePolicyData.enabled_views}
                   setupConfig={scopePolicyData.setup_config}
                   canEdit={canEditScopePolicy}
                   saving={scopePolicySaving}

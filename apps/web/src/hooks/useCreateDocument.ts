@@ -9,6 +9,7 @@ import {
 import { ensureDocsVaultUnlocked } from "@/lib/offline/offline-vault-session";
 import { createLocalDocumentId } from "@/lib/offline/local-document";
 import { notifyDocumentSyncStatus } from "@/lib/offline/sync-engine";
+import { markDocumentFresh } from "@/lib/documents/fresh-documents";
 
 function offlineRecordToDocument(record: {
   id: string;
@@ -68,6 +69,7 @@ export function useCreateDocument(
         });
         await commitOfflineDocumentCreate({ document, create });
         notifyDocumentSyncStatus(id, "pending");
+        markDocumentFresh(id);
         return offlineRecordToDocument(document);
       }
 
@@ -89,7 +91,9 @@ export function useCreateDocument(
         );
       }
 
-      return data.document as DocumentRecord;
+      const document = data.document as DocumentRecord;
+      markDocumentFresh(document.id);
+      return document;
     },
     [workspaceId, online, userId],
   );

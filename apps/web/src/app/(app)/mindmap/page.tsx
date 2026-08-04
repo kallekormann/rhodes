@@ -1,5 +1,1 @@
-import { DocumentsView } from "@/views/DocumentsView";
-
-export default function MindMapPage() {
-  return <DocumentsView />;
-}
+export { ScopeEnginePage as default } from "@/components/ScopeEnginePage";

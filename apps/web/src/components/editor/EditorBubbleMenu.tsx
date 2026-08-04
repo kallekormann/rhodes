@@ -338,7 +338,7 @@ export function EditorBubbleMenu({
         }}
         onLinkClose={() => setLinkOpen(false)}
         onMarkClick={handleMarkClick}
-        onAsk={handleAsk}
+        onAsk={onAsk ? handleAsk : undefined}
         askDisabled={askOffline}
         askDisabledTitle="Ask unavailable offline — you can still write"
         onLinkApply={applyLink}

@@ -1,4 +1,5 @@
-/* Apple-style overlay scrollbar — thin, visible while scrolling or on hover */
+/* Apple-style overlay scrollbar — thin, visible while scrolling or on hover.
+   Transparent track (no white/light gutter) in both light and dark themes. */
 
 .overlay-scrollbar {
   scrollbar-width: thin;
@@ -12,9 +13,11 @@
 
 .overlay-scrollbar::-webkit-scrollbar {
   width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 
-.overlay-scrollbar::-webkit-scrollbar-track {
+.overlay-scrollbar::-webkit-scrollbar-track,
+.overlay-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
 

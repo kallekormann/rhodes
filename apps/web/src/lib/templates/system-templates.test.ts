@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ESSENTIAL_TEMPLATE_FIELD_KEYS,
   SYSTEM_TEMPLATE_SEEDS,
+  resolveTemplateSchemaFieldKeys,
 } from "@rhodes/shared/system-templates";
 import { parseStatusOptions } from "@/lib/metadata/schemas";
 import {
@@ -416,5 +417,33 @@ describe("parseTemplateMetadata", () => {
       default_properties: { status: "draft" },
     });
     expect(meta).toEqual({ status: "draft", document_type: "report" });
+  });
+});
+
+describe("resolveTemplateSchemaFieldKeys", () => {
+  it("returns Meeting Notes fields (not experiment fields) by slug", () => {
+    const keys = resolveTemplateSchemaFieldKeys({
+      template_slug: "meeting-notes",
+      document_type: "meeting_notes",
+    });
+    expect(keys).not.toBeNull();
+    expect(keys?.has("meeting_date")).toBe(true);
+    expect(keys?.has("attendees")).toBe(true);
+    expect(keys?.has("status")).toBe(true);
+    expect(keys?.has("experiment_status")).toBe(false);
+    expect(keys?.has("confidence")).toBe(false);
+  });
+
+  it("resolves by document_type when slug is missing", () => {
+    const keys = resolveTemplateSchemaFieldKeys({
+      document_type: "meeting_notes",
+    });
+    expect(keys?.has("meeting_type")).toBe(true);
+    expect(keys?.has("funnel_stage")).toBe(false);
+  });
+
+  it("returns null when classification is unknown", () => {
+    expect(resolveTemplateSchemaFieldKeys({})).toBeNull();
+    expect(resolveTemplateSchemaFieldKeys(null)).toBeNull();
   });
 });

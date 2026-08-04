@@ -1,5 +1,1 @@
-import { DocumentsView } from "@/views/DocumentsView";
-
-export default function DashboardPage() {
-  return <DocumentsView />;
-}
+export { ScopeEnginePage as default } from "@/components/ScopeEnginePage";

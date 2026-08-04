@@ -36,7 +36,15 @@ export function resolveMindMapRelationField(
     );
     if (matched) return matched;
   }
-  return schemas.find((schema) => schema.field_type === "relation") ?? null;
+  // Prefer a dedicated link field over the universal Origin property.
+  return (
+    schemas.find(
+      (schema) =>
+        schema.field_type === "relation" && schema.field_key !== "origin",
+    ) ??
+    schemas.find((schema) => schema.field_type === "relation") ??
+    null
+  );
 }
 
 /** Places a newly-added node near the layout's centroid, offset so it doesn't stack on others. */

@@ -12,7 +12,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import type { DocumentRecord } from "@/hooks/useDocument";
@@ -44,6 +44,8 @@ import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
 import { GroupLabel } from "@/components/SectionHeader";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ViewDocumentPanelHost } from "@/components/views/ViewDocumentPanelHost";
+import type { ViewDocumentPanelState } from "@/components/views/view-document-panel-types";
 import {
   ViewDockPanel,
   ViewSettingsField,
@@ -110,7 +112,7 @@ function KanbanCard({
       className={`kanban-card${isDragging ? " kanban-card--dragging" : ""}`}
       {...listeners}
       {...attributes}
-      onDoubleClick={() => onOpen(document)}
+      onClick={() => onOpen(document)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -128,11 +130,15 @@ function KanbanColumnPane({
   documents,
   resolveAuthor,
   onOpen,
+  onAdd,
+  canAdd,
 }: {
   column: KanbanColumn;
   documents: DocumentRecord[];
   resolveAuthor: (doc: DocumentRecord) => AuthorInfo | null;
   onOpen: (doc: DocumentRecord) => void;
+  onAdd?: () => void;
+  canAdd?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const [searchOpen, setSearchOpen] = useState(false);
@@ -187,6 +193,15 @@ function KanbanColumnPane({
           <>
             <GroupLabel className="kanban-column__title">{column.label}</GroupLabel>
             <div className="kanban-column__header-meta">
+              {canAdd && onAdd ? (
+                <IconButton
+                  icon={Plus}
+                  label={`Add card to ${column.label}`}
+                  size="small"
+                  iconSize={14}
+                  onClick={onAdd}
+                />
+              ) : null}
               <IconButton
                 icon={Search}
                 label={`Search ${column.label}`}
@@ -199,7 +214,7 @@ function KanbanColumnPane({
           </>
         )}
       </header>
-      <div className="kanban-column__cards">
+      <div className="kanban-column__cards overlay-scrollbar">
         {filtered.map((doc) => (
           <KanbanCard
             key={doc.id}
@@ -316,7 +331,7 @@ export function KanbanView() {
   } = useApp();
 
   const scopesPending = !workspaceId;
-  const { documents, loading, error, updateDocument } = useDocuments(
+  const { documents, loading, error, updateDocument, refresh } = useDocuments(
     workspaceId,
     "all",
     session.userId,
@@ -343,6 +358,9 @@ export function KanbanView() {
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [panel, setPanel] = useState<ViewPanelMode>(null);
+  const [docPanel, setDocPanel] = useState<ViewDocumentPanelState>({
+    mode: "closed",
+  });
   const [savingSettings, setSavingSettings] = useState(false);
   /** Optimistic metadata overrides so cards move instantly on drop. */
   const [optimisticMetadata, setOptimisticMetadata] = useState<
@@ -392,6 +410,7 @@ export function KanbanView() {
 
   useEffect(() => {
     setPanel(null);
+    setDocPanel({ mode: "closed" });
   }, [workspaceId, activeInstanceId]);
 
   useEffect(() => {
@@ -433,7 +452,9 @@ export function KanbanView() {
 
   const activeDocs = useMemo(() => {
     const base = documents.filter(
-      (doc) => !isDocumentArchived(doc.metadata) && isDocumentNativeToScope(doc),
+      (doc) =>
+        !isDocumentArchived(doc.metadata) &&
+        isDocumentNativeToScope(doc, workspaceId),
     );
     if (optimisticMetadata.size === 0) return base;
     return base.map((doc) => {
@@ -441,7 +462,7 @@ export function KanbanView() {
       if (!override) return doc;
       return { ...doc, metadata: override };
     });
-  }, [documents, optimisticMetadata]);
+  }, [documents, optimisticMetadata, workspaceId]);
 
   const docsByColumn = useMemo(() => {
     const map = new Map<string, DocumentRecord[]>();
@@ -466,10 +487,35 @@ export function KanbanView() {
   );
 
   const openDoc = (doc: DocumentRecord) => {
-    cacheDocumentTitle(doc.id, doc.title);
-    setDocumentTitle(doc.title);
-    setDocumentId(doc.id);
-    openEditor(doc.id);
+    setPanel(null);
+    setDocPanel({ mode: "editing", documentId: doc.id });
+  };
+
+  const openFullPage = (documentId: string, title?: string) => {
+    if (title) {
+      cacheDocumentTitle(documentId, title);
+      setDocumentTitle(title);
+    }
+    setDocumentId(documentId);
+    setDocPanel({ mode: "closed" });
+    openEditor(documentId);
+  };
+
+  const startCreateInColumn = (column: KanbanColumn) => {
+    if (!groupField || !canWriteActiveScope) return;
+    const seedMetadata =
+      column.value != null
+        ? withUserMetadataValue({}, groupField.field_key, column.value)
+        : {};
+    setPanel(null);
+    setDocPanel({
+      mode: "pick-template",
+      viewType: "kanban",
+      createContext: {
+        kind: "seed",
+        metadata: seedMetadata,
+      },
+    });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -559,7 +605,10 @@ export function KanbanView() {
               trailing={
                 <ViewHeaderActions
                   panel={panel}
-                  onPanelChange={setPanel}
+                  onPanelChange={(next) => {
+                    setDocPanel({ mode: "closed" });
+                    setPanel(next);
+                  }}
                   canEditSettings={canWriteActiveScope}
                 />
               }
@@ -571,7 +620,7 @@ export function KanbanView() {
             {error ? <p className="caption kanban-view__error">{error}</p> : null}
 
             {boardLoading ? (
-              <LoaderState label="Loading board…" />
+              <LoaderState label="Loading board…" align="fill" />
             ) : instances.length === 0 ? (
               <p className="caption kanban-view__empty">
                 {canWriteActiveScope
@@ -590,7 +639,7 @@ export function KanbanView() {
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
               >
-                <div className="kanban-view__board-scroll">
+                <div className="kanban-view__board-scroll overlay-scrollbar">
                   <div className="kanban-board" role="list">
                     {columns.map((column) => (
                       <KanbanColumnPane
@@ -599,6 +648,8 @@ export function KanbanView() {
                         documents={docsByColumn.get(column.id) ?? []}
                         resolveAuthor={resolveAuthor}
                         onOpen={openDoc}
+                        canAdd={canWriteActiveScope}
+                        onAdd={() => startCreateInColumn(column)}
                       />
                     ))}
                   </div>
@@ -641,6 +692,19 @@ export function KanbanView() {
             onClose={() => setPanel(null)}
           />
         ) : null}
+
+        <ViewDocumentPanelHost
+          state={docPanel}
+          onClose={() => setDocPanel({ mode: "closed" })}
+          onOpenFullPage={openFullPage}
+          onDocumentCreated={(doc) => {
+            void refresh();
+            setDocPanel({ mode: "editing", documentId: doc.id });
+          }}
+          onDocumentUpdated={() => {
+            void refresh();
+          }}
+        />
       </div>
     </DocumentsSyncGate>
   );

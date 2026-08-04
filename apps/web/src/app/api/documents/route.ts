@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import {
   attachShareContextToDocuments,
-  enrichDocumentListForWorkspace,
   fetchIncomingSharedDocuments,
 } from "@/lib/documents/enrich-share-context";
 import { extractPlainText } from "@/lib/documents/plain-text";
@@ -208,23 +207,23 @@ export async function GET(request: Request) {
     return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
   }
 
-  const includePersonalUserShares = await workspaceAcceptsPersonalUserShares(
-    supabase,
-    parsed.data.workspace_id,
-  );
+  // Board engines request filter=all without bodies — workspace rows only.
+  if (parsed.data.filter === "all" && !parsed.data.include_body) {
+    return withSecurityHeaders(NextResponse.json({ documents: data ?? [] }));
+  }
 
-  const enriched = await enrichDocumentListForWorkspace(
+  // recent / favorites / archive: this scope's documents only.
+  // Incoming shares belong on filter=shared — merging them here made every
+  // personal scope look like it contained nearly all of the user's docs.
+  const enrichedOwned = await attachShareContextToDocuments(
     supabase,
     parsed.data.workspace_id,
     data ?? [],
-    documentFields,
-    {
-      userId: user.id,
-      includePersonalUserShares,
-    },
+    new Set(),
+    new Map(),
   );
 
-  return withSecurityHeaders(NextResponse.json({ documents: enriched }));
+  return withSecurityHeaders(NextResponse.json({ documents: enrichedOwned }));
 }
 
 export async function POST(request: Request) {

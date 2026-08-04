@@ -7,15 +7,14 @@ import {
 } from "./scope-bundles";
 import {
   type ViewTemplateAffinityMap,
-  VIEW_TEMPLATE_AFFINITY,
   getRecommendedTemplatesForView,
-  viewsSatisfiedByTemplates,
 } from "./view-template-affinity";
 import {
   ADDITIONAL_SCOPE_VIEW_CATALOG,
   validateScopeCompositionViewSelection,
 } from "./scope-views";
 import type { ViewPreset } from "./scope-bundles";
+import { getViewPresetById } from "./scope-bundles";
 
 export type ScopeCompositionInput = {
   selectedViewPresetIds: string[];
@@ -124,16 +123,126 @@ function mergeMetadataFields(
   return fields;
 }
 
+/** Templates still required by remaining views and/or selected bundles. */
+export function templatesRequiredByViewsAndBundles(
+  viewIds: Iterable<string>,
+  bundleIds: Iterable<string>,
+  bundles: readonly BundleDefinition[] = BUNDLE_CATALOG,
+): Set<string> {
+  const required = new Set<string>();
+  for (const viewId of viewIds) {
+    for (const slug of getRecommendedTemplatesForView(viewId)) {
+      required.add(slug);
+    }
+  }
+  const bundleIdSet = new Set(
+    [...bundleIds].map((id) => id.trim()).filter(Boolean),
+  );
+  for (const bundle of bundles) {
+    if (!bundleIdSet.has(bundle.id)) continue;
+    for (const slug of bundle.templateSlugs) {
+      required.add(slug);
+    }
+  }
+  return required;
+}
+
+/** Bundle labels that contribute a page type via their presets (for lock UI). */
+export function bundlesLockingBaseView(
+  viewId: string,
+  bundleIds: Iterable<string>,
+  bundles: readonly BundleDefinition[] = BUNDLE_CATALOG,
+): BundleDefinition[] {
+  const selected = new Set(
+    [...bundleIds].map((id) => id.trim()).filter(Boolean),
+  );
+  return bundles.filter(
+    (bundle) =>
+      selected.has(bundle.id) &&
+      bundle.viewPresets.some((preset) => preset.baseViewType === viewId),
+  );
+}
+
 /**
- * Merge user selections and bundles; infer missing views/templates bidirectionally.
- * Pure function — safe to run client-side in the wizard and server-side on create.
+ * Apply a page-type toggle to composition draft fields.
+ * Enabling adds recommended templates; disabling drops that page type's orphan
+ * presets and recommended templates that nothing else still needs.
+ * Presets are bundle-owned — they are never listed as selectable views.
+ */
+export function applyBaseViewToggle(
+  draft: {
+    selectedBaseViewIds: string[];
+    selectedViewPresetIds: string[];
+    selectedTemplateSlugs: string[];
+    selectedBundleIds: string[];
+  },
+  viewId: string,
+  options: {
+    currentlyEnabled: boolean;
+    bundles?: readonly BundleDefinition[];
+  },
+): typeof draft {
+  const bundles = options.bundles ?? BUNDLE_CATALOG;
+  if (bundlesLockingBaseView(viewId, draft.selectedBundleIds, bundles).length > 0) {
+    return draft;
+  }
+
+  if (!options.currentlyEnabled) {
+    const recommended = getRecommendedTemplatesForView(viewId);
+    return {
+      ...draft,
+      selectedBaseViewIds: uniqueOrdered([
+        ...draft.selectedBaseViewIds,
+        viewId,
+      ]),
+      selectedTemplateSlugs: uniqueOrdered([
+        ...draft.selectedTemplateSlugs,
+        ...recommended,
+      ]),
+    };
+  }
+
+  const remainingViews = draft.selectedBaseViewIds.filter((id) => id !== viewId);
+  const remainingPresets = draft.selectedViewPresetIds.filter((presetId) => {
+    const preset = getViewPresetById(presetId);
+    return preset?.baseViewType !== viewId;
+  });
+  const stillRequired = templatesRequiredByViewsAndBundles(
+    remainingViews,
+    draft.selectedBundleIds,
+    bundles,
+  );
+  // Also keep templates required by remaining presets' page types (legacy picks).
+  for (const presetId of remainingPresets) {
+    const preset = getViewPresetById(presetId);
+    if (!preset) continue;
+    for (const slug of getRecommendedTemplatesForView(preset.baseViewType)) {
+      stillRequired.add(slug);
+    }
+  }
+  const droppedRecommended = new Set(getRecommendedTemplatesForView(viewId));
+  const remainingTemplates = draft.selectedTemplateSlugs.filter(
+    (slug) => stillRequired.has(slug) || !droppedRecommended.has(slug),
+  );
+
+  return {
+    ...draft,
+    selectedBaseViewIds: remainingViews,
+    selectedViewPresetIds: remainingPresets,
+    selectedTemplateSlugs: remainingTemplates,
+  };
+}
+
+/**
+ * Merge user selections and bundles; views drive recommended templates.
+ * Presets come from bundles (and legacy setup_config picks) — they are tabs on a
+ * page type, not additional page types. Templates do not force-enable views.
  */
 export function resolveScopeComposition(
   input: ScopeCompositionInput,
   options: ResolveScopeCompositionOptions = {},
 ): ScopeCompositionOutcome {
   const catalog = options.bundles ?? BUNDLE_CATALOG;
-  const affinity = options.affinity ?? VIEW_TEMPLATE_AFFINITY;
 
   const explicitBundles: BundleDefinition[] = [];
   const seenBundleIds = new Set<string>();
@@ -167,6 +276,7 @@ export function resolveScopeComposition(
     ...bundlePresetIds,
   ]);
 
+  // Page types: explicit picks + page types implied by presets/bundles (tabs).
   const explicitBaseViews = uniqueOrdered([
     ...input.selectedBaseViewIds,
     ...resolvePresetBaseViews(explicitViewPresetIds, catalog),
@@ -182,7 +292,13 @@ export function resolveScopeComposition(
   const templateSlugs = new Set(explicitTemplateSlugs);
   const enabledViews = new Set(explicitBaseViews);
 
-  // View → templates: auto-add recommended templates for each selected view.
+  // Blank is always available — header + creates from this template.
+  if (!templateSlugs.has("blank")) {
+    templateSlugs.add("blank");
+    inferredTemplates.add("blank");
+  }
+
+  // View → templates: auto-add recommended templates for each enabled page type.
   for (const viewId of enabledViews) {
     for (const slug of getRecommendedTemplatesForView(viewId)) {
       if (!templateSlugs.has(slug)) {
@@ -192,10 +308,10 @@ export function resolveScopeComposition(
     }
   }
 
-  // Templates → views: enable views when template set satisfies minForView.
-  for (const viewId of viewsSatisfiedByTemplates(templateSlugs, affinity)) {
-    if (!enabledViews.has(viewId)) {
-      enabledViews.add(viewId);
+  // Page types implied only by presets (not explicit base picks) count as inferred
+  // for UI messaging — they are not separately selectable "views".
+  for (const viewId of resolvePresetBaseViews(explicitViewPresetIds, catalog)) {
+    if (!input.selectedBaseViewIds.includes(viewId)) {
       inferredViews.add(viewId);
     }
   }
@@ -222,10 +338,20 @@ export function resolveScopeComposition(
   }
 
   const metadataFields = mergeMetadataFields(explicitBundles);
+  // Every scope gets Origin so documents can link to a parent/source document.
+  if (!metadataFields.some((field) => field.field_key === "origin")) {
+    metadataFields.unshift({
+      field_key: "origin",
+      field_label: "Origin",
+      field_type: "relation",
+      ai_fill_enabled: false,
+    });
+  }
   const setupConfig: ScopeSetupConfig = {
-    viewPresetIds: viewPresetIdsList,
+    // Persist explicit picks only — bundle presets/templates re-enter via bundle_ids.
+    viewPresetIds: uniqueOrdered(input.selectedViewPresetIds),
     baseViewIds: uniqueOrdered(input.selectedBaseViewIds),
-    templateSlugs: templateSlugsList,
+    templateSlugs: uniqueOrdered(input.selectedTemplateSlugs),
     featuredTemplateSlugs: templateSlugsList.slice(0, 6),
     bundleIds: bundleIdsList,
     compositionSource: "api",

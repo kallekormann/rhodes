@@ -5,6 +5,7 @@ import { RadioGroup } from "@/components/Radio";
 import { Toggle } from "@/components/Toggle";
 import { GroupLabel } from "@/components/SectionHeader";
 import type { OrgPolicy } from "@rhodes/shared/scope-policies";
+import { createTimedCache, isCacheFresh } from "@/lib/cache/swr-cache";
 import "./ScopeSettingsPanels.css";
 
 type OrgPolicySettingsProps = {
@@ -13,29 +14,54 @@ type OrgPolicySettingsProps = {
   canEdit: boolean;
 };
 
+const orgPolicyCache = createTimedCache<OrgPolicy>();
+
+async function fetchOrgPolicy(orgId: string): Promise<OrgPolicy> {
+  const response = await fetch(`/app/api/organizations/${orgId}/policy`);
+  const body = (await response.json().catch(() => ({}))) as {
+    policy?: OrgPolicy;
+    error?: string;
+  };
+  if (!response.ok) throw new Error(body.error ?? "Couldn't load org policy");
+  if (!body.policy) throw new Error("Couldn't load org policy");
+  return body.policy;
+}
+
 export function OrgPolicySettings({ orgId, orgName, canEdit }: OrgPolicySettingsProps) {
-  const [policy, setPolicy] = useState<OrgPolicy | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cached = orgPolicyCache.get(orgId);
+  const [policy, setPolicy] = useState<OrgPolicy | null>(() => cached?.value ?? null);
+  const [loading, setLoading] = useState(() => !cached);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/app/api/organizations/${orgId}/policy`);
-      const body = (await response.json().catch(() => ({}))) as {
-        policy?: OrgPolicy;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(body.error ?? "Couldn't load org policy");
-      setPolicy(body.policy ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't load org policy");
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  const load = useCallback(
+    async (options?: { force?: boolean }) => {
+      const hit = orgPolicyCache.get(orgId);
+      if (hit && !options?.force && isCacheFresh(hit.fetchedAt)) {
+        setPolicy(hit.value);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      if (!hit) setLoading(true);
+      setError(null);
+      try {
+        const { value } = await orgPolicyCache.getOrFetch(
+          orgId,
+          () => fetchOrgPolicy(orgId),
+          { force: options?.force },
+        );
+        setPolicy(value);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't load org policy");
+        if (!hit) setPolicy(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [orgId],
+  );
 
   useEffect(() => {
     void load();
@@ -56,7 +82,10 @@ export function OrgPolicySettings({ orgId, orgName, canEdit }: OrgPolicySettings
         error?: string;
       };
       if (!response.ok) throw new Error(body.error ?? "Couldn't save");
-      setPolicy(body.policy ?? null);
+      if (body.policy) {
+        orgPolicyCache.set(orgId, body.policy);
+        setPolicy(body.policy);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save");
     } finally {
@@ -64,7 +93,7 @@ export function OrgPolicySettings({ orgId, orgName, canEdit }: OrgPolicySettings
     }
   };
 
-  if (loading) {
+  if (loading && !policy) {
     return <p className="caption settings-section__empty">Loading organization settings…</p>;
   }
 

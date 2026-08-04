@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentFilter } from "@/lib/documents/schemas";
 import type { DocumentRecord } from "@/hooks/useDocument";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -28,6 +28,8 @@ import {
   type WorkspaceSyncState,
 } from "@/lib/offline/workspace-sync";
 import { bodyRichness } from "@/lib/offline/document-body";
+import { isCacheFresh } from "@/lib/cache/swr-cache";
+import { markDocumentFresh } from "@/lib/documents/fresh-documents";
 
 type DocumentsListCacheEntry = {
   documents: DocumentRecord[];
@@ -36,6 +38,15 @@ type DocumentsListCacheEntry = {
 };
 
 const documentsListCache = new Map<string, DocumentsListCacheEntry>();
+
+/** Board `filter=all` lists can be large; don't abort into a tiny offline fallback. */
+const FETCH_TIMEOUT_MS: Record<DocumentFilter, number> = {
+  all: 30_000,
+  recent: 15_000,
+  favorites: 15_000,
+  archive: 15_000,
+  shared: 20_000,
+};
 
 function documentsListCacheKey(
   workspaceId: string,
@@ -61,6 +72,16 @@ function writeDocumentsListCache(
     ...entry,
     fetchedAt: Date.now(),
   });
+}
+
+function scopeDocumentsToWorkspace(
+  docs: DocumentRecord[],
+  workspaceId: string,
+  filter: DocumentFilter,
+): DocumentRecord[] {
+  // Shared tab intentionally includes docs owned by other workspaces.
+  if (filter === "shared") return docs;
+  return docs.filter((doc) => doc.workspace_id === workspaceId);
 }
 
 async function mergePendingLocalDocuments(
@@ -160,6 +181,9 @@ export function useDocuments(
   userId?: string | null,
 ) {
   const { online } = useOnlineStatus(workspaceId);
+  const listKey = workspaceId
+    ? documentsListCacheKey(workspaceId, filter)
+    : null;
   const cachedList = readDocumentsListCache(workspaceId, filter);
   const [documents, setDocuments] = useState<DocumentRecord[]>(
     () => cachedList?.documents ?? [],
@@ -181,13 +205,68 @@ export function useDocuments(
   const refreshGeneration = useRef(0);
   const documentsRef = useRef(documents);
   documentsRef.current = documents;
+  const listKeyRef = useRef<string | null>(listKey);
 
-  const refresh = useCallback(async () => {
+  // Scope switch must never leave the previous workspace's rows on screen.
+  useEffect(() => {
+    if (listKeyRef.current === listKey) return;
+    listKeyRef.current = listKey;
+    refreshGeneration.current += 1;
+
+    if (!workspaceId) {
+      setDocuments([]);
+      setLoading(false);
+      setOfflineSource(false);
+      setError(null);
+      return;
+    }
+
+    const cached = readDocumentsListCache(workspaceId, filter);
+    if (cached && !cached.offlineSource) {
+      setDocuments(
+        scopeDocumentsToWorkspace(cached.documents, workspaceId, filter),
+      );
+      setOfflineSource(false);
+      setLoading(false);
+    } else if (cached?.offlineSource) {
+      setDocuments(
+        scopeDocumentsToWorkspace(cached.documents, workspaceId, filter),
+      );
+      setOfflineSource(true);
+      // Still treat as loading when online so we replace the offline subset.
+      setLoading(online);
+    } else {
+      setDocuments([]);
+      setOfflineSource(false);
+      setLoading(true);
+    }
+    setError(null);
+  }, [listKey, workspaceId, filter, online]);
+
+  const refresh = useCallback(async (options?: { force?: boolean }) => {
     if (!workspaceId) {
       setDocuments([]);
       setLoading(false);
       setOfflineSource(false);
       return;
+    }
+
+    const warm = readDocumentsListCache(workspaceId, filter);
+    // Serve warm *online* cache for instant paint, then always revalidate.
+    // Never treat an offline-timeout fallback as a complete online list.
+    if (
+      warm &&
+      !options?.force &&
+      online &&
+      isCacheFresh(warm.fetchedAt) &&
+      !warm.offlineSource
+    ) {
+      setDocuments(
+        scopeDocumentsToWorkspace(warm.documents, workspaceId, filter),
+      );
+      setOfflineSource(false);
+      setLoading(false);
+      setError(null);
     }
 
     const generation = ++refreshGeneration.current;
@@ -201,10 +280,15 @@ export function useDocuments(
         if (userId) await ensureDocsVaultUnlocked(userId);
         const cached = await listOfflineDocumentSummariesForWorkspace(workspaceId);
         if (generation !== refreshGeneration.current) return;
-        setDocuments(cached.map(offlineRecordToDocument));
+        const offlineDocs = scopeDocumentsToWorkspace(
+          cached.map(offlineRecordToDocument),
+          workspaceId,
+          filter,
+        );
+        setDocuments(offlineDocs);
         setOfflineSource(true);
         writeDocumentsListCache(workspaceId, filter, {
-          documents: cached.map(offlineRecordToDocument),
+          documents: offlineDocs,
           offlineSource: true,
         });
       } catch {
@@ -217,7 +301,13 @@ export function useDocuments(
       return;
     }
 
-    const showLoadingState = documentsRef.current.length === 0;
+    const scopedCurrent = scopeDocumentsToWorkspace(
+      documentsRef.current,
+      workspaceId,
+      filter,
+    );
+    const showLoadingState =
+      scopedCurrent.length === 0 && !(warm && !warm.offlineSource);
     if (showLoadingState) {
       setLoading(true);
     }
@@ -232,8 +322,9 @@ export function useDocuments(
 
     try {
       const fetchOptions: RequestInit = {};
+      const timeoutMs = FETCH_TIMEOUT_MS[filter] ?? 15_000;
       if (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal) {
-        fetchOptions.signal = AbortSignal.timeout(8_000);
+        fetchOptions.signal = AbortSignal.timeout(timeoutMs);
       }
       const response = await fetch(`/app/api/documents?${params}`, fetchOptions);
       if (generation !== refreshGeneration.current) return;
@@ -242,44 +333,84 @@ export function useDocuments(
 
       if (!response.ok) {
         setError(typeof data.error === "string" ? data.error : "Failed to load documents");
-        setDocuments([]);
+        if (!(warm && !warm.offlineSource) && scopedCurrent.length === 0) {
+          setDocuments([]);
+        }
         setLoading(false);
         return;
       }
 
-      const serverDocs = (data.documents as DocumentRecord[]) ?? [];
-      const merged = await mergePendingLocalDocuments(
+      const serverDocs = scopeDocumentsToWorkspace(
+        (data.documents as DocumentRecord[]) ?? [],
         workspaceId,
-        userId,
-        serverDocs,
+        filter,
       );
-      if (generation !== refreshGeneration.current) return;
-      setDocuments(merged);
+      setDocuments(serverDocs);
       writeDocumentsListCache(workspaceId, filter, {
-        documents: merged,
+        documents: serverDocs,
         offlineSource: false,
       });
+      setLoading(false);
+
+      void mergePendingLocalDocuments(workspaceId, userId, serverDocs).then(
+        (merged) => {
+          if (generation !== refreshGeneration.current) return;
+          const scoped = scopeDocumentsToWorkspace(merged, workspaceId, filter);
+          setDocuments(scoped);
+          writeDocumentsListCache(workspaceId, filter, {
+            documents: scoped,
+            offlineSource: false,
+          });
+        },
+      );
     } catch {
       if (generation !== refreshGeneration.current) return;
+
+      // Online request failed (timeout/network). Never replace a good online
+      // list — or an empty loading state — with a tiny offline IDB subset.
+      const warmOnline =
+        warm && !warm.offlineSource
+          ? scopeDocumentsToWorkspace(warm.documents, workspaceId, filter)
+          : null;
+      if (warmOnline && warmOnline.length > 0) {
+        setDocuments(warmOnline);
+        setOfflineSource(false);
+        setError("Couldn't refresh documents");
+        setLoading(false);
+        return;
+      }
+
+      if (scopedCurrent.length > 0) {
+        setDocuments(scopedCurrent);
+        setOfflineSource(false);
+        setError("Couldn't refresh documents");
+        setLoading(false);
+        return;
+      }
+
+      // No online data yet — show offline copy for UX, but do not write it into
+      // the SWR cache as a successful online fetch (that poisoned boards).
       try {
         if (userId) await ensureDocsVaultUnlocked(userId);
         const cached = await listOfflineDocumentSummariesForWorkspace(workspaceId);
         if (generation !== refreshGeneration.current) return;
-        setDocuments(cached.map(offlineRecordToDocument));
+        const offlineDocs = scopeDocumentsToWorkspace(
+          cached.map(offlineRecordToDocument),
+          workspaceId,
+          filter,
+        );
+        setDocuments(offlineDocs);
         setOfflineSource(true);
-        setError(null);
-        if (workspaceId) {
-          writeDocumentsListCache(workspaceId, filter, {
-            documents: cached.map(offlineRecordToDocument),
-            offlineSource: true,
-          });
-        }
+        setError(
+          offlineDocs.length > 0
+            ? "Showing offline copy — couldn't reach server"
+            : "Failed to load documents",
+        );
       } catch {
         setError("Failed to load documents");
         setDocuments([]);
         setOfflineSource(false);
       }
-    } finally {
       if (generation === refreshGeneration.current) {
         setLoading(false);
       }
@@ -293,11 +424,11 @@ export function useDocuments(
   useEffect(() => {
     const onOffline = () => {
       refreshGeneration.current += 1;
-      void refresh();
+      void refresh({ force: true });
     };
     const onOnline = () => {
       refreshGeneration.current += 1;
-      void refresh();
+      void refresh({ force: true });
     };
     window.addEventListener("offline", onOffline);
     window.addEventListener("online", onOnline);
@@ -314,7 +445,7 @@ export function useDocuments(
   useEffect(() => {
     return subscribeSyncEngine((event) => {
       if (event.type === "drained") {
-        void refresh();
+        void refresh({ force: true });
       }
     });
   }, [refresh]);
@@ -352,8 +483,11 @@ export function useDocuments(
           });
           await commitOfflineDocumentCreate({ document, create });
           const created = offlineRecordToDocument(document);
-          setDocuments((prev) => [created, ...prev]);
+          if (targetWorkspaceId === workspaceId) {
+            setDocuments((prev) => [created, ...prev]);
+          }
           notifyDocumentSyncStatus(id, "pending");
+          markDocumentFresh(id);
           return created;
         } catch {
           setError("Failed to create document offline");
@@ -379,7 +513,10 @@ export function useDocuments(
       }
 
       const created = data.document as DocumentRecord;
-      setDocuments((prev) => [created, ...prev]);
+      if (targetWorkspaceId === workspaceId) {
+        setDocuments((prev) => [created, ...prev]);
+      }
+      markDocumentFresh(created.id);
       return created;
     },
     [workspaceId, online, userId],
@@ -487,13 +624,18 @@ export function useDocuments(
     [online, userId],
   );
 
+  const scopedDocuments = useMemo(() => {
+    if (!workspaceId) return [];
+    return scopeDocumentsToWorkspace(documents, workspaceId, filter);
+  }, [documents, workspaceId, filter]);
+
   return {
-    documents,
+    documents: scopedDocuments,
     loading,
     error,
     offlineSource,
     workspaceSync,
-    refresh,
+    refresh: () => refresh({ force: true }),
     createDocument,
     updateDocument,
     deleteDocument,

@@ -11,15 +11,37 @@ type DocumentSearchResult = {
   title: string | null;
 };
 
-/** Cross-document reference (Coda-style relation column) — search-and-pick, single value in v1. */
+async function searchDocumentsInWorkspace(
+  workspaceId: string,
+  query: string,
+  limit: number,
+): Promise<DocumentSearchResult[]> {
+  const params = new URLSearchParams({
+    workspace_id: workspaceId,
+    filter: "recent",
+    q: query,
+    limit: String(limit),
+  });
+  const res = await fetch(`/app/api/documents?${params.toString()}`);
+  if (!res.ok) return [];
+  const data = (await res.json().catch(() => ({}))) as {
+    documents?: DocumentSearchResult[];
+  };
+  return Array.isArray(data.documents) ? data.documents : [];
+}
+
+/** Cross-document reference — search-and-pick, single value. Scope-local, or org-wide when in an org scope. */
 export function RelationFieldEditor({
   value,
   onChange,
+  excludeDocumentId,
 }: {
   value: MetadataRelationValue | null;
   onChange: (value: MetadataRelationValue | null) => void;
+  /** Hide the current document from search results. */
+  excludeDocumentId?: string | null;
 }) {
-  const { workspaceId } = useApp();
+  const { workspaceId, activeScope, scopes } = useApp();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -48,30 +70,48 @@ export function RelationFieldEditor({
     let cancelled = false;
     setLoading(true);
     const handle = setTimeout(() => {
-      const params = new URLSearchParams({
-        workspace_id: workspaceId,
-        filter: "recent",
-        q: query.trim(),
-        limit: "8",
-      });
-      fetch(`/api/documents?${params.toString()}`)
-        .then((res) => (res.ok ? res.json() : { documents: [] }))
-        .then((data: { documents?: DocumentSearchResult[] }) => {
-          if (!cancelled) setResults(Array.isArray(data.documents) ? data.documents : []);
-        })
-        .catch(() => {
+      void (async () => {
+        try {
+          const orgId = activeScope.orgId;
+          const workspaceIds =
+            orgId != null
+              ? scopes
+                  .filter((scope) => scope.orgId === orgId)
+                  .map((scope) => scope.id)
+              : [workspaceId];
+
+          const uniqueIds = [...new Set(workspaceIds.filter(Boolean))];
+          const batches = await Promise.all(
+            uniqueIds.map((id) => searchDocumentsInWorkspace(id, query.trim(), 8)),
+          );
+
+          const seen = new Set<string>();
+          if (excludeDocumentId) seen.add(excludeDocumentId);
+          const merged: DocumentSearchResult[] = [];
+          for (const batch of batches) {
+            for (const doc of batch) {
+              if (seen.has(doc.id)) continue;
+              seen.add(doc.id);
+              merged.push(doc);
+              if (merged.length >= 8) break;
+            }
+            if (merged.length >= 8) break;
+          }
+
+          if (!cancelled) setResults(merged);
+        } catch {
           if (!cancelled) setResults([]);
-        })
-        .finally(() => {
+        } finally {
           if (!cancelled) setLoading(false);
-        });
+        }
+      })();
     }, 250);
 
     return () => {
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [query, open, workspaceId]);
+  }, [query, open, workspaceId, activeScope.orgId, scopes, excludeDocumentId]);
 
   if (value) {
     return (

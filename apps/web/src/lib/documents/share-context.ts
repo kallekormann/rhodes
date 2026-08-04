@@ -38,12 +38,20 @@ export function shareContextLabel(
 }
 
 /**
- * True unless the document was merged into this list from another scope via sharing.
- * Organizing views (Kanban, Calendar, Gantt, Mind-Map, Knowledge Graph, Dashboard) should
- * only manage a scope's own documents — shared-in references stay visible in the plain
- * Documents list, but don't belong on a board/timeline/graph that writes back to the doc.
+ * True for documents that belong in the active scope's organizing views.
+ * Shared-in docs (other workspace_id / is_incoming) stay on the Shared tab only.
  */
-export function isDocumentNativeToScope(doc: DocumentWithShareContext): boolean {
+export function isDocumentNativeToScope(
+  doc: DocumentWithShareContext & { workspace_id?: string | null },
+  activeWorkspaceId?: string | null,
+): boolean {
+  if (
+    activeWorkspaceId != null &&
+    doc.workspace_id != null &&
+    doc.workspace_id !== activeWorkspaceId
+  ) {
+    return false;
+  }
   return !doc.share_context?.is_incoming;
 }
 

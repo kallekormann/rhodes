@@ -40,6 +40,8 @@ import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
 import { NavLink } from "@/components/NavLink";
+import { ViewDocumentPanelHost } from "@/components/views/ViewDocumentPanelHost";
+import type { ViewDocumentPanelState } from "@/components/views/view-document-panel-types";
 import {
   ViewDockPanel,
   ViewSettingsField,
@@ -147,7 +149,7 @@ export function MindMapView() {
   } = useApp();
 
   const scopesPending = !workspaceId;
-  const { documents, loading, error, updateDocument } = useDocuments(
+  const { documents, loading, error, updateDocument, refresh } = useDocuments(
     workspaceId,
     "all",
     session.userId,
@@ -174,6 +176,12 @@ export function MindMapView() {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [addPickerOpen, setAddPickerOpen] = useState(false);
   const [panel, setPanel] = useState<ViewPanelMode>(null);
+  const [docPanel, setDocPanel] = useState<ViewDocumentPanelState>({
+    mode: "closed",
+  });
+  const [pendingPlacement, setPendingPlacement] = useState<{
+    parentDocId?: string;
+  } | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
 
   const config = useMemo(() => mindMapConfigFromInstance(instance), [instance]);
@@ -192,8 +200,10 @@ export function MindMapView() {
 
   useEffect(() => {
     setPanel(null);
+    setDocPanel({ mode: "closed" });
     setSelectedDocId(null);
     setAddPickerOpen(false);
+    setPendingPlacement(null);
   }, [workspaceId, activeInstanceId]);
 
   const pageTitle = instance?.label ?? "Mind-Map";
@@ -228,9 +238,11 @@ export function MindMapView() {
   const activeDocs = useMemo(
     () =>
       documents.filter(
-        (doc) => !isDocumentArchived(doc.metadata) && isDocumentNativeToScope(doc),
+        (doc) =>
+          !isDocumentArchived(doc.metadata) &&
+          isDocumentNativeToScope(doc, workspaceId),
       ),
-    [documents],
+    [documents, workspaceId],
   );
   const docsById = useMemo(() => {
     const map = new Map<string, DocumentRecord>();
@@ -318,6 +330,11 @@ export function MindMapView() {
       delete nextLayout[docId];
       void persistLayout(nextLayout);
       if (selectedDocId === docId) setSelectedDocId(null);
+      setDocPanel((prev) =>
+        prev.mode === "editing" && prev.documentId === docId
+          ? { mode: "closed" }
+          : prev,
+      );
     },
     [layout, persistLayout, selectedDocId],
   );
@@ -351,16 +368,82 @@ export function MindMapView() {
     [canWriteActiveScope, showToast, relationField, docsById, updateDocument],
   );
 
+  const openFullPage = (documentId: string, title?: string) => {
+    if (title) {
+      cacheDocumentTitle(documentId, title);
+      setDocumentTitle(title);
+    }
+    setDocumentId(documentId);
+    setDocPanel({ mode: "closed" });
+    openEditor(documentId);
+  };
+
+  const startCreateRoot = () => {
+    if (!canWriteActiveScope) return;
+    setPanel(null);
+    setAddPickerOpen(false);
+    setPendingPlacement({});
+    setDocPanel({
+      mode: "pick-template",
+      viewType: "mindmap",
+      createContext: { kind: "root" },
+    });
+  };
+
+  const startCreateChild = (parent: DocumentRecord) => {
+    if (!canWriteActiveScope) return;
+    setPanel(null);
+    setAddPickerOpen(false);
+    setPendingPlacement({ parentDocId: parent.id });
+    setDocPanel({
+      mode: "pick-template",
+      viewType: "mindmap",
+      createContext: {
+        kind: "child",
+        parentDocId: parent.id,
+        parentTitle: parent.title || "Untitled",
+      },
+    });
+  };
+
+  const placeCreatedDocument = useCallback(
+    async (docId: string, title: string) => {
+      const parentId = pendingPlacement?.parentDocId;
+      const parentPos = parentId ? layout[parentId] : null;
+      const position = parentPos
+        ? { x: parentPos.x + 220, y: parentPos.y + 40 }
+        : nextNodePosition(layout);
+      await persistLayout({ ...layout, [docId]: position });
+
+      if (parentId && relationField && relationField.field_key !== "origin") {
+        const parent = docsById.get(parentId);
+        if (parent) {
+          const nextMetadata = withUserMetadataValue(
+            parent.metadata,
+            relationField.field_key,
+            { document_id: docId, title: title || "Untitled" },
+          );
+          await updateDocument(parentId, { metadata: nextMetadata });
+        }
+      }
+      setPendingPlacement(null);
+      setSelectedDocId(docId);
+    },
+    [
+      pendingPlacement,
+      layout,
+      persistLayout,
+      relationField,
+      docsById,
+      updateDocument,
+    ],
+  );
+
   const handleNodeClick: NodeMouseHandler = useCallback((_event, node) => {
     setSelectedDocId(node.id);
+    setPanel(null);
+    setDocPanel({ mode: "editing", documentId: node.id });
   }, []);
-
-  const openFullPage = (doc: DocumentRecord) => {
-    cacheDocumentTitle(doc.id, doc.title);
-    setDocumentTitle(doc.title);
-    setDocumentId(doc.id);
-    openEditor(doc.id);
-  };
 
   const addableDocs = useMemo(
     () => activeDocs.filter((doc) => !(doc.id in layout)),
@@ -398,16 +481,32 @@ export function MindMapView() {
           trailing={
             <ViewHeaderActions
               panel={panel}
-              onPanelChange={setPanel}
+              onPanelChange={(next) => {
+                setDocPanel({ mode: "closed" });
+                setPanel(next);
+              }}
               canEditSettings={canWriteActiveScope}
               extra={
                 canWriteActiveScope ? (
-                  <NavLink
-                    size="small"
-                    onClick={() => setAddPickerOpen((v) => !v)}
-                  >
-                    Add node
-                  </NavLink>
+                  <>
+                    <NavLink size="small" onClick={startCreateRoot}>
+                      New root
+                    </NavLink>
+                    {selectedDoc ? (
+                      <NavLink
+                        size="small"
+                        onClick={() => startCreateChild(selectedDoc)}
+                      >
+                        New child
+                      </NavLink>
+                    ) : null}
+                    <NavLink
+                      size="small"
+                      onClick={() => setAddPickerOpen((v) => !v)}
+                    >
+                      Place existing
+                    </NavLink>
+                  </>
                 ) : null
               }
             />
@@ -436,13 +535,13 @@ export function MindMapView() {
         {error ? <p className="caption mindmap-view__error">{error}</p> : null}
 
         {mapLoading ? (
-          <LoaderState label="Loading mind-map…" />
+          <LoaderState label="Loading mind-map…" align="fill" />
         ) : (
           <div className="mindmap-view__canvas">
             {canvasDocs.length === 0 ? (
               <p className="caption mindmap-view__empty">
                 {canWriteActiveScope
-                  ? 'No nodes yet. Click "Add node" to place a document on the canvas.'
+                  ? 'No nodes yet. Use "New root" to create a document on the canvas.'
                   : "This mind-map has no nodes yet."}
               </p>
             ) : (
@@ -466,8 +565,8 @@ export function MindMapView() {
           </div>
         )}
 
-        {selectedDoc && panel === null ? (
-          <aside className="mindmap-side-panel">
+        {selectedDoc && panel === null && docPanel.mode === "closed" ? (
+          <aside className="mindmap-side-panel overlay-scrollbar">
             <header className="mindmap-side-panel__header">
               <h3 className="mindmap-side-panel__title">
                 {selectedDoc.title || "Untitled"}
@@ -490,19 +589,39 @@ export function MindMapView() {
               <button
                 type="button"
                 className="mindmap-side-panel__button"
-                onClick={() => openFullPage(selectedDoc)}
+                onClick={() =>
+                  setDocPanel({ mode: "editing", documentId: selectedDoc.id })
+                }
+              >
+                Edit in panel
+              </button>
+              <button
+                type="button"
+                className="mindmap-side-panel__button"
+                onClick={() =>
+                  openFullPage(selectedDoc.id, selectedDoc.title)
+                }
               >
                 <ExternalLink size={14} strokeWidth={1.75} />
                 Open full page
               </button>
               {canWriteActiveScope ? (
-                <button
-                  type="button"
-                  className="mindmap-side-panel__button mindmap-side-panel__button--ghost"
-                  onClick={() => handleRemoveNode(selectedDoc.id)}
-                >
-                  Remove from canvas
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="mindmap-side-panel__button mindmap-side-panel__button--ghost"
+                    onClick={() => startCreateChild(selectedDoc)}
+                  >
+                    New child
+                  </button>
+                  <button
+                    type="button"
+                    className="mindmap-side-panel__button mindmap-side-panel__button--ghost"
+                    onClick={() => handleRemoveNode(selectedDoc.id)}
+                  >
+                    Remove from canvas
+                  </button>
+                </>
               ) : null}
             </div>
           </aside>
@@ -513,7 +632,9 @@ export function MindMapView() {
             title={pageTitle}
             subtitle={config.subtitle ?? ""}
             relationFieldKey={relationField?.field_key ?? ""}
-            relationFieldOptions={relationFieldOptions}
+            relationFieldOptions={relationFieldOptions.filter(
+              (field) => field.field_key !== "origin",
+            )}
             onClose={() => setPanel(null)}
             onSave={(input) => {
               void saveSettings(input);
@@ -531,6 +652,22 @@ export function MindMapView() {
             onClose={() => setPanel(null)}
           />
         ) : null}
+
+        <ViewDocumentPanelHost
+          state={docPanel}
+          onClose={() => setDocPanel({ mode: "closed" })}
+          onOpenFullPage={openFullPage}
+          onDocumentCreated={(doc) => {
+            void (async () => {
+              await placeCreatedDocument(doc.id, doc.title);
+              await refresh();
+              setDocPanel({ mode: "editing", documentId: doc.id });
+            })();
+          }}
+          onDocumentUpdated={() => {
+            void refresh();
+          }}
+        />
       </div>
     </DocumentsSyncGate>
   );

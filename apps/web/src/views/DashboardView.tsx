@@ -393,7 +393,7 @@ export function DashboardView() {
   return (
     <DocumentsSyncGate>
       <div className="dashboard-view">
-        <div className="dashboard-view__scroll">
+        <div className="dashboard-view__scroll overlay-scrollbar">
           <div className="dashboard-view__inner">
             <ViewInstanceTabBar
               className="dashboard-view__tabs"
@@ -436,7 +436,7 @@ export function DashboardView() {
             {saving ? <p className="caption dashboard-view__hint">Saving…</p> : null}
 
             {dashboardLoading ? (
-              <LoaderState label="Loading dashboard…" />
+              <LoaderState label="Loading dashboard…" align="fill" />
             ) : (
               <>
                 {editingWidget ? (

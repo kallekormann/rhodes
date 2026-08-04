@@ -55,12 +55,17 @@ do not attempt to seed it as a bundle view preset yet.
 
 ## Template bundles (wizard pre-check)
 
-When a user selects additional views at scope creation, the wizard pre-selects templates that support that
-view (bidirectionally: picking templates can also infer views). Full view↔template affinity data lives in
-[`view-template-affinity.ts`](../packages/shared/src/view-template-affinity.ts) (`VIEW_TEMPLATE_AFFINITY`,
-`TEMPLATE_SUPPORTED_VIEWS`) — see [31-scope-bundles-catalog.md](31-scope-bundles-catalog.md) for the full list
-of shipped bundles and templates. User can add/remove before create. System templates from seed migrations
-apply when `workspace_id` is null.
+When a user selects additional **page types** at scope creation, the wizard adds
+recommended templates for those views. Removing a page type removes those
+templates (unless another selected view or bundle still needs them). Preset boards
+are **not** selectable views — they ship with bundles as tabs on a page type.
+Picking templates alone does **not** force-enable page types. System templates from
+seed migrations apply when `workspace_id` is null. The header **+** always creates
+via the Blank system template (which includes the universal **Origin** relation).
+Every system template carries Origin so documents can optionally link to a parent
+document. Kanban, Calendar, Mind-Map, and Roadmap/Gantt create/open documents in a
+sidebar panel with a template picker rather than jumping straight to the full editor.
+
 
 ## Scope-type defaults
 

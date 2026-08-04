@@ -1,0 +1,437 @@
+"use client";
+
+import { Archive, ArchiveRestore, Search, Share2, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useApp } from "@/context/AppContext";
+import type { DocumentFilter } from "@/lib/documents/schemas";
+import {
+  formatCreatedAt,
+  formatUpdatedAt,
+  getDateGroup,
+  sortDateGroups,
+} from "@/lib/documents/format";
+import {
+  isDocumentArchived,
+  withArchived,
+} from "@/lib/documents/metadata";
+import {
+  documentMatchesMetadataFilter,
+  formatMetadataOptionLabel,
+  pickDocumentsFilterField,
+} from "@/lib/metadata/filter-documents";
+import {
+  parseSchemaOptions,
+  readUserMetadataValue,
+} from "@/lib/metadata/schemas";
+import { useDocuments } from "@/hooks/useDocuments";
+import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
+import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
+import { cacheDocumentTitle } from "@/lib/editor/editor-shell-session";
+import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
+import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
+import { LoaderState } from "@/components/Loader";
+import { DocumentShareBadge } from "@/components/DocumentShareBadge";
+import { Dialog } from "@/components/Dialog";
+import { Divider } from "@/components/Divider";
+import { Dropdown } from "@/components/Dropdown";
+import { GroupLabel, SectionHeader } from "@/components/SectionHeader";
+import { Input } from "@/components/Input";
+import { ItemList, ListRow } from "@/components/ListRow";
+import { SegmentedControl } from "@/components/SegmentedControl";
+import { SharePopover } from "@/components/SharePopover";
+import { StatusPill } from "@/components/StatusPill";
+import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import "./DocumentsView.css";
+
+type DocTab = DocumentFilter;
+
+const ANY_PROPERTY = "__any__";
+
+export function DocumentsListView() {
+  const {
+    workspaceId,
+    openEditor,
+    setDocumentTitle,
+    setDocumentId,
+    setView,
+    showToast,
+    canWriteActiveScope,
+    session,
+    overviewTemplates,
+    overviewTemplatesLoading,
+  } = useApp();
+
+  const { online } = useOnlineStatus(workspaceId);
+  const [tab, setTab] = useState<DocTab>("recent");
+  const [filter, setFilter] = useState("");
+  const [propertyFilter, setPropertyFilter] = useState(ANY_PROPERTY);
+  const [shareDocId, setShareDocId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+
+  const scopesPending = !workspaceId;
+
+  const {
+    documents,
+    loading,
+    error,
+    offlineSource,
+    workspaceSync,
+    refresh,
+    updateDocument,
+    deleteDocument,
+    createDocument,
+  } = useDocuments(workspaceId, tab, session.userId);
+
+  const { schemas } = useMetadataSchemas(workspaceId);
+  const filterField = useMemo(() => pickDocumentsFilterField(schemas), [schemas]);
+  const filterOptions = useMemo(
+    () => (filterField ? parseSchemaOptions(filterField.options) ?? [] : []),
+    [filterField],
+  );
+
+  const overviewTemplateCards = useMemo(
+    () => pickOverviewTemplates(overviewTemplates).map(templateRecordToUi),
+    [overviewTemplates],
+  );
+
+  const showOverviewTemplatesLoader =
+    overviewTemplateCards.length === 0 &&
+    (scopesPending || overviewTemplatesLoading);
+
+  const showDocumentsLoader =
+    documents.length === 0 && (scopesPending || loading);
+
+  const filtered = useMemo(
+    () =>
+      documents.filter((doc) => {
+        if (!doc.title.toLowerCase().includes(filter.toLowerCase())) return false;
+        return documentMatchesMetadataFilter(
+          doc,
+          filterField?.field_key ?? "",
+          propertyFilter === ANY_PROPERTY ? null : propertyFilter,
+        );
+      }),
+    [documents, filter, filterField, propertyFilter],
+  );
+
+  const groups = useMemo(() => {
+    const unique = [...new Set(filtered.map((doc) => getDateGroup(doc.updated_at)))];
+    return unique.sort(sortDateGroups);
+  }, [filtered]);
+
+  const handleArchive = async (docId: string, archived: boolean) => {
+    const doc = documents.find((item) => item.id === docId);
+    if (!doc) return;
+    const updated = await updateDocument(docId, {
+      metadata: withArchived(doc.metadata, archived),
+    });
+    if (updated) {
+      showToast(archived ? "Document archived" : "Document restored", "success");
+      await refresh();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const ok = await deleteDocument(deleteTarget.id);
+    if (ok) showToast("Document deleted", "success");
+    setDeleteTarget(null);
+  };
+
+  const emptyMessage = (() => {
+    if (propertyFilter !== ANY_PROPERTY && filterField) {
+      return `No documents with ${filterField.field_label.toLowerCase()} “${formatMetadataOptionLabel(propertyFilter)}”.`;
+    }
+    if (filter.trim()) {
+      return "No documents match this search.";
+    }
+    if (tab === "favorites") {
+      return "No favorite documents yet. Open a document and mark it as Favorite.";
+    }
+    if (tab === "archive") {
+      return "No archived documents.";
+    }
+    if (tab === "shared") {
+      return "No shared documents yet. Open a document and use Share in the editor.";
+    }
+    if (offlineSource) {
+      return "No offline documents in this scope. Open documents while online to cache them for offline use.";
+    }
+    return canWriteActiveScope
+      ? "No documents yet. Use + in the header to create one."
+      : "No documents in this scope yet.";
+  })();
+
+  return (
+    <DocumentsSyncGate>
+    <div className="canvas-view documents-view">
+      <div className="documents-view__scroll overlay-scrollbar">
+        <div className="documents-view__inner">
+          {online && (
+          <>
+          <section className="documents-section">
+            <SectionHeader
+              title="Templates"
+              action={{ label: "More templates", onClick: () => setView("templates") }}
+            />
+            {showOverviewTemplatesLoader ? (
+              <LoaderState
+                label="Loading templates…"
+                size="s"
+                className="documents-section__loading"
+              />
+            ) : (
+              <TemplateCardGrid>
+                {overviewTemplateCards.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    name={template.name}
+                    description={template.shortDescription}
+                    onClick={async () => {
+                      if (!canWriteActiveScope) {
+                        showToast("You have read-only access in this scope", "error");
+                        return;
+                      }
+                      if (!workspaceId) return;
+                      const created = await createDocument({
+                        title: template.name,
+                        template_id: template.id,
+                      });
+                      if (!created) {
+                        showToast("Couldn't create document from template", "error");
+                        return;
+                      }
+                      setDocumentId(created.id);
+                      setDocumentTitle(created.title);
+                      openEditor(created.id);
+                    }}
+                  />
+                ))}
+              </TemplateCardGrid>
+            )}
+          </section>
+
+          <Divider />
+          </>
+          )}
+
+          <section className="documents-section">
+            {offlineSource && (
+              <p className="documents-view__offline-note caption">
+                Showing documents cached for offline use in this scope.
+              </p>
+            )}
+            <div className="documents-toolbar">
+              <div className="documents-toolbar__filters">
+                <Input
+                  placeholder="Search documents…"
+                  value={filter}
+                  onChange={setFilter}
+                  icon={<Search size={18} strokeWidth={1.75} />}
+                  className="documents-toolbar__search"
+                  aria-label="Search documents by title"
+                />
+                {filterField && filterOptions.length > 0 && (
+                  <Dropdown
+                    variant="field"
+                    className="documents-toolbar__property"
+                    value={propertyFilter}
+                    placeholder={filterField.field_label}
+                    aria-label={`Filter by ${filterField.field_label}`}
+                    options={[
+                      {
+                        id: ANY_PROPERTY,
+                        label: `Any ${filterField.field_label.toLowerCase()}`,
+                      },
+                      ...filterOptions.map((option) => ({
+                        id: option,
+                        label: formatMetadataOptionLabel(option),
+                      })),
+                    ]}
+                    onChange={setPropertyFilter}
+                  />
+                )}
+              </div>
+              <div className="documents-toolbar__tabs">
+                <SegmentedControl
+                  options={[
+                    { value: "recent", label: "Recent" },
+                    { value: "all", label: "All" },
+                    { value: "favorites", label: "Favorites" },
+                    { value: "archive", label: "Archive" },
+                    { value: "shared", label: "Shared" },
+                  ]}
+                  value={tab}
+                  onChange={setTab}
+                />
+              </div>
+            </div>
+
+            {showDocumentsLoader ? (
+              <LoaderState
+                label="Loading documents…"
+                size="s"
+                className="documents-empty"
+              />
+            ) : error ? (
+              <p className="documents-empty caption">{error}</p>
+            ) : filtered.length === 0 ? (
+              <p className="documents-empty caption" role="status">
+                {emptyMessage}
+              </p>
+            ) : (
+              groups.map((group) => (
+                <div key={group} className="doc-group">
+                  <GroupLabel>{group}</GroupLabel>
+                  <ItemList>
+                    {filtered
+                      .filter((doc) => getDateGroup(doc.updated_at) === group)
+                      .map((doc) => {
+                        const archived = isDocumentArchived(doc.metadata);
+                        const statusValue =
+                          filterField != null
+                            ? readUserMetadataValue(
+                                doc.metadata,
+                                filterField.field_key,
+                              )
+                            : null;
+                        const statusVariant =
+                          statusValue === "done"
+                            ? "success"
+                            : statusValue === "in_progress"
+                              ? "progress"
+                              : "draft";
+                        return (
+                          <ListRow
+                            key={doc.id}
+                            title={doc.title}
+                            meta={formatCreatedAt(doc.created_at)}
+                            metaSecondary={
+                              <span className="documents-row__meta-line">
+                                <span>{formatUpdatedAt(doc.updated_at)}</span>
+                                <DocumentShareBadge context={doc.share_context} />
+                              </span>
+                            }
+                            trailing={
+                              archived ? (
+                                <StatusPill variant="draft" label="Archived" />
+                              ) : statusValue ? (
+                                <StatusPill
+                                  variant={statusVariant}
+                                  label={formatMetadataOptionLabel(statusValue)}
+                                />
+                              ) : null
+                            }
+                            footer={
+                              shareDocId === doc.id ? (
+                                <div className="documents-row__share-popover">
+                                  <SharePopover
+                                    documentId={doc.id}
+                                    onClose={() => setShareDocId(null)}
+                                    onSharesChange={() => void refresh()}
+                                  />
+                                </div>
+                              ) : undefined
+                            }
+                            actions={
+                              canWriteActiveScope ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="list-row__action"
+                                    aria-label="Share document"
+                                    aria-expanded={shareDocId === doc.id}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setShareDocId((current) =>
+                                        current === doc.id ? null : doc.id,
+                                      );
+                                    }}
+                                  >
+                                    <Share2 size={15} strokeWidth={1.75} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="list-row__action"
+                                    aria-label={
+                                      archived ? "Unarchive document" : "Archive document"
+                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleArchive(doc.id, !archived);
+                                    }}
+                                  >
+                                    {archived ? (
+                                      <ArchiveRestore size={15} strokeWidth={1.75} />
+                                    ) : (
+                                      <Archive size={15} strokeWidth={1.75} />
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="list-row__action list-row__action--danger"
+                                    aria-label="Delete document"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setDeleteTarget({
+                                        id: doc.id,
+                                        title: doc.title,
+                                      });
+                                    }}
+                                  >
+                                    <Trash2 size={15} strokeWidth={1.75} />
+                                  </button>
+                                </>
+                              ) : undefined
+                            }
+                            onClick={() => {
+                              setShareDocId(null);
+                              setDocumentId(doc.id);
+                              setDocumentTitle(doc.title);
+                              cacheDocumentTitle(doc.id, doc.title);
+                              openEditor(doc.id);
+                            }}
+                          />
+                        );
+                      })}
+                  </ItemList>
+                </div>
+              ))
+            )}
+          </section>
+        </div>
+      </div>
+
+      <Dialog
+        open={deleteTarget != null}
+        title="Delete document?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.title}” will be permanently deleted. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => void handleDelete()}
+        onClose={() => setDeleteTarget(null)}
+      />
+
+      {workspaceSync.active && (
+        <RhodesActivityRail
+          processing
+          processingLabel={
+            workspaceSync.documentTitle
+              ? `Syncing “${workspaceSync.documentTitle}”`
+              : "Syncing documents…"
+          }
+        />
+      )}
+    </div>
+    </DocumentsSyncGate>
+  );
+}

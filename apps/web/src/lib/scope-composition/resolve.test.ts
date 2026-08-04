@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { BundleDefinition } from "@rhodes/shared/scope-bundles";
-import { resolveScopeComposition } from "@rhodes/shared/scope-composition";
+import {
+  applyBaseViewToggle,
+  resolveScopeComposition,
+} from "@rhodes/shared/scope-composition";
 
 const TEST_BUNDLE_KB: BundleDefinition = {
   id: "knowledge-base-ops",
@@ -79,7 +82,25 @@ describe("resolveScopeComposition", () => {
     expect(result.inferred.addedTemplates.length).toBeGreaterThan(0);
   });
 
-  it("infers views when templates sufficient for a view are selected", () => {
+  it("always includes the blank template", () => {
+    const result = resolveScopeComposition(
+      {
+        selectedBaseViewIds: [],
+        selectedViewPresetIds: [],
+        selectedTemplateSlugs: [],
+        selectedBundleIds: [],
+        tier: "pro",
+      },
+      { bundles: TEST_BUNDLES },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.templateSlugs).toContain("blank");
+    expect(result.metadataFields.some((f) => f.field_key === "origin")).toBe(true);
+  });
+
+  it("does not force-enable views from templates alone", () => {
     const result = resolveScopeComposition(
       {
         selectedBaseViewIds: [],
@@ -94,8 +115,30 @@ describe("resolveScopeComposition", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.enabledViews).toContain("kanban");
-    expect(result.inferred.addedViews).toContain("kanban");
+    expect(result.enabledViews).not.toContain("kanban");
+    expect(result.enabledViews).toEqual([]);
+    expect(result.templateSlugs).toContain("product-spec");
+    expect(result.templateSlugs).toContain("blank");
+  });
+
+  it("enables page types from bundle presets without counting presets as views", () => {
+    const result = resolveScopeComposition(
+      {
+        selectedBaseViewIds: [],
+        selectedViewPresetIds: [],
+        selectedTemplateSlugs: [],
+        selectedBundleIds: ["product-discovery-ux"],
+        tier: "pro",
+      },
+      { bundles: TEST_BUNDLES },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.enabledViews).toEqual(["kanban"]);
+    expect(result.viewPresetIds).toContain("discovery-matrix");
+    expect(result.setupConfig.baseViewIds).toEqual([]);
   });
 
   it("unions multiple bundles", () => {
@@ -185,5 +228,45 @@ describe("resolveScopeComposition", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toMatch(/not available/);
+  });
+
+  it("cascades recommended templates when toggling a page type", () => {
+    const enabled = applyBaseViewToggle(
+      {
+        selectedBaseViewIds: [],
+        selectedViewPresetIds: [],
+        selectedTemplateSlugs: [],
+        selectedBundleIds: [],
+      },
+      "kanban",
+      { currentlyEnabled: false, bundles: TEST_BUNDLES },
+    );
+
+    expect(enabled.selectedBaseViewIds).toEqual(["kanban"]);
+    expect(enabled.selectedTemplateSlugs).toContain("project-kickoff");
+    expect(enabled.selectedTemplateSlugs).toContain("meeting-notes");
+
+    const disabled = applyBaseViewToggle(enabled, "kanban", {
+      currentlyEnabled: true,
+      bundles: TEST_BUNDLES,
+    });
+
+    expect(disabled.selectedBaseViewIds).toEqual([]);
+    expect(disabled.selectedTemplateSlugs).not.toContain("project-kickoff");
+    expect(disabled.selectedTemplateSlugs).not.toContain("meeting-notes");
+  });
+
+  it("keeps bundle-locked page types when toggled off", () => {
+    const draft = {
+      selectedBaseViewIds: [],
+      selectedViewPresetIds: [],
+      selectedTemplateSlugs: [],
+      selectedBundleIds: ["product-discovery-ux"],
+    };
+    const next = applyBaseViewToggle(draft, "kanban", {
+      currentlyEnabled: true,
+      bundles: TEST_BUNDLES,
+    });
+    expect(next).toEqual(draft);
   });
 });

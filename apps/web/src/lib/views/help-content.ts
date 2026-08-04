@@ -42,7 +42,7 @@ export const VIEW_HELP_CONTENT = {
       "Optionally set a custom title and subtitle.",
     ],
     actions: [
-      "Switch Month and List with the control in the header.",
+      "Switch Month and List with the control above the calendar.",
       "Move between months with the arrows, jump to Today, or narrow the window with the date range picker.",
       "Click a document to open it in the editor.",
       "Change the date field in Calendar settings if you have more than one.",

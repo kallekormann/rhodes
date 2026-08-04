@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
+import { TextArea } from "@/components/TextArea";
 import { Modal } from "@/components/Modal";
 import {
   fieldKeyFromLabel,
@@ -216,16 +217,15 @@ export function PropertiesManageSheet({
                 />
               </div>
               {needsOptions(fieldType) && (
-                <label className="properties-manage__options">
-                  <span>Options (one per line)</span>
-                  <textarea
-                    className="textarea"
+                <div className="properties-manage__options">
+                  <TextArea
+                    label="Options (one per line)"
                     rows={5}
                     value={optionsDraft}
                     onChange={(event) => setOptionsDraft(event.target.value)}
                     placeholder={"draft\nin progress\ndone"}
                   />
-                </label>
+                </div>
               )}
               {formError && <p className="properties-manage__error">{formError}</p>}
               <div className="properties-manage__form-actions">

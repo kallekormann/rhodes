@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatLibraryFileSize } from "@/lib/library/format";
+import { createTimedCache, isCacheFresh } from "@/lib/cache/swr-cache";
 import "./LibraryStorageQuota.css";
 
 type QuotaBreakdownItem = {
@@ -19,29 +20,46 @@ type QuotaPayload = {
   breakdown: QuotaBreakdownItem[];
 };
 
+const quotaCache = createTimedCache<QuotaPayload>();
+const QUOTA_CACHE_KEY = "account";
+
 export function LibraryStorageQuota() {
-  const [quota, setQuota] = useState<QuotaPayload | null>(null);
+  const cached = quotaCache.get(QUOTA_CACHE_KEY);
+  const [quota, setQuota] = useState<QuotaPayload | null>(
+    () => cached?.value ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cached);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    const hit = quotaCache.get(QUOTA_CACHE_KEY);
+    if (hit && isCacheFresh(hit.fetchedAt)) {
+      setQuota(hit.value);
+      setLoading(false);
+      return;
+    }
+
     void (async () => {
-      setLoading(true);
+      if (!hit) setLoading(true);
       setError(null);
       try {
-        const response = await fetch("/app/api/account/library-quota");
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(
-            typeof data.error === "string" ? data.error : "Failed to load quota",
-          );
-        }
-        if (!cancelled) setQuota(data as QuotaPayload);
+        const { value } = await quotaCache.getOrFetch(QUOTA_CACHE_KEY, async () => {
+          const response = await fetch("/app/api/account/library-quota");
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(
+              typeof data.error === "string" ? data.error : "Failed to load quota",
+            );
+          }
+          return data as QuotaPayload;
+        });
+        if (!cancelled) setQuota(value);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load quota");
+          if (!hit) setQuota(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -52,7 +70,7 @@ export function LibraryStorageQuota() {
     };
   }, []);
 
-  if (loading) {
+  if (loading && !quota) {
     return <p className="caption settings-field__hint">Loading storage…</p>;
   }
 

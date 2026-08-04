@@ -86,6 +86,12 @@ import {
 } from "@/lib/documents/menu-position";
 import "./TipTapEditor.css";
 
+/** Stable empties — inline default `[]` recreates every render and loops conflict refresh. */
+const EMPTY_OFFLINE_CONFLICT_CLUSTERS: SpanConflictCluster[] = [];
+const EMPTY_OFFLINE_CONFLICT_REVIEWS: BlockReviewModel[] = [];
+const EMPTY_REMOTE_CURSORS: RemoteCollaboratorCursor[] = [];
+const EMPTY_COMMENTS: StoredDocumentComment[] = [];
+
 function findImagePosByUploadId(editor: Editor, uploadId: string): number | null {
   let found: number | null = null;
   editor.state.doc.descendants((node, pos) => {
@@ -278,10 +284,10 @@ export function TipTapEditor({
   lockedBlockIndex = null,
   lockedSelectionFrom = null,
   lockedByName = null,
-  remoteCursors = [],
+  remoteCursors = EMPTY_REMOTE_CURSORS,
   documentId,
   workspaceId,
-  comments = [],
+  comments = EMPTY_COMMENTS,
   onAddComment,
   onCommentsDocumentSync,
   onUpdate,
@@ -297,8 +303,8 @@ export function TipTapEditor({
   onRegisterEditor,
   onActiveBlockChange,
   onSelectionChange,
-  offlineConflictClusters = [],
-  offlineConflictReviews = [],
+  offlineConflictClusters = EMPTY_OFFLINE_CONFLICT_CLUSTERS,
+  offlineConflictReviews = EMPTY_OFFLINE_CONFLICT_REVIEWS,
   conflictReviewColors = null,
   activeOfflineConflictClusterId = null,
   onActivateOfflineConflictCluster,
@@ -1112,6 +1118,7 @@ export function TipTapEditor({
   useEffect(() => {
     if (!editor) return;
     const storage = editor.storage.rhodesConflictInline as {
+      state: ConflictInlineState;
       refresh: (next: ConflictInlineState) => void;
     };
     const next: ConflictInlineState = {
@@ -1126,6 +1133,15 @@ export function TipTapEditor({
         offlineConflictClusters[0]?.id ??
         null,
     };
+    const prev = storage.state;
+    if (
+      prev.clusters === next.clusters &&
+      prev.reviews === next.reviews &&
+      prev.colors === next.colors &&
+      prev.activeClusterId === next.activeClusterId
+    ) {
+      return;
+    }
     storage.refresh(next);
   }, [
     activeOfflineConflictClusterId,

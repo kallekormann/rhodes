@@ -5,12 +5,12 @@ import {
   BUNDLE_CATALOG,
   bundleAllowedForTier,
   getBundlesByIds,
-  getViewPresetsByIds,
 } from "@rhodes/shared/scope-bundles";
 import {
   SYSTEM_SCOPE_TEMPLATE_CATALOG,
   getScopeTemplateLabel,
 } from "@rhodes/shared/scope-template-catalog";
+import { bundlesLockingBaseView } from "@rhodes/shared/scope-composition";
 import { Checkbox } from "@/components/Checkbox";
 import { GroupLabel } from "@/components/SectionHeader";
 import { NeutralPill } from "@/components/NeutralPill";
@@ -27,7 +27,6 @@ type ScopeCompositionWorkspaceProps = {
   tab: CompositionTab;
   onTabChange: (tab: CompositionTab) => void;
   onToggleBaseView: (viewId: string) => void;
-  onToggleViewPreset: (presetId: string) => void;
   onToggleTemplate: (slug: string) => void;
   onToggleBundle: (bundleId: string) => void;
 };
@@ -39,7 +38,6 @@ export function ScopeCompositionWorkspace({
   tab,
   onTabChange,
   onToggleBaseView,
-  onToggleViewPreset,
   onToggleTemplate,
   onToggleBundle,
 }: ScopeCompositionWorkspaceProps) {
@@ -50,21 +48,9 @@ export function ScopeCompositionWorkspace({
     (view) => view.status !== "available",
   );
 
-  const bundlePresets = BUNDLE_CATALOG.flatMap((bundle) =>
-    bundle.viewPresets.map((preset) => ({
-      bundleId: bundle.id,
-      bundleLabel: bundle.label,
-      preset,
-    })),
-  );
-
-  // Checkboxes always reflect the user's explicit picks, even when `resolved` fails
-  // validation (e.g. over the plan's view limit) — otherwise every checkbox would
-  // appear to clear itself the moment a limit is hit.
+  // Checkboxes always reflect effective page types (explicit + bundle), even when
+  // `resolved` fails validation — otherwise every checkbox clears at the limit.
   const checkedViewIds = new Set(draft.selectedBaseViewIds);
-  const inferredViewIds = new Set(
-    resolved.ok ? resolved.inferred.addedViews : [],
-  );
   const inferredTemplateSlugs = new Set(
     resolved.ok ? resolved.inferred.addedTemplates : [],
   );
@@ -74,8 +60,7 @@ export function ScopeCompositionWorkspace({
   const hasPageTypeRows =
     selectableViews.length > 0 || comingSoonViews.length > 0;
 
-  // Bundles the user has explicitly selected — their templates/presets are locked "on"
-  // elsewhere in the workspace, so those rows read as included, not independently toggleable.
+  // Bundles the user has explicitly selected — their templates are locked "on".
   const selectedBundles = getBundlesByIds(draft.selectedBundleIds);
   const bundleLabelByTemplate = new Map<string, string>();
   for (const bundle of selectedBundles) {
@@ -90,11 +75,6 @@ export function ScopeCompositionWorkspace({
   const extraBundleTemplates = [...bundleLabelByTemplate.entries()].filter(
     ([slug]) => !catalogSlugs.has(slug),
   );
-
-  const selectedPresetIds = resolved.ok
-    ? resolved.viewPresetIds
-    : draft.selectedViewPresetIds;
-  const selectedPresets = getViewPresetsByIds(selectedPresetIds);
 
   return (
     <div className="scope-composition">
@@ -116,38 +96,30 @@ export function ScopeCompositionWorkspace({
             </p>
           ) : null}
           <p className="scope-composition__intro">
-            Each page type counts toward your plan limit. Boards and dashboards
-            inside a page are tabs and are unlimited.
+            Choose page types for this scope (Kanban, Calendar, and so on). Each
+            counts toward your plan limit. Preset boards and dashboards come with
+            bundles and appear as tabs inside a page — they are not separate views.
           </p>
           {hasPageTypeRows ? (
             <ul className="scope-composition__options">
               {selectableViews.map((view) => {
-                const explicit = draft.selectedBaseViewIds.includes(view.id);
-                const inferredOnly =
-                  !explicit &&
-                  inferredViewIds.has(view.id) &&
-                  checkedViewIds.has(view.id);
-                const boardCount = selectedPresets.filter(
-                  (preset) => preset.baseViewType === view.id,
-                ).length;
+                const lockingBundles = bundlesLockingBaseView(
+                  view.id,
+                  draft.selectedBundleIds,
+                );
+                const lockedByBundle = lockingBundles[0];
                 return (
                   <li key={view.id} className="scope-composition__option">
                     <Checkbox
                       className="scope-composition__checkbox"
-                      label={
-                        boardCount > 1
-                          ? `${view.label} (${boardCount} boards)`
-                          : boardCount === 1
-                            ? `${view.label} (1 board)`
-                            : view.label
-                      }
+                      label={view.label}
                       description={view.description}
                       checked={checkedViewIds.has(view.id)}
-                      disabled={inferredOnly}
+                      disabled={Boolean(lockedByBundle)}
                       onChange={() => onToggleBaseView(view.id)}
                       trailing={
-                        inferredOnly ? (
-                          <NeutralPill>Enabled by your templates</NeutralPill>
+                        lockedByBundle ? (
+                          <NeutralPill>Via {lockedByBundle.label}</NeutralPill>
                         ) : undefined
                       }
                     />
@@ -174,59 +146,15 @@ export function ScopeCompositionWorkspace({
               way.
             </p>
           )}
-
-          {bundlePresets.length > 0 ? (
-            <div className="scope-composition__group">
-              <GroupLabel className="scope-composition__group-label">
-                Preset boards
-              </GroupLabel>
-              <p className="scope-composition__intro">
-                These appear as tabs on Kanban, Dashboard, and other pages —
-                they do not count as extra page types.
-              </p>
-              <ul className="scope-composition__options">
-                {bundlePresets.map(({ bundleId, bundleLabel, preset }) => {
-                  const lockedByBundle =
-                    draft.selectedBundleIds.includes(bundleId);
-                  const checked = lockedByBundle
-                    ? true
-                    : resolved.ok
-                      ? resolved.viewPresetIds.includes(preset.id)
-                      : draft.selectedViewPresetIds.includes(preset.id);
-                  const pageLabel =
-                    ADDITIONAL_SCOPE_VIEW_CATALOG.find(
-                      (view) => view.id === preset.baseViewType,
-                    )?.label ?? preset.baseViewType;
-                  return (
-                    <li key={preset.id} className="scope-composition__option">
-                      <Checkbox
-                        className="scope-composition__checkbox"
-                        label={preset.label}
-                        description={`${preset.description} · Tab on ${pageLabel}`}
-                        checked={checked}
-                        disabled={lockedByBundle}
-                        onChange={() => onToggleViewPreset(preset.id)}
-                        trailing={
-                          lockedByBundle ? (
-                            <NeutralPill>Via {bundleLabel}</NeutralPill>
-                          ) : (
-                            <NeutralPill>{pageLabel} tab</NeutralPill>
-                          )
-                        }
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
         </>
       )}
 
       {tab === "templates" && (
         <>
           <p className="scope-composition__intro">
-            Choose templates for new documents in this scope.
+            Choose templates for new documents in this scope. Selecting a view
+            adds its recommended templates; removing a view removes them. You can
+            always create a blank document from the header +.
           </p>
           <ul className="scope-composition__options">
             {SYSTEM_SCOPE_TEMPLATE_CATALOG.map((template) => {
@@ -257,7 +185,7 @@ export function ScopeCompositionWorkspace({
                       lockedByBundle ? (
                         <NeutralPill>Via {lockedByBundle}</NeutralPill>
                       ) : inferredOnly ? (
-                        <NeutralPill>Enabled by your views</NeutralPill>
+                        <NeutralPill>Required by your views</NeutralPill>
                       ) : undefined
                     }
                   />
@@ -293,8 +221,8 @@ export function ScopeCompositionWorkspace({
       {tab === "bundles" && (
         <>
           <p className="scope-composition__intro">
-            Bundles add matched boards (as tabs) and templates together. Page
-            types still count toward your plan limit.
+            Bundles add matched preset tabs and templates together. Page types
+            they unlock still count toward your plan limit.
           </p>
           <ul className="scope-composition__options">
             {BUNDLE_CATALOG.map((bundle) => {

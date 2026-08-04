@@ -13,6 +13,7 @@ import {
 
 type ScopeCompositionSettingsProps = {
   bundleIds: string[];
+  enabledViews?: string[];
   setupConfig: Record<string, unknown>;
   canEdit: boolean;
   saving: boolean;
@@ -21,6 +22,7 @@ type ScopeCompositionSettingsProps = {
 
 export function ScopeCompositionSettings({
   bundleIds,
+  enabledViews,
   setupConfig,
   canEdit,
   saving,
@@ -28,13 +30,12 @@ export function ScopeCompositionSettings({
 }: ScopeCompositionSettingsProps) {
   const { featureGates, showToast } = useApp();
   const [tab, setTab] = useState<"views" | "templates" | "bundles">("views");
-  const initial = draftFromSetupConfig(setupConfig, bundleIds);
+  const initial = draftFromSetupConfig(setupConfig, bundleIds, enabledViews);
 
   const {
     draft,
     resolved,
     toggleBaseView,
-    toggleViewPreset,
     toggleTemplate,
     toggleBundle,
     resetDraft,
@@ -44,8 +45,8 @@ export function ScopeCompositionSettings({
   });
 
   useEffect(() => {
-    resetDraft(draftFromSetupConfig(setupConfig, bundleIds));
-  }, [bundleIds, resetDraft, setupConfig]);
+    resetDraft(draftFromSetupConfig(setupConfig, bundleIds, enabledViews));
+  }, [bundleIds, enabledViews, resetDraft, setupConfig]);
 
   const handleSave = async () => {
     if (!resolved.ok) {
@@ -61,9 +62,10 @@ export function ScopeCompositionSettings({
   return (
     <div className="scope-composition-settings">
       <p className="caption settings-section__intro">
-        Pick views, templates, and bundles for this scope. Items labeled &ldquo;Via&rdquo; come
-        from a selected bundle — drop the bundle to release them individually. Views or
-        templates enabled only by inference stay locked until you remove what requires them.
+        Pick page types, templates, and bundles for this scope. Preset boards come
+        with bundles as tabs inside a page — they are not separate views. Selecting
+        a view adds its templates; removing a view removes them. Items labeled
+        &ldquo;Via&rdquo; stay locked until you drop that bundle.
       </p>
       <ScopeCompositionWorkspace
         draft={draft}
@@ -72,7 +74,6 @@ export function ScopeCompositionSettings({
         tab={tab}
         onTabChange={setTab}
         onToggleBaseView={toggleBaseView}
-        onToggleViewPreset={toggleViewPreset}
         onToggleTemplate={toggleTemplate}
         onToggleBundle={toggleBundle}
       />

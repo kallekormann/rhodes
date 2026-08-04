@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { parseApiErrorMessage } from "@/lib/api/parse-error";
+import { isCacheFresh } from "@/lib/cache/swr-cache";
 import type {
   MetadataFieldType,
   MetadataGroupField,
@@ -39,9 +40,43 @@ function mapGroupFromApi(group: MetadataSchemaGroup): MetadataSchemaGroup {
 type SchemaCacheEntry = {
   schemas: MetadataSchemaField[];
   groups: MetadataSchemaGroup[];
+  fetchedAt: number;
 };
 
 const schemaCache = new Map<string, SchemaCacheEntry>();
+const schemaInFlight = new Map<string, Promise<SchemaCacheEntry>>();
+
+async function fetchSchemas(workspaceId: string): Promise<SchemaCacheEntry> {
+  const pending = schemaInFlight.get(workspaceId);
+  if (pending) return pending;
+
+  const job = (async () => {
+    const params = new URLSearchParams({ workspace_id: workspaceId });
+    const response = await fetch(`/app/api/metadata-schemas?${params}`);
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(
+        parseApiErrorMessage(data, "Failed to load metadata schemas"),
+      );
+    }
+
+    const entry: SchemaCacheEntry = {
+      schemas: (data.schemas as MetadataSchemaField[]) ?? [],
+      groups: ((data.groups as MetadataSchemaGroup[]) ?? []).map(mapGroupFromApi),
+      fetchedAt: Date.now(),
+    };
+    schemaCache.set(workspaceId, entry);
+    return entry;
+  })();
+
+  schemaInFlight.set(workspaceId, job);
+  try {
+    return await job;
+  } finally {
+    schemaInFlight.delete(workspaceId);
+  }
+}
 
 export function useMetadataSchemas(workspaceId: string | null) {
   const cached = workspaceId ? schemaCache.get(workspaceId) : undefined;
@@ -54,56 +89,53 @@ export function useMetadataSchemas(workspaceId: string | null) {
   const [loading, setLoading] = useState(() => Boolean(workspaceId) && !cached);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!workspaceId) {
-      setSchemas([]);
-      setGroups([]);
-      setLoading(false);
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    const hasCache = schemaCache.has(workspaceId);
-    if (!hasCache) setLoading(true);
-    setError(null);
-
-    try {
-      const params = new URLSearchParams({ workspace_id: workspaceId });
-      const response = await fetch(`/app/api/metadata-schemas?${params}`);
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        const message = parseApiErrorMessage(data, "Failed to load metadata schemas");
-        setError(message);
-        if (!hasCache) {
-          setSchemas([]);
-          setGroups([]);
-        }
+  const refresh = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!workspaceId) {
+        setSchemas([]);
+        setGroups([]);
+        setLoading(false);
         return;
       }
 
-      const nextSchemas = (data.schemas as MetadataSchemaField[]) ?? [];
-      const nextGroups = ((data.groups as MetadataSchemaGroup[]) ?? []).map(
-        mapGroupFromApi,
-      );
-      schemaCache.set(workspaceId, { schemas: nextSchemas, groups: nextGroups });
-      setSchemas(nextSchemas);
-      setGroups(nextGroups);
-    } catch {
-      setError("Failed to load metadata schemas");
-      if (!hasCache) {
-        setSchemas([]);
-        setGroups([]);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setLoading(false);
+        setError(null);
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId]);
+
+      const hit = schemaCache.get(workspaceId);
+      if (hit && !options?.force && isCacheFresh(hit.fetchedAt)) {
+        setSchemas(hit.schemas);
+        setGroups(hit.groups);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
+      if (!hit) setLoading(true);
+      setError(null);
+
+      try {
+        // Bust in-flight when forcing so mutations always hit the network.
+        if (options?.force) schemaInFlight.delete(workspaceId);
+        const entry = await fetchSchemas(workspaceId);
+        setSchemas(entry.schemas);
+        setGroups(entry.groups);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to load metadata schemas",
+        );
+        if (!hit) {
+          setSchemas([]);
+          setGroups([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [workspaceId],
+  );
 
   useEffect(() => {
     if (!workspaceId) {
@@ -148,7 +180,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const, schema: data.schema as MetadataSchemaField };
     },
     [refresh, workspaceId],
@@ -185,7 +217,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const, group: data.group as MetadataSchemaGroup };
     },
     [refresh, workspaceId],
@@ -204,7 +236,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const };
     },
     [refresh],
@@ -223,7 +255,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const };
     },
     [refresh],
@@ -251,7 +283,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const, schema: data.schema as MetadataSchemaField };
     },
     [refresh],
@@ -285,7 +317,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
         return { ok: false as const, error: message };
       }
 
-      await refresh();
+      await refresh({ force: true });
       return { ok: true as const, group: data.group as MetadataSchemaGroup };
     },
     [refresh],
@@ -296,7 +328,7 @@ export function useMetadataSchemas(workspaceId: string | null) {
     groups,
     loading,
     error,
-    refresh,
+    refresh: () => refresh({ force: true }),
     createSchema,
     createGroup,
     updateSchema,

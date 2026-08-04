@@ -157,7 +157,6 @@ export function ScopeSetupWizard({
     draft,
     resolved,
     toggleBaseView,
-    toggleViewPreset,
     toggleTemplate,
     toggleBundle,
     resetDraft,
@@ -317,7 +316,6 @@ export function ScopeSetupWizard({
             tab={tab}
             onTabChange={setTab}
             onToggleBaseView={toggleBaseView}
-            onToggleViewPreset={toggleViewPreset}
             onToggleTemplate={toggleTemplate}
             onToggleBundle={toggleBundle}
           />
