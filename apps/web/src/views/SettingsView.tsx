@@ -720,8 +720,8 @@ export function SettingsView() {
 
   return (
     <OfflineGate
-      title="Settings unavailable offline"
-      message="Account and workspace settings need an internet connection."
+      title="Settings offline"
+      message="Connect to change account or workspace settings."
     >
     <div className="settings-view">
       <div className="settings-view__topbar">

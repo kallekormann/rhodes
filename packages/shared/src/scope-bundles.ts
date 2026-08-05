@@ -144,7 +144,7 @@ export const GROWTH_EXPERIMENTATION_BUNDLE: BundleDefinition = {
       baseViewType: "kanban",
       label: "Experiment board",
       description: "Backlog → Design → Engineering → Live → Analyzing → Concluded",
-      config: { groupBy: "experiment_status" },
+      config: { groupBy: "ab_experiment_status" },
     },
     {
       id: "growth-funnel-dashboard",
@@ -387,7 +387,7 @@ export const LEGAL_COMPLIANCE_FINANCE_BUNDLE: BundleDefinition = {
       baseViewType: "kanban",
       label: "Contract pipeline",
       description: "Intake → Legal review → Negotiation → Approved/Rejected",
-      config: { groupBy: "review_status" },
+      config: { groupBy: "contract_review_status" },
     },
     {
       id: "compliance-dashboard",

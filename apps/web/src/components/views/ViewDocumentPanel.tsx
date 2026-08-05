@@ -59,13 +59,28 @@ function slugForTemplate(template: TemplateRecord): string | null {
   return seed?.slug ?? null;
 }
 
+function isBlankTemplate(template: TemplateRecord): boolean {
+  const slug = slugForTemplate(template);
+  return slug === "blank" || template.name === "Blank";
+}
+
+/**
+ * Sidebar template picker order: Blank always first (core default),
+ * then view affinity recommendations, then A–Z.
+ */
 function sortTemplatesForView(
   templates: TemplateRecord[],
   viewType: string,
 ): TemplateRecord[] {
-  const recommended = getRecommendedTemplatesForView(viewType);
+  const recommended = getRecommendedTemplatesForView(viewType).filter(
+    (slug) => slug !== "blank",
+  );
   const rank = new Map(recommended.map((slug, index) => [slug, index]));
   return [...templates].sort((a, b) => {
+    const aBlank = isBlankTemplate(a);
+    const bBlank = isBlankTemplate(b);
+    if (aBlank !== bBlank) return aBlank ? -1 : 1;
+
     const aSlug = slugForTemplate(a);
     const bSlug = slugForTemplate(b);
     const aRank = aSlug != null && rank.has(aSlug) ? rank.get(aSlug)! : 999;
@@ -81,6 +96,11 @@ export function ViewDocumentPanel({
   onOpenFullPage,
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentTitleChange,
+  connections,
+  onSelectConnection,
+  placement = "dock",
+  hideClose = false,
 }: ViewDocumentPanelProps) {
   const {
     workspaceId,
@@ -106,6 +126,10 @@ export function ViewDocumentPanel({
     deleteSchema,
     deleteGroup,
   } = useMetadataSchemas(workspaceId);
+
+  const isViewing = state.mode === "viewing";
+  const isDocumentMode = state.mode === "editing" || state.mode === "viewing";
+  const readOnly = isViewing || !canWriteActiveScope;
 
   const [creating, setCreating] = useState(false);
   const [loadingDoc, setLoadingDoc] = useState(false);
@@ -133,8 +157,10 @@ export function ViewDocumentPanel({
 
   const onDocumentUpdatedRef = useRef(onDocumentUpdated);
   onDocumentUpdatedRef.current = onDocumentUpdated;
+  const onDocumentTitleChangeRef = useRef(onDocumentTitleChange);
+  onDocumentTitleChangeRef.current = onDocumentTitleChange;
 
-  const documentId = state.mode === "editing" ? state.documentId : null;
+  const documentId = isDocumentMode ? state.documentId : null;
 
   const templates = useMemo(() => {
     if (state.mode !== "pick-template") return [];
@@ -151,7 +177,7 @@ export function ViewDocumentPanel({
       },
       options?: { notifyBoard?: boolean },
     ) => {
-      if (!documentId || !canWriteActiveScope) return;
+      if (!documentId || readOnly) return;
       setSaveError(null);
       try {
         const response = await fetch(`/app/api/documents/${documentId}`, {
@@ -170,11 +196,12 @@ export function ViewDocumentPanel({
         setSaveError(err instanceof Error ? err.message : "Couldn't save");
       }
     },
-    [documentId, canWriteActiveScope],
+    [documentId, readOnly],
   );
 
   const scheduleContentSave = useCallback(
     (nextContent: Record<string, unknown>, plainText: string) => {
+      if (readOnly) return;
       // Keep TipTap as source of truth — do not push content back into React
       // state (that re-triggered contentSync and caused flicker).
       contentRef.current = nextContent;
@@ -183,12 +210,16 @@ export function ViewDocumentPanel({
         void persist({ content: nextContent, content_plain: plainText });
       }, 800);
     },
-    [persist],
+    [persist, readOnly],
   );
 
   const handleTitleChange = useCallback(
     (next: string) => {
+      if (readOnly) return;
       setTitle(next);
+      if (documentId) {
+        onDocumentTitleChangeRef.current?.(documentId, next);
+      }
       if (titleTimer.current) clearTimeout(titleTimer.current);
       titleTimer.current = setTimeout(() => {
         void persist(
@@ -197,7 +228,7 @@ export function ViewDocumentPanel({
         );
       }, 500);
     },
-    [persist],
+    [persist, documentId, readOnly],
   );
 
   useEffect(() => {
@@ -208,13 +239,13 @@ export function ViewDocumentPanel({
   }, []);
 
   useEffect(() => {
-    if (state.mode !== "editing" || !state.documentId) {
+    if (!isDocumentMode || !documentId) {
       loadedDocIdRef.current = null;
       setEditorReady(false);
       return;
     }
 
-    const docId = state.documentId;
+    const docId = documentId;
     // Same document already in the panel — parent board refresh must not reload.
     if (loadedDocIdRef.current === docId) {
       return;
@@ -264,12 +295,16 @@ export function ViewDocumentPanel({
     return () => {
       cancelled = true;
     };
-  }, [state.mode, state.mode === "editing" ? state.documentId : null]);
+  }, [isDocumentMode, documentId]);
 
   const handlePickTemplate = async (template: TemplateRecord) => {
     if (state.mode !== "pick-template" || !workspaceId) return;
     if (!canWriteActiveScope) {
       showToast("You have read-only access in this scope", "error");
+      return;
+    }
+    if (!onDocumentCreated) {
+      showToast("Couldn't create document in this view", "error");
       return;
     }
     setCreating(true);
@@ -296,7 +331,9 @@ export function ViewDocumentPanel({
         showToast("Couldn't create document", "error");
         return;
       }
-      onDocumentCreated({ id: created.id, title: created.title });
+      await Promise.resolve(
+        onDocumentCreated({ id: created.id, title: created.title }, ctx),
+      );
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Couldn't create document",
@@ -330,18 +367,32 @@ export function ViewDocumentPanel({
   if (state.mode === "closed") return null;
 
   if (state.mode === "pick-template") {
+    if (creating && placement === "fill") {
+      return (
+        <aside className="view-document-panel view-document-panel--picker view-document-panel--fill view-document-panel--creating">
+          <LoaderState label="Creating document…" size="m" align="fill" />
+        </aside>
+      );
+    }
+
     return (
-      <aside className="view-document-panel view-document-panel--picker">
+      <aside
+        className={`view-document-panel view-document-panel--picker${
+          placement === "fill" ? " view-document-panel--fill" : ""
+        }`}
+      >
         <header className="view-document-panel__chrome">
           <h3 className="view-document-panel__picker-title">New document</h3>
-          <IconButton icon={X} label="Close panel" size="small" onClick={onClose} />
+          {!hideClose ? (
+            <IconButton icon={X} label="Close panel" size="small" onClick={onClose} />
+          ) : null}
         </header>
         <p className="caption view-document-panel__intro">
           Choose a template for this entry. Suggested templates for this view
           appear first.
         </p>
         {creating ? (
-          <LoaderState label="Creating…" size="s" align="fill" />
+          <LoaderState label="Creating document…" size="s" align="fill" />
         ) : templates.length === 0 ? (
           <p className="caption">No templates available in this scope yet.</p>
         ) : (
@@ -385,9 +436,18 @@ export function ViewDocumentPanel({
     <aside
       className={`view-document-panel view-document-panel--editor${
         propertiesOpen ? " view-document-panel--properties-open" : ""
+      }${isViewing ? " view-document-panel--viewing" : ""}${
+        placement === "fill" ? " view-document-panel--fill" : ""
       }`}
     >
-      <header className="view-document-panel__chrome">
+      <header
+        className={`view-document-panel__chrome${
+          isViewing ? " view-document-panel__chrome--split" : ""
+        }`}
+      >
+        {isViewing ? (
+          <p className="caption view-document-panel__chrome-label">View only</p>
+        ) : null}
         <div className="view-document-panel__chrome-actions">
           <IconButton
             icon={ExternalLink}
@@ -395,7 +455,9 @@ export function ViewDocumentPanel({
             size="small"
             onClick={() => onOpenFullPage(state.documentId, title)}
           />
-          <IconButton icon={X} label="Close panel" size="small" onClick={onClose} />
+          {!hideClose ? (
+            <IconButton icon={X} label="Close panel" size="small" onClick={onClose} />
+          ) : null}
         </div>
       </header>
 
@@ -408,6 +470,34 @@ export function ViewDocumentPanel({
       ) : (
         <div className="view-document-panel__body">
           <div className="view-document-panel__editor-pane overlay-scrollbar">
+            {isViewing && connections && connections.length > 0 ? (
+              <section className="view-document-panel__connections">
+                <p className="caption view-document-panel__connections-label">
+                  {connections.length} connection
+                  {connections.length === 1 ? "" : "s"}
+                </p>
+                <ul className="view-document-panel__connections-list">
+                  {connections.map((connection) => (
+                    <li key={`${connection.documentId}:${connection.fieldLabel}:${connection.direction}`}>
+                      <button
+                        type="button"
+                        className="view-document-panel__connection"
+                        onClick={() => onSelectConnection?.(connection.documentId)}
+                      >
+                        <span className="view-document-panel__connection-title">
+                          {connection.title}
+                        </span>
+                        <span className="caption view-document-panel__connection-field">
+                          {connection.direction === "outgoing" ? "→" : "←"}{" "}
+                          {connection.fieldLabel}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <article className="view-document-panel__article">
               <header className="editor-content__header">
                 <div className="editor-content__gutter" aria-hidden="true" />
@@ -417,26 +507,28 @@ export function ViewDocumentPanel({
                     onChange={handleTitleChange}
                     placeholder="Untitled Document"
                     aria-label="Document title"
-                    disabled={!canWriteActiveScope}
+                    disabled={readOnly}
                   />
-                  <div className="editor-content__meta">
-                    <div className="editor-content__meta-row">
-                      <IconLabelButton
-                        variant="meta"
-                        icon={SlidersHorizontal}
-                        active={propertiesOpen}
-                        disabled={!online}
-                        title={
-                          online
-                            ? undefined
-                            : "Properties unavailable offline — you can still write"
-                        }
-                        onClick={() => setPropertiesOpen((open) => !open)}
-                      >
-                        Properties
-                      </IconLabelButton>
+                  {!isViewing ? (
+                    <div className="editor-content__meta">
+                      <div className="editor-content__meta-row">
+                        <IconLabelButton
+                          variant="meta"
+                          icon={SlidersHorizontal}
+                          active={propertiesOpen}
+                          disabled={!online}
+                          title={
+                            online
+                              ? undefined
+                              : "Properties offline — you can still write"
+                          }
+                          onClick={() => setPropertiesOpen((open) => !open)}
+                        >
+                          Properties
+                        </IconLabelButton>
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
                 <div className="editor-content__gutter" aria-hidden="true" />
               </header>
@@ -448,7 +540,7 @@ export function ViewDocumentPanel({
                       key={state.documentId}
                       content={content}
                       contentSyncToken={0}
-                      editable={canWriteActiveScope}
+                      editable={!readOnly}
                       documentId={state.documentId}
                       workspaceId={workspaceId}
                       onUpdate={scheduleContentSave}
@@ -460,7 +552,7 @@ export function ViewDocumentPanel({
             </article>
           </div>
 
-          {propertiesOpen ? (
+          {!isViewing && propertiesOpen ? (
             <aside className="view-document-panel__properties">
               <PropertiesTab
                 mode="document"

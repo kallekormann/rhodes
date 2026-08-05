@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { VIEW_ENGINE_BASE_TYPES } from "@rhodes/shared/view-engine";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
+import { viewInstanceLayoutSchema } from "@/lib/views/view-instance-layout-schema";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -13,7 +14,7 @@ const createInstanceSchema = z.object({
   base_view_type: z.enum(VIEW_ENGINE_BASE_TYPES),
   label: z.string().min(1).max(200).optional(),
   config: z.record(z.unknown()).optional(),
-  layout: z.record(z.object({ x: z.number(), y: z.number() })).optional(),
+  layout: viewInstanceLayoutSchema.optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext) {

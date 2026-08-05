@@ -1,6 +1,5 @@
 "use client";
 
-import { WifiOff } from "lucide-react";
 import "./OfflineUnavailable.css";
 
 type OfflineUnavailableProps = {
@@ -8,14 +7,14 @@ type OfflineUnavailableProps = {
   message?: string;
 };
 
+/** Soft offline placeholder — caption-scale, no alarm iconography. */
 export function OfflineUnavailable({
-  title = "You're offline",
-  message = "This area needs an internet connection. Open a cached document from Documents to keep working offline.",
+  title = "Unavailable offline",
+  message = "Connect to use this area. Cached documents still work from Documents.",
 }: OfflineUnavailableProps) {
   return (
     <div className="offline-unavailable" role="status">
-      <WifiOff size={28} strokeWidth={1.75} className="offline-unavailable__icon" />
-      <h2 className="offline-unavailable__title">{title}</h2>
+      <p className="offline-unavailable__title">{title}</p>
       <p className="offline-unavailable__message">{message}</p>
     </div>
   );

@@ -36,6 +36,10 @@ const GanttView = dynamic(
   () => import("@/views/GanttView").then((m) => ({ default: m.GanttView })),
   { loading: engineLoading, ssr: false },
 );
+const WikiView = dynamic(
+  () => import("@/views/WikiView").then((m) => ({ default: m.WikiView })),
+  { loading: engineLoading, ssr: false },
+);
 
 /**
  * Routes scope engine surfaces (Kanban, Calendar, …).
@@ -62,6 +66,9 @@ export function DocumentsView() {
   }
   if (view === "gantt") {
     return <GanttView />;
+  }
+  if (view === "wiki") {
+    return <WikiView />;
   }
   return <DocumentsListView />;
 }

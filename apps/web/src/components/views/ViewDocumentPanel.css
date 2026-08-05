@@ -15,9 +15,29 @@
   z-index: 6;
 }
 
+/** Wiki (and similar): fill the parent pane instead of docking as an overlay. */
+.view-document-panel--fill {
+  position: relative;
+  inset: auto;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  border-left: none;
+  box-shadow: none;
+  z-index: auto;
+}
+
 .view-document-panel--picker {
   background: var(--color-surface);
   gap: var(--space-sm);
+}
+
+.view-document-panel--creating {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
 }
 
 .view-document-panel__chrome {
@@ -31,7 +51,12 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.view-document-panel__chrome--split {
+  justify-content: space-between;
+}
+
 .view-document-panel__chrome-label {
+  margin: 0;
   color: var(--color-text-tertiary);
 }
 
@@ -112,6 +137,56 @@
   margin: 0;
   flex-shrink: 0;
   color: var(--color-danger, #b42318);
+}
+
+.view-document-panel__connections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-md);
+  padding: var(--space-md) 0 var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.view-document-panel__connections-label {
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+
+.view-document-panel__connections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.view-document-panel__connection {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 2px;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--color-surface-hover);
+  text-align: left;
+  cursor: pointer;
+}
+
+.view-document-panel__connection:hover {
+  background: var(--color-accent-subtle, var(--color-surface-hover));
+}
+
+.view-document-panel__connection-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.view-document-panel__connection-field {
+  color: var(--color-text-tertiary);
 }
 
 .view-document-panel__body {

@@ -1,0 +1,76 @@
+/* Quiet empty state — matches Rhodes caption / meta language, not a hero. */
+
+.view-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 36rem;
+}
+
+.view-empty-state--inline {
+  align-items: flex-start;
+  padding: var(--space-md) 0 var(--space-lg);
+  min-height: 0;
+  text-align: left;
+}
+
+.view-empty-state--panel {
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin: auto;
+  padding: var(--space-xl) var(--space-lg);
+  min-height: 10rem;
+  text-align: center;
+}
+
+.view-empty-state__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.view-empty-state--panel .view-empty-state__copy {
+  align-items: center;
+}
+
+.view-empty-state__icon {
+  display: none; /* reserved; prefer typography-only empties */
+}
+
+.view-empty-state__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.view-empty-state__description {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+.view-empty-state__hint {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-text-tertiary);
+  opacity: 0.85;
+}
+
+.view-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.view-empty-state--panel .view-empty-state__actions {
+  justify-content: center;
+}

@@ -15,6 +15,7 @@ export type TemplateRecord = {
   metadata?: Record<string, unknown> | null;
   is_system: boolean;
   is_shared: boolean;
+  slug?: string | null;
   created_at: string;
 };
 

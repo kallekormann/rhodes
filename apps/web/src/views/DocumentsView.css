@@ -30,7 +30,7 @@
 
 .documents-view__offline-note {
   margin: 0 0 var(--space-md);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .documents-toolbar {

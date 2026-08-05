@@ -21,6 +21,7 @@ import {
   dashboardConfigFromInstance,
   isNumericAggregation,
 } from "@/lib/views/dashboard";
+import { dashboardEmptyCopy } from "@/lib/views/empty-states";
 import { VIEW_HELP_CONTENT } from "@/lib/views/help-content";
 import { RhodesBarChart, RhodesLineChart } from "@/components/charts/ChartFrame";
 import { Dropdown } from "@/components/Dropdown";
@@ -28,6 +29,7 @@ import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
 import { NavLink } from "@/components/NavLink";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
 import {
   ViewDockPanel,
   ViewSettingsField,
@@ -449,11 +451,19 @@ export function DashboardView() {
                 ) : null}
 
                 {widgets.length === 0 && !editingWidget ? (
-                  <p className="caption dashboard-view__empty">
-                    {canWriteActiveScope
-                      ? "No widgets yet. Add a stat, breakdown, trend, or list to summarize this scope's documents."
-                      : "This dashboard has no widgets yet."}
-                  </p>
+                  <ViewEmptyState
+                    layout="panel"
+                    title={dashboardEmptyCopy(canWriteActiveScope).title}
+                    description={dashboardEmptyCopy(canWriteActiveScope).description}
+                    primaryAction={
+                      canWriteActiveScope
+                        ? {
+                            label: "Add widget",
+                            onClick: () => setFormState({ mode: "create" }),
+                          }
+                        : undefined
+                    }
+                  />
                 ) : (
                   <div className="dashboard-grid">
                     {widgets.map((widget) => {

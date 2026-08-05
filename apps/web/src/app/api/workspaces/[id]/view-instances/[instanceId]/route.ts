@@ -2,15 +2,14 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { withSecurityHeaders } from "@/lib/api/security-headers";
 import { createClient } from "@/lib/supabase/server";
+import { viewInstanceLayoutSchema } from "@/lib/views/view-instance-layout-schema";
 
 type RouteContext = { params: Promise<{ id: string; instanceId: string }> };
-
-const layoutPointSchema = z.object({ x: z.number(), y: z.number() });
 
 const updateInstanceSchema = z.object({
   label: z.string().min(1).max(200).optional(),
   config: z.record(z.unknown()).optional(),
-  layout: z.record(layoutPointSchema).nullable().optional(),
+  layout: viewInstanceLayoutSchema.optional(),
 });
 
 export async function PATCH(request: Request, context: RouteContext) {

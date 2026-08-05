@@ -22,11 +22,13 @@ import {
   ganttConfigFromInstance,
 } from "@/lib/views/gantt";
 import { VIEW_HELP_CONTENT } from "@/lib/views/help-content";
+import { ganttEmptyCopy } from "@/lib/views/empty-states";
 import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { Dropdown } from "@/components/Dropdown";
 import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
 import { NavLink } from "@/components/NavLink";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
 import type { MetadataSchemaField } from "@/lib/metadata/schemas";
 import { ViewDocumentPanelHost } from "@/components/views/ViewDocumentPanelHost";
 import type { ViewDocumentPanelState } from "@/components/views/view-document-panel-types";
@@ -300,9 +302,15 @@ export function GanttView() {
   const tasks = useMemo(
     () =>
       startField
-        ? buildGanttTasks(activeDocs, hierarchyFields, startField, endField)
+        ? buildGanttTasks(
+            activeDocs,
+            hierarchyFields,
+            startField,
+            endField,
+            config?.durationField ?? "planned_duration_days",
+          )
         : [],
-    [activeDocs, hierarchyFields, startField, endField],
+    [activeDocs, hierarchyFields, startField, endField, config?.durationField],
   );
 
   const svarTasks = useMemo(
@@ -428,16 +436,43 @@ export function GanttView() {
         {ganttLoading ? (
           <LoaderState label="Loading roadmap…" align="fill" />
         ) : !startField ? (
-          <p className="caption gantt-view__empty">
-            This scope has no date or date-range properties yet. Add one in Settings to
-            plot documents on the roadmap.
-          </p>
+          <ViewEmptyState
+            layout="panel"
+            title={
+              ganttEmptyCopy({ canWrite: canWriteActiveScope, hasDateField: false })
+                .title
+            }
+            description={
+              ganttEmptyCopy({ canWrite: canWriteActiveScope, hasDateField: false })
+                .description
+            }
+          />
         ) : tasks.length === 0 ? (
-          <p className="caption gantt-view__empty">
-            {canWriteActiveScope
-              ? `No documents have a value for “${startField.field_label}” yet. Use New entry to create one with today’s date.`
-              : `No documents have a value for “${startField.field_label}” yet.`}
-          </p>
+          <ViewEmptyState
+            layout="panel"
+            title={
+              ganttEmptyCopy({
+                canWrite: canWriteActiveScope,
+                hasDateField: true,
+                fieldLabel: startField.field_label,
+              }).title
+            }
+            description={
+              ganttEmptyCopy({
+                canWrite: canWriteActiveScope,
+                hasDateField: true,
+                fieldLabel: startField.field_label,
+              }).description
+            }
+            primaryAction={
+              canWriteActiveScope
+                ? {
+                    label: "New entry",
+                    onClick: startCreateEntry,
+                  }
+                : undefined
+            }
+          />
         ) : (
           <div className="gantt-view__chart">
             <Willow>

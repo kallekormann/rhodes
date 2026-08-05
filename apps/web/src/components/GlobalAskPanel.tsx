@@ -16,16 +16,14 @@ const AskPanel = dynamic(
 );
 
 /**
- * Rhodes Ask shell for non-editor views (Documents, Library, future Dashboard).
- * ~50vw fixed overlay — does not squeeze page content. Editor keeps docked RightPanel.
+ * Scope-level Rhodes Ask (~50vw overlay). Opened from Cmd+K
+ * "Ask about {scope}" — independent of the document editor's docked Ask tab.
  */
 export function GlobalAskPanel() {
   const [mounted, setMounted] = useState(false);
   const {
-    view,
-    panelOpen,
-    panelTab,
-    closePanel,
+    globalAskOpen,
+    closeGlobalAsk,
     workspaceId,
     activeScope,
   } = useApp();
@@ -35,7 +33,7 @@ export function GlobalAskPanel() {
     setMounted(true);
   }, []);
 
-  const visible = view !== "editor" && panelOpen && panelTab === "ask";
+  const visible = globalAskOpen;
 
   if (!mounted) {
     return null;
@@ -61,7 +59,7 @@ export function GlobalAskPanel() {
               <IconButton
                 icon={PanelRightClose}
                 label="Close panel"
-                onClick={closePanel}
+                onClick={closeGlobalAsk}
                 iconSize={18}
               />
             </div>
@@ -70,8 +68,8 @@ export function GlobalAskPanel() {
                 <AskPanel workspaceId={workspaceId} />
               ) : (
                 <OfflineUnavailable
-                  title="Ask unavailable offline"
-                  message="Rhodes Ask needs an internet connection."
+                  title="Ask offline"
+                  message="Connect to use Ask."
                 />
               )}
             </div>

@@ -20,6 +20,8 @@ import { GroupLabel } from "@/components/SectionHeader";
 import { Input } from "@/components/Input";
 import { PaginationBar } from "@/components/PaginationBar";
 import { StatusPill } from "@/components/StatusPill";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
+import { libraryEmptyCopy } from "@/lib/views/empty-states";
 import {
   LIBRARY_PAGE_SIZE,
   useLibrarySources,
@@ -243,8 +245,8 @@ export function LibraryView() {
 
   return (
     <OfflineGate
-      title="Library unavailable offline"
-      message="Knowledge sources need an internet connection. Open a cached document from Documents to keep editing offline."
+      title="Library offline"
+      message="Open a cached document from Documents to keep working."
     >
     <div className="canvas-view library-view">
       <div className="library-view__scroll overlay-scrollbar">
@@ -317,11 +319,24 @@ export function LibraryView() {
           {error && <p className="caption library-view__error">{error}</p>}
 
           {showEmpty && (
-            <p className="caption library-view__empty">
-              {query.q || query.fileType !== "all" || query.from || query.to
-                ? "No sources match these filters."
-                : `No sources yet. Upload a ${LIBRARY_FILE_LABEL} file to get started.`}
-            </p>
+            <ViewEmptyState
+              title={
+                libraryEmptyCopy({
+                  canWrite: canUpload,
+                  filtered: Boolean(
+                    query.q || query.fileType !== "all" || query.from || query.to,
+                  ),
+                }).title
+              }
+              description={
+                libraryEmptyCopy({
+                  canWrite: canUpload,
+                  filtered: Boolean(
+                    query.q || query.fileType !== "all" || query.from || query.to,
+                  ),
+                }).description
+              }
+            />
           )}
 
           {sources.length > 0 && (

@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ADDITIONAL_SCOPE_VIEW_CATALOG } from "@rhodes/shared/scope-views";
-import type { ScopeViewInstanceRecord } from "@rhodes/shared/view-engine";
+import {
+  createEmptyMindMapLayout,
+  createEmptyWikiLayout,
+  type ScopeViewInstanceRecord,
+} from "@rhodes/shared/view-engine";
 import { useScopeViewInstances } from "@/hooks/useScopeViewInstances";
 
 export type ViewInstanceBaseType =
@@ -11,7 +15,8 @@ export type ViewInstanceBaseType =
   | "calendar"
   | "gantt"
   | "mindmap"
-  | "graph";
+  | "graph"
+  | "wiki";
 
 function storageKey(workspaceId: string, baseViewType: string): string {
   return `rhodes:view-instance:${workspaceId}:${baseViewType}`;
@@ -154,6 +159,11 @@ export function useViewInstances(
         base_view_type: baseViewType,
         label: label.trim() || defaultLabel,
         config: {},
+        ...(baseViewType === "mindmap"
+          ? { layout: createEmptyMindMapLayout() }
+          : baseViewType === "wiki"
+            ? { layout: createEmptyWikiLayout() }
+            : {}),
       });
       if (!result.ok) {
         reportError(result.error);

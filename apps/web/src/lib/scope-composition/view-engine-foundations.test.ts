@@ -27,6 +27,12 @@ describe("view engine foundations", () => {
     expect(ids.filter((id) => id === "graph" || id === "mindmap")).toHaveLength(2);
   });
 
+  it("marks wiki as available in the catalog", () => {
+    const wiki = ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === "wiki");
+    expect(wiki?.status).toBe("available");
+    expect(wiki?.label).toBe("Wiki");
+  });
+
   it("marks kanban as available in the catalog", () => {
     const kanban = ADDITIONAL_SCOPE_VIEW_CATALOG.find((view) => view.id === "kanban");
     expect(kanban?.status).toBe("available");
@@ -56,5 +62,7 @@ describe("view engine foundations", () => {
   it("defines affinity rules for mindmap and graph", () => {
     expect(VIEW_TEMPLATE_AFFINITY.mindmap?.recommended.length).toBeGreaterThan(0);
     expect(VIEW_TEMPLATE_AFFINITY.graph?.recommended.length).toBeGreaterThan(0);
+    expect(VIEW_TEMPLATE_AFFINITY.mindmap?.recommended[0]).toBe("blank");
+    expect(VIEW_TEMPLATE_AFFINITY.graph?.recommended[0]).toBe("blank");
   });
 });

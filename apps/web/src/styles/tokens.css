@@ -78,6 +78,8 @@
   --space-2xl: 64px;
 
   --header-height: 48px;
+  /* View tab bars / page chrome rows (Kanban, Wiki, Mind-Map, Graph, …). */
+  --view-chrome-height: var(--header-height);
   /* Shared with AppHeader padding — view settings/info icons align to this edge. */
   --app-chrome-inline: var(--space-md);
   --app-header-action-gap: 2px;

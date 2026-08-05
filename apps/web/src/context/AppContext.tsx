@@ -58,6 +58,7 @@ export type AppView =
   | "gantt"
   | "mindmap"
   | "graph"
+  | "wiki"
   | "templates"
   | "library"
   | "settings"
@@ -119,6 +120,14 @@ type AppContextValue = {
   openPanel: (tab?: PanelTab) => void;
   closePanel: () => void;
   setPanelTab: (tab: PanelTab) => void;
+  /**
+   * Scope-level Rhodes Ask (~50vw overlay). Independent of the document
+   * editor's docked RightPanel Ask tab — Cmd+K "Ask about {scope}" always
+   * opens this, even while an editor is mounted.
+   */
+  globalAskOpen: boolean;
+  openGlobalAsk: () => void;
+  closeGlobalAsk: () => void;
   cmdKOpen: boolean;
   openCmdK: () => void;
   closeCmdK: () => void;
@@ -227,6 +236,7 @@ export function AppProvider({
   const [theme, setThemeState] = useState<Theme>("light");
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<PanelTab>("insights");
+  const [globalAskOpen, setGlobalAskOpen] = useState(false);
   const [cmdKOpen, setCmdKOpen] = useState(false);
   const [libraryUploadNonce, setLibraryUploadNonce] = useState(0);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -623,6 +633,7 @@ export function AppProvider({
       }
       if (e.key === "Escape") {
         setCmdKOpen(false);
+        setGlobalAskOpen(false);
         setPanelOpen(false);
       }
     };
@@ -783,9 +794,16 @@ export function AppProvider({
   const openPanel = useCallback((tab: PanelTab = "insights") => {
     setPanelTab(tab);
     setPanelOpen(true);
+    // Avoid two Ask shells at once when opening the docked editor panel.
+    if (tab === "ask") setGlobalAskOpen(false);
   }, []);
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
+  const openGlobalAsk = useCallback(() => {
+    setGlobalAskOpen(true);
+    if (panelTab === "ask") setPanelOpen(false);
+  }, [panelTab]);
+  const closeGlobalAsk = useCallback(() => setGlobalAskOpen(false), []);
   const openCmdK = useCallback(() => setCmdKOpen(true), []);
   const closeCmdK = useCallback(() => setCmdKOpen(false), []);
   const openLibraryUpload = useCallback(() => {
@@ -824,6 +842,9 @@ export function AppProvider({
       openPanel,
       closePanel,
       setPanelTab,
+      globalAskOpen,
+      openGlobalAsk,
+      closeGlobalAsk,
       cmdKOpen,
       openCmdK,
       closeCmdK,
@@ -884,6 +905,10 @@ export function AppProvider({
       panelTab,
       openPanel,
       closePanel,
+      setPanelTab,
+      globalAskOpen,
+      openGlobalAsk,
+      closeGlobalAsk,
       cmdKOpen,
       openCmdK,
       closeCmdK,

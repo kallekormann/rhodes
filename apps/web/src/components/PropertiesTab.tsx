@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import { Dialog } from "@/components/Dialog";
 import { Input } from "@/components/Input";
@@ -33,7 +33,12 @@ import {
 import { PROPERTY_GROUP_PRESETS } from "@/lib/metadata/group-presets";
 import { PROPERTY_PRESETS } from "@/lib/metadata/presets";
 import type { TemplateMetadata } from "@/lib/templates/metadata";
-import { DOCUMENT_TYPE_LABELS, isEssentialTemplateFieldKey, resolveTemplateSchemaFieldKeys } from "@rhodes/shared/system-templates";
+import {
+  DOCUMENT_TYPE_LABELS,
+  isEssentialTemplateFieldKey,
+  resolveTemplateSchemaFieldKeys,
+  resolveTemplateSchemaGroupKeys,
+} from "@rhodes/shared/system-templates";
 import { isDocumentFresh } from "@/lib/documents/fresh-documents";
 import { upgradeCopyForFeature } from "@/lib/features/upgrade-copy";
 import { DocumentHistorySection, type ActivityNavigateTarget } from "@/components/DocumentHistorySection";
@@ -113,6 +118,12 @@ type PropertiesTabProps = {
   onNavigateToActivity?: (target: ActivityNavigateTarget) => void;
   /** When false, skip Activity/Versions UI and its network fetches. */
   showHistory?: boolean;
+  /**
+   * Field keys that are display-only in document mode (e.g. Wiki locks Origin —
+   * parentage is edited via the page tree).
+   */
+  readOnlyFieldKeys?: string[];
+  fieldHints?: Record<string, string>;
 };
 
 function UseCasesEditor({
@@ -230,11 +241,17 @@ export function PropertiesTab({
   onVersionRestored,
   onNavigateToActivity,
   showHistory,
+  readOnlyFieldKeys = [],
+  fieldHints = {},
 }: PropertiesTabProps) {
   const { showToast, featureGates } = useApp();
   const canManageProperties = featureGates.can("properties.manage");
   const historyVisible =
     showHistory ?? (documentId != null && !isDocumentFresh(documentId));
+  const readOnlyFields = useMemo(
+    () => new Set(readOnlyFieldKeys),
+    [readOnlyFieldKeys],
+  );
 
   const [internalStage, setInternalStage] = useState<PropertiesPanelStage>("view");
   const stage = stageProp ?? internalStage;
@@ -274,14 +291,23 @@ export function PropertiesTab({
 
   // View mode: only Tier B fields for this document's template — not every
   // schema seeded into the scope (e.g. hide experiment fields on Meeting Notes).
-  // Manage / Add keep the full scope list.
+  // Manage / Add keep the full scope list. Fail closed when template is unknown.
   const templateFieldKeys = resolveTemplateSchemaFieldKeys(metadata);
+  const templateGroupKeys = resolveTemplateSchemaGroupKeys(metadata);
   const visibleSchemas =
-    stage === "view" && templateFieldKeys
-      ? editableSchemas.filter((field) => templateFieldKeys.has(field.field_key))
+    stage === "view"
+      ? templateFieldKeys
+        ? editableSchemas.filter((field) => templateFieldKeys.has(field.field_key))
+        : editableSchemas.filter((field) => isEssentialTemplateFieldKey(field.field_key))
       : editableSchemas;
+  // View mode: only groups declared on this template (e.g. Targeting / ICE on A/B).
+  // Unknown template → no groups (fail closed).
   const visibleGroups =
-    stage === "view" && templateFieldKeys ? [] : groups;
+    stage === "view"
+      ? templateGroupKeys
+        ? groups.filter((group) => templateGroupKeys.has(group.group_key))
+        : []
+      : groups;
 
   const handleMetadataFieldChange = useCallback(
     (fieldKey: string, value: MetadataFieldValue) => {
@@ -324,6 +350,7 @@ export function PropertiesTab({
       document_type: templateMetadata?.document_type,
       supported_views: templateMetadata?.supported_views,
       schema_fields: templateMetadata?.schema_fields,
+      schema_groups: templateMetadata?.schema_groups,
       default_properties: next,
     });
   };
@@ -554,6 +581,8 @@ export function PropertiesTab({
                 onChange={(value) => handleMetadataFieldChange(field.field_key, value)}
                 aiSuggested={field.ai_fill_enabled === true && aiFilledKeys.has(field.field_key)}
                 excludeDocumentId={documentId}
+                readOnly={readOnlyFields.has(field.field_key)}
+                hint={fieldHints[field.field_key]}
               />
             ))}
           </dl>
@@ -680,6 +709,7 @@ export function PropertiesTab({
                   document_type: templateMetadata?.document_type,
                   supported_views: templateMetadata?.supported_views,
                   schema_fields: templateMetadata?.schema_fields,
+                  schema_groups: templateMetadata?.schema_groups,
                   default_properties: defaultProperties,
                 })
               }

@@ -22,7 +22,9 @@ import type { ScopeCompositionBody } from "@/lib/scope-composition/apply";
 export type ScopeSetupWizardMode =
   | "create_personal"
   | "create_team"
-  | "settings_reconfigure";
+  | "settings_reconfigure"
+  /** First-run: configure the bootstrapped private scope after account onboarding. */
+  | "onboarding_personal";
 
 export type PendingTeamInvite = {
   email: string;
@@ -69,6 +71,31 @@ const PERSONAL_STEPS: StepConfig[] = [
     label: "Summary",
     heading: "Review your scope",
     description: "Confirm everything below, then create your scope.",
+  },
+];
+
+/** Same steps as personal create, with onboarding-specific headings. */
+const ONBOARDING_PERSONAL_STEPS: StepConfig[] = [
+  {
+    id: "name",
+    label: "Name",
+    heading: "Name your private scope",
+    description:
+      "This is your personal space to explore Rhodes. Organization and team scopes can wait until you’re ready.",
+  },
+  {
+    id: "setup",
+    label: "Setup",
+    heading: "What do you want for yourself?",
+    description:
+      "Documents and Library are always included. Add views, templates, or bundles for how you work privately.",
+  },
+  {
+    id: "summary",
+    label: "Summary",
+    heading: "Ready to explore",
+    description:
+      "Confirm your private scope, then open Rhodes. You can add org or team scopes later from the scope switcher.",
   },
 ];
 
@@ -144,7 +171,9 @@ export function ScopeSetupWizard({
       ? SETTINGS_STEPS
       : mode === "create_team"
         ? TEAM_STEPS
-        : PERSONAL_STEPS;
+        : mode === "onboarding_personal"
+          ? ONBOARDING_PERSONAL_STEPS
+          : PERSONAL_STEPS;
 
   const [stepId, setStepId] = useState(steps[0]?.id ?? "name");
   const [name, setName] = useState(initialName);
@@ -182,14 +211,19 @@ export function ScopeSetupWizard({
 
   const trimmedName = name.trim();
   const isCreate = mode === "create_personal" || mode === "create_team";
+  const isOnboarding = mode === "onboarding_personal";
   const isSummaryStep = stepId === "summary";
-  const title = isCreate
-    ? kind === "personal"
-      ? "New personal scope"
-      : "New team scope"
-    : "Configure scope";
+  const title = isOnboarding
+    ? "Set up your private scope"
+    : isCreate
+      ? kind === "personal"
+        ? "New personal scope"
+        : "New team scope"
+      : "Configure scope";
   const placeholder =
-    kind === "personal" ? "e.g. Book draft, Research notes" : "e.g. Growth Engine";
+    kind === "personal" || isOnboarding
+      ? "e.g. My notes, Research, Sandbox"
+      : "e.g. Growth Engine";
 
   const stepIndex = steps.findIndex((step) => step.id === stepId);
   const currentStep = steps[stepIndex];
@@ -214,7 +248,7 @@ export function ScopeSetupWizard({
     try {
       const ok = await Promise.resolve(
         onSubmit({
-          name: isCreate ? trimmedName : initialName,
+          name: isCreate || isOnboarding ? trimmedName : initialName,
           scopeComposition: draftToCompositionBody(draft),
           pendingInvites:
             mode === "create_team" ? normalizeInvites(inviteRows) : undefined,
@@ -252,7 +286,9 @@ export function ScopeSetupWizard({
   const primaryLabel = isLastStep
     ? mode === "settings_reconfigure"
       ? "Save"
-      : "Create"
+      : isOnboarding
+        ? "Open Rhodes"
+        : "Create"
     : "Continue";
 
   return (
@@ -266,7 +302,7 @@ export function ScopeSetupWizard({
       aside={
         isSummaryStep ? undefined : (
           <WizardScopeOutline
-            scopeName={isCreate ? name : initialName}
+            scopeName={isCreate || isOnboarding ? name : initialName}
             resolved={resolved}
             inviteRows={inviteRows}
             showMembers={mode === "create_team"}
@@ -276,7 +312,7 @@ export function ScopeSetupWizard({
       footer={
         <>
           <Button variant="ghost" onClick={goBack}>
-            {isFirstStep ? "Cancel" : "Back"}
+            {isFirstStep ? (isOnboarding ? "Skip for now" : "Cancel") : "Back"}
           </Button>
           <Button
             variant="primary"

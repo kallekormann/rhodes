@@ -13,6 +13,7 @@ export const viewToPath: Record<AppView, string> = {
   gantt: "/gantt",
   mindmap: "/mindmap",
   graph: "/graph",
+  wiki: "/wiki",
   templates: "/templates",
   library: "/library",
   settings: "/settings",
@@ -29,6 +30,7 @@ export function pathToView(pathname: string): AppView {
   if (normalized === "/gantt") return "gantt";
   if (normalized === "/mindmap") return "mindmap";
   if (normalized === "/graph") return "graph";
+  if (normalized === "/wiki") return "wiki";
   if (normalized === "/editor") return "editor";
   if (normalized === "/templates") return "templates";
   if (normalized === "/library") return "library";

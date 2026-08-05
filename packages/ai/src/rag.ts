@@ -41,6 +41,8 @@ export async function retrieveWorkspaceKnowledge(input: {
   queryText: string;
   matchThreshold?: number;
   matchCount?: number;
+  /** Drop matches from this document (Insights while editing). */
+  excludeDocumentId?: string | null;
 }): Promise<KnowledgeMatch[]> {
   const query = input.queryText.trim();
   if (!query) return [];
@@ -48,11 +50,17 @@ export async function retrieveWorkspaceKnowledge(input: {
   const ollama = createOllamaClient();
   const embedding = await ollama.embed(query);
   const admin = createAdminClient();
+  const excludeDocumentId = input.excludeDocumentId?.trim() || null;
+  // Over-fetch when excluding so we still return a full page after filtering.
+  const matchCount = input.matchCount ?? 8;
+  const fetchCount = excludeDocumentId
+    ? Math.min(matchCount + 8, 24)
+    : matchCount;
 
   const { data, error } = await admin.rpc("match_workspace_knowledge", {
     query_embedding: toVectorLiteral(embedding),
     match_threshold: input.matchThreshold ?? 0.72,
-    match_count: input.matchCount ?? 8,
+    match_count: fetchCount,
     target_workspace_id: input.workspaceId,
   });
 
@@ -61,7 +69,7 @@ export async function retrieveWorkspaceKnowledge(input: {
   }
 
   const rows = (data as Array<Record<string, unknown>> | null) ?? [];
-  return rows.map((row) => {
+  const matches = rows.map((row) => {
     const page_ref =
       typeof row.page_ref === "number" ? row.page_ref : null;
     const chunk_metadata =
@@ -86,4 +94,26 @@ export async function retrieveWorkspaceKnowledge(input: {
       }),
     };
   });
+
+  if (!excludeDocumentId) return matches.slice(0, matchCount);
+
+  return matches
+    .filter((match) => !isCurrentDocumentMatch(match, excludeDocumentId))
+    .slice(0, matchCount);
+}
+
+/** True when a RAG hit is a chunk/embedding of the document the user is editing. */
+export function isCurrentDocumentMatch(
+  match: Pick<KnowledgeMatch, "origin_type" | "item_id" | "source_ref_id">,
+  documentId: string,
+): boolean {
+  if (
+    match.origin_type !== "document" &&
+    match.origin_type !== "document_chunk"
+  ) {
+    return false;
+  }
+  return (
+    match.source_ref_id === documentId || match.item_id === documentId
+  );
 }

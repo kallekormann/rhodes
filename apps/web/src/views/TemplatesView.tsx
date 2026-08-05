@@ -1,21 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import type { Template } from "@/data/templates";
 import { useDocuments } from "@/hooks/useDocuments";
 import { deleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { templateRecordToUi } from "@/lib/templates/map";
+import { templatesEmptyCopy } from "@/lib/views/empty-states";
 import { LoaderState } from "@/components/Loader";
 import { OfflineGate } from "@/components/OfflineGate";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { TemplateDetailPanel } from "@/components/TemplateDetailPanel";
 import { IconLabelButton } from "@/components/IconLabelButton";
 import { Dialog } from "@/components/Dialog";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
+import {
+  TEMPLATE_CATEGORY_CATALOG,
+  type TemplateCategoryId,
+} from "@rhodes/shared/system-templates";
 import "./TemplatesView.css";
 
-type TemplateTab = "all" | "mine";
+type TemplateTab = "mine" | TemplateCategoryId;
+
+const TAB_OPTIONS: { value: TemplateTab; label: string }[] = [
+  { value: "mine", label: "Mine" },
+  ...TEMPLATE_CATEGORY_CATALOG.map((entry) => ({
+    value: entry.id as TemplateTab,
+    label: entry.label,
+  })),
+];
 
 export function TemplatesView() {
   const {
@@ -31,7 +45,7 @@ export function TemplatesView() {
   } = useApp();
   const canCreateTemplates =
     canWriteActiveScope && featureGates.can("templates.create");
-  const [tab, setTab] = useState<TemplateTab>("all");
+  const [tab, setTab] = useState<TemplateTab>("essentials");
   const [selected, setSelected] = useState<Template | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
@@ -42,10 +56,29 @@ export function TemplatesView() {
     setClientReady(true);
   }, []);
 
-  const { templates, loading, error, refresh } = useTemplates(workspaceId, tab);
+  const listFilter = tab === "mine" ? "mine" : "all";
+  const { templates, loading, error, refresh } = useTemplates(
+    workspaceId,
+    listFilter,
+  );
   const { createDocument } = useDocuments(workspaceId, "recent", session.userId);
 
-  const filtered = templates.map(templateRecordToUi);
+  const filtered = useMemo(() => {
+    const ui = templates.map(templateRecordToUi);
+    if (tab === "mine") {
+      return ui.filter((template) => template.mine);
+    }
+    return ui.filter(
+      (template) => !template.mine && template.category === tab,
+    );
+  }, [templates, tab]);
+
+  useEffect(() => {
+    if (selected && !filtered.some((template) => template.id === selected.id)) {
+      setSelected(null);
+    }
+  }, [filtered, selected]);
+
   const showLoader = clientReady && loading && filtered.length === 0;
   const showEmpty =
     clientReady && !loading && !error && filtered.length === 0;
@@ -132,21 +165,20 @@ export function TemplatesView() {
 
   return (
     <OfflineGate
-      title="Templates unavailable offline"
-      message="Templates need an internet connection. Open a cached document from Documents to keep working offline."
+      title="Templates offline"
+      message="Open a cached document from Documents to keep working."
     >
     <div className={`templates-view ${selected ? "templates-view--panel-open" : ""}`}>
       <div className="templates-view__scroll overlay-scrollbar">
         <div className="templates-view__inner">
           <div className="templates-toolbar">
-            <SegmentedControl
-              options={[
-                { value: "all", label: "All" },
-                { value: "mine", label: "Mine" },
-              ]}
-              value={tab}
-              onChange={setTab}
-            />
+            <div className="templates-toolbar__tabs overlay-scrollbar">
+              <SegmentedControl
+                options={TAB_OPTIONS}
+                value={tab}
+                onChange={setTab}
+              />
+            </div>
             {canCreateTemplates ? (
               <IconLabelButton
                 variant="ghost"
@@ -167,7 +199,20 @@ export function TemplatesView() {
           ) : error ? (
             <p className="caption templates-view__status">{error}</p>
           ) : showEmpty ? (
-            <p className="caption templates-view__status">No templates found.</p>
+            <ViewEmptyState
+              title={templatesEmptyCopy(tab === "mine").title}
+              description={templatesEmptyCopy(tab === "mine").description}
+              primaryAction={
+                tab === "mine" && canCreateTemplates
+                  ? {
+                      label: "Create template",
+                      onClick: () => {
+                        void handleCreateTemplate();
+                      },
+                    }
+                  : undefined
+              }
+            />
           ) : filtered.length > 0 ? (
             <ul className="template-list">
               {filtered.map((template) => (

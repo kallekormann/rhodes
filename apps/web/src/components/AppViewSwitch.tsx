@@ -55,6 +55,7 @@ function renderAppView(view: AppView) {
     case "gantt":
     case "mindmap":
     case "graph":
+    case "wiki":
       return <ScopeEnginesView />;
     case "templates":
       return <TemplatesView />;

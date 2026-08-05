@@ -23,6 +23,7 @@ import {
   parseSchemaOptions,
   readUserMetadataValue,
 } from "@/lib/metadata/schemas";
+import { documentsEmptyCopy } from "@/lib/views/empty-states";
 import { useDocuments } from "@/hooks/useDocuments";
 import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
@@ -40,6 +41,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { SharePopover } from "@/components/SharePopover";
 import { StatusPill } from "@/components/StatusPill";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import "./DocumentsView.css";
 
@@ -59,6 +61,7 @@ export function DocumentsListView() {
     session,
     overviewTemplates,
     overviewTemplatesLoading,
+    createNewDocument,
   } = useApp();
 
   const { online } = useOnlineStatus(workspaceId);
@@ -141,29 +144,26 @@ export function DocumentsListView() {
     setDeleteTarget(null);
   };
 
-  const emptyMessage = (() => {
-    if (propertyFilter !== ANY_PROPERTY && filterField) {
-      return `No documents with ${filterField.field_label.toLowerCase()} “${formatMetadataOptionLabel(propertyFilter)}”.`;
-    }
-    if (filter.trim()) {
-      return "No documents match this search.";
-    }
-    if (tab === "favorites") {
-      return "No favorite documents yet. Open a document and mark it as Favorite.";
-    }
-    if (tab === "archive") {
-      return "No archived documents.";
-    }
-    if (tab === "shared") {
-      return "No shared documents yet. Open a document and use Share in the editor.";
-    }
-    if (offlineSource) {
-      return "No offline documents in this scope. Open documents while online to cache them for offline use.";
-    }
-    return canWriteActiveScope
-      ? "No documents yet. Use + in the header to create one."
-      : "No documents in this scope yet.";
-  })();
+  const emptyCopy = documentsEmptyCopy({
+    canWrite: canWriteActiveScope,
+    offline: offlineSource || !online,
+    tab,
+    filtered:
+      Boolean(filter.trim()) ||
+      (propertyFilter !== ANY_PROPERTY && Boolean(filterField)),
+  });
+
+  // Soft refresh errors: keep the list visible. Hard empty failures: prefer empty CTA.
+  const showHardError =
+    Boolean(error) &&
+    filtered.length === 0 &&
+    error !== "Couldn't refresh documents" &&
+    error !== "Couldn't reach the server — showing cached documents";
+  const showSoftErrorBanner =
+    Boolean(error) &&
+    (filtered.length > 0 ||
+      error === "Couldn't refresh documents" ||
+      error === "Couldn't reach the server — showing cached documents");
 
   return (
     <div className="canvas-view documents-view">
@@ -218,11 +218,16 @@ export function DocumentsListView() {
           )}
 
           <section className="documents-section">
-            {offlineSource && (
+            {offlineSource && filtered.length > 0 ? (
               <p className="documents-view__offline-note caption">
-                Showing documents cached for offline use in this scope.
+                Showing cached documents for this scope.
               </p>
-            )}
+            ) : null}
+            {showSoftErrorBanner && filtered.length > 0 ? (
+              <p className="documents-view__offline-note caption" role="status">
+                {error}
+              </p>
+            ) : null}
             <div className="documents-toolbar">
               <div className="documents-toolbar__filters">
                 <Input
@@ -275,12 +280,51 @@ export function DocumentsListView() {
                 size="s"
                 className="documents-empty"
               />
-            ) : error ? (
-              <p className="documents-empty caption">{error}</p>
+            ) : showHardError ? (
+              <ViewEmptyState
+                title="Couldn't load documents"
+                description="Check your connection, then try again."
+                primaryAction={
+                  canWriteActiveScope && online
+                    ? {
+                        label: "New document",
+                        onClick: () => {
+                          void createNewDocument();
+                        },
+                      }
+                    : undefined
+                }
+                secondaryAction={{
+                  label: "Try again",
+                  onClick: () => {
+                    void refresh();
+                  },
+                }}
+              />
             ) : filtered.length === 0 ? (
-              <p className="documents-empty caption" role="status">
-                {emptyMessage}
-              </p>
+              <ViewEmptyState
+                title={emptyCopy.title}
+                description={emptyCopy.description}
+                hint={emptyCopy.hint}
+                primaryAction={
+                  emptyCopy.primaryLabel && canWriteActiveScope && online
+                    ? {
+                        label: emptyCopy.primaryLabel,
+                        onClick: () => {
+                          void createNewDocument();
+                        },
+                      }
+                    : undefined
+                }
+                secondaryAction={
+                  emptyCopy.secondaryLabel && online
+                    ? {
+                        label: emptyCopy.secondaryLabel,
+                        onClick: () => setView("templates"),
+                      }
+                    : undefined
+                }
+              />
             ) : (
               groups.map((group) => (
                 <div key={group} className="doc-group">

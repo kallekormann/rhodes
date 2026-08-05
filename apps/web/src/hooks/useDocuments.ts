@@ -8,8 +8,10 @@ import {
   getOfflineDocument,
   listMergeableOfflineDocumentsForWorkspace,
   listOfflineDocumentSummariesForWorkspace,
+  putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
+import { notifyDocumentMetadataPatched } from "@/lib/documents/document-metadata-bus";
 import { createLocalDocumentId, isLocalOnlyDocument } from "@/lib/offline/local-document";
 import {
   buildOfflineCreateDocument,
@@ -400,11 +402,13 @@ export function useDocuments(
           filter,
         );
         setDocuments(offlineDocs);
-        setOfflineSource(true);
+        setOfflineSource(offlineDocs.length > 0);
+        // Empty cache after a failed online fetch is not "offline mode" —
+        // treat as empty so first-run UI can guide the user, not scare them.
         setError(
           offlineDocs.length > 0
-            ? "Showing offline copy — couldn't reach server"
-            : "Failed to load documents",
+            ? "Couldn't reach the server — showing cached documents"
+            : null,
         );
       } catch {
         setError("Failed to load documents");
@@ -568,6 +572,13 @@ export function useDocuments(
           setDocuments((prev) =>
             prev.map((doc) => (doc.id === id ? nextLocal : doc)),
           );
+          if (patch.metadata !== undefined) {
+            notifyDocumentMetadataPatched({
+              documentId: id,
+              metadata: nextLocal.metadata,
+              updated_at: nextLocal.updated_at,
+            });
+          }
           return nextLocal;
         } catch (err) {
           setError(err instanceof Error ? err.message : "Update failed");
@@ -578,6 +589,34 @@ export function useDocuments(
       try {
         const updated = await patchDocumentById(id, patch);
         setDocuments((prev) => prev.map((doc) => (doc.id === id ? updated : doc)));
+        if (patch.metadata !== undefined) {
+          notifyDocumentMetadataPatched({
+            documentId: id,
+            metadata: updated.metadata ?? null,
+            updated_at: updated.updated_at,
+          });
+          // Keep offline cache Origin/title in sync without clobbering richer body.
+          if (userId) {
+            void (async () => {
+              try {
+                await ensureDocsVaultUnlocked(userId);
+                const cached = await getOfflineDocument(id);
+                if (!cached) return;
+                await putOfflineDocument(
+                  toOfflineDocumentRecord({
+                    ...cached,
+                    title: updated.title || cached.title,
+                    metadata: updated.metadata ?? null,
+                    updated_at: updated.updated_at,
+                    server_updated_at: updated.updated_at,
+                  }),
+                );
+              } catch {
+                /* IndexedDB unavailable */
+              }
+            })();
+          }
+        }
         return updated;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Update failed");

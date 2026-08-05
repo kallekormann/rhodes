@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+import { IconButton } from "@/components/IconButton";
 import { Input } from "@/components/Input";
+import { NeutralPill } from "@/components/NeutralPill";
 import { useApp } from "@/context/AppContext";
 import type { MetadataRelationValue } from "@/lib/metadata/schemas";
 import "./RelationFieldEditor.css";
@@ -30,16 +33,23 @@ async function searchDocumentsInWorkspace(
   return Array.isArray(data.documents) ? data.documents : [];
 }
 
-/** Cross-document reference — search-and-pick, single value. Scope-local, or org-wide when in an org scope. */
+/**
+ * Linked-document control — plain Input search + NeutralPill selection
+ * (sticker-sheet primitives; same pattern as Properties fields).
+ */
 export function RelationFieldEditor({
   value,
   onChange,
   excludeDocumentId,
+  readOnly = false,
+  emptyLabel = "None",
 }: {
   value: MetadataRelationValue | null;
   onChange: (value: MetadataRelationValue | null) => void;
-  /** Hide the current document from search results. */
   excludeDocumentId?: string | null;
+  /** When true, show the linked doc only — no clear or search. */
+  readOnly?: boolean;
+  emptyLabel?: string;
 }) {
   const { workspaceId, activeScope, scopes } = useApp();
   const [query, setQuery] = useState("");
@@ -49,20 +59,23 @@ export function RelationFieldEditor({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || readOnly) return;
 
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setOpen(false);
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  }, [open, readOnly]);
 
   useEffect(() => {
-    if (!open || !workspaceId || !query.trim()) {
+    if (!open || !workspaceId || readOnly) {
       setResults([]);
       return;
     }
@@ -82,7 +95,9 @@ export function RelationFieldEditor({
 
           const uniqueIds = [...new Set(workspaceIds.filter(Boolean))];
           const batches = await Promise.all(
-            uniqueIds.map((id) => searchDocumentsInWorkspace(id, query.trim(), 8)),
+            uniqueIds.map((id) =>
+              searchDocumentsInWorkspace(id, query.trim(), 8),
+            ),
           );
 
           const seen = new Set<string>();
@@ -111,21 +126,31 @@ export function RelationFieldEditor({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [query, open, workspaceId, activeScope.orgId, scopes, excludeDocumentId]);
+  }, [query, open, workspaceId, activeScope.orgId, scopes, excludeDocumentId, readOnly]);
+
+  if (readOnly) {
+    return (
+      <div className="relation-field-editor__selected">
+        {value ? (
+          <NeutralPill>{value.title || "Untitled"}</NeutralPill>
+        ) : (
+          <span className="relation-field-editor__empty">{emptyLabel}</span>
+        )}
+      </div>
+    );
+  }
 
   if (value) {
     return (
-      <span className="relation-field-editor__pill">
-        {value.title || "Untitled"}
-        <button
-          type="button"
-          className="relation-field-editor__remove"
+      <div className="relation-field-editor__selected">
+        <NeutralPill>{value.title || "Untitled"}</NeutralPill>
+        <IconButton
+          icon={X}
+          label="Remove link"
+          size="small"
           onClick={() => onChange(null)}
-          aria-label="Remove link"
-        >
-          ×
-        </button>
-      </span>
+        />
+      </div>
     );
   }
 
@@ -140,30 +165,40 @@ export function RelationFieldEditor({
         }}
         onFocus={() => setOpen(true)}
         placeholder="Search documents…"
+        aria-label="Search documents to link"
       />
-      {open && query.trim() && (
-        <div className="relation-field-editor__results">
-          {loading && <p className="relation-field-editor__hint">Searching…</p>}
-          {!loading && results.length === 0 && (
-            <p className="relation-field-editor__hint">No matches</p>
-          )}
-          {!loading &&
-            results.map((doc) => (
-              <button
-                key={doc.id}
-                type="button"
-                className="relation-field-editor__result"
-                onClick={() => {
-                  onChange({ document_id: doc.id, title: doc.title ?? "Untitled" });
-                  setQuery("");
-                  setOpen(false);
-                }}
-              >
-                {doc.title || "Untitled"}
-              </button>
-            ))}
+      {open ? (
+        <div className="relation-field-editor__results" role="listbox">
+          {loading ? (
+            <p className="relation-field-editor__hint">Searching…</p>
+          ) : null}
+          {!loading && results.length === 0 ? (
+            <p className="relation-field-editor__hint">
+              {query.trim() ? "No matches" : "Type to search recent documents"}
+            </p>
+          ) : null}
+          {!loading
+            ? results.map((doc) => (
+                <button
+                  key={doc.id}
+                  type="button"
+                  role="option"
+                  className="relation-field-editor__result"
+                  onClick={() => {
+                    onChange({
+                      document_id: doc.id,
+                      title: doc.title ?? "Untitled",
+                    });
+                    setQuery("");
+                    setOpen(false);
+                  }}
+                >
+                  {doc.title || "Untitled"}
+                </button>
+              ))
+            : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

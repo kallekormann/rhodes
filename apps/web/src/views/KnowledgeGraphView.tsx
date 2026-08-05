@@ -1,9 +1,7 @@
 "use client";
 
-import "@xyflow/react/dist/style.css";
-import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react";
-import { ExternalLink, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { RELATION_VIEW_FIELD_TYPES } from "@rhodes/shared/view-engine";
 import { useApp } from "@/context/AppContext";
 import type { DocumentRecord } from "@/hooks/useDocument";
@@ -14,26 +12,41 @@ import { usePublishScopeInstanceLabel } from "@/hooks/usePublishScopeInstanceLab
 import { cacheDocumentTitle } from "@/lib/editor/editor-shell-session";
 import { isDocumentArchived } from "@/lib/documents/metadata";
 import { isDocumentNativeToScope } from "@/lib/documents/share-context";
-import { computeForceLayout } from "@/lib/views/force-layout";
+import { openKnowledgeSourcePreview } from "@/lib/library/preview";
+import {
+  buildCitationEdges,
+  walkCitationNodes,
+  type CitationEdge,
+} from "@/lib/views/citation-graph";
 import {
   degreeEmphasis,
   knowledgeGraphConfigFromInstance,
+  LIBRARY_NODE_COLOR,
   showCommunitiesEnabled,
+  showLibraryNodesEnabled,
 } from "@/lib/views/knowledge-graph";
 import {
   buildRelationEdges,
   computeDegrees,
   detectCommunities,
   relationFields,
+  type GraphDocument,
   type RelationEdge,
 } from "@/lib/views/relation-graph";
+import { knowledgeGraphEmptyCopy } from "@/lib/views/empty-states";
 import { VIEW_HELP_CONTENT } from "@/lib/views/help-content";
-import { GRAPH_NODE_TYPES, paletteColor } from "@/components/graph/DocumentNode";
+import { paletteColor } from "@/components/graph/DocumentNode";
+import {
+  KnowledgeGraph3D,
+  type KnowledgeGraph3DLink,
+  type KnowledgeGraph3DNode,
+} from "@/components/graph/KnowledgeGraph3D";
 import { Checkbox } from "@/components/Checkbox";
 import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { Input } from "@/components/Input";
 import { LoaderState } from "@/components/Loader";
 import { Toggle } from "@/components/Toggle";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
 import {
   ViewDockPanel,
   ViewSettingsField,
@@ -43,8 +56,94 @@ import {
   type ViewPanelMode,
 } from "@/components/views/ViewHeaderActions";
 import { ViewInfoPanel } from "@/components/views/ViewInfoPanel";
-import { ViewInstanceTabBar } from "@/components/views/ViewInstanceTabBar";
+import { ViewDocumentPanelHost } from "@/components/views/ViewDocumentPanelHost";
+import type {
+  ViewDocumentPanelConnection,
+  ViewDocumentPanelState,
+} from "@/components/views/view-document-panel-types";
 import "./KnowledgeGraphView.css";
+
+type LibrarySourceNode = { id: string; title: string };
+
+type GraphDisplayEdge = RelationEdge | CitationEdge;
+
+async function fetchAllLibrarySources(
+  workspaceId: string,
+): Promise<LibrarySourceNode[]> {
+  const collected: LibrarySourceNode[] = [];
+  const limit = 50;
+  let offset = 0;
+  let total = Infinity;
+
+  while (offset < total) {
+    const params = new URLSearchParams({
+      workspace_id: workspaceId,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    const response = await fetch(`/app/api/library?${params}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        typeof data.error === "string" ? data.error : "Failed to load library",
+      );
+    }
+    const sources = (data.sources as { id: string; file_name?: string }[]) ?? [];
+    total = typeof data.total === "number" ? data.total : sources.length;
+    for (const source of sources) {
+      collected.push({
+        id: source.id,
+        title: source.file_name?.trim() || "Library file",
+      });
+    }
+    if (sources.length === 0) break;
+    offset += sources.length;
+  }
+
+  return collected;
+}
+
+async function fetchDocumentBodies(
+  workspaceId: string,
+): Promise<Map<string, unknown>> {
+  const params = new URLSearchParams({
+    workspace_id: workspaceId,
+    filter: "all",
+    include_body: "true",
+  });
+  const response = await fetch(`/app/api/documents?${params}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Failed to load document bodies",
+    );
+  }
+  const map = new Map<string, unknown>();
+  for (const doc of (data.documents as DocumentRecord[]) ?? []) {
+    if (doc.content) map.set(doc.id, doc.content);
+  }
+  return map;
+}
+
+async function resolveCitationRefs(
+  workspaceId: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const response = await fetch("/app/api/library/resolve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ workspace_id: workspaceId, ids }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return new Map();
+  const map = new Map<string, string>();
+  const raw = (data.map ?? {}) as Record<string, string>;
+  for (const [from, to] of Object.entries(raw)) {
+    map.set(from, to);
+  }
+  return map;
+}
 
 function KnowledgeGraphSettingsPanel({
   title,
@@ -154,6 +253,7 @@ export function KnowledgeGraphView() {
     canWriteActiveScope,
     showToast,
     session,
+    setView,
   } = useApp();
 
   const scopesPending = !workspaceId;
@@ -164,16 +264,12 @@ export function KnowledgeGraphView() {
   );
   const { schemas, loading: schemasLoading } = useMetadataSchemas(workspaceId);
   const {
-    instances,
     activeInstance: instance,
     activeId: activeInstanceId,
-    setActiveId: setActiveInstanceId,
     loading: instancesLoading,
     error: instancesError,
     updateInstance,
     createInstance,
-    createTab,
-    deleteTab,
   } = useViewInstances(workspaceId, "graph", {
     canWrite: canWriteActiveScope,
     onError: (message) => showToast(message, "error"),
@@ -182,11 +278,22 @@ export function KnowledgeGraphView() {
   usePublishScopeInstanceLabel(instance?.label);
 
   const [search, setSearch] = useState("");
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [docPanel, setDocPanel] = useState<ViewDocumentPanelState>({
+    mode: "closed",
+  });
+  const [fitToken, setFitToken] = useState(0);
   const [panel, setPanel] = useState<ViewPanelMode>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [librarySources, setLibrarySources] = useState<LibrarySourceNode[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [bodyById, setBodyById] = useState<Map<string, unknown>>(new Map());
+  const [chunkToSourceId, setChunkToSourceId] = useState<Map<string, string>>(
+    () => new Map(),
+  );
 
   const config = useMemo(() => knowledgeGraphConfigFromInstance(instance), [instance]);
+  const includeLibrary = showLibraryNodesEnabled(config);
 
   const relationFieldOptions = useMemo(
     () =>
@@ -198,9 +305,76 @@ export function KnowledgeGraphView() {
 
   useEffect(() => {
     setPanel(null);
-    setSelectedDocId(null);
+    setSelectedId(null);
+    setDocPanel({ mode: "closed" });
     setSearch("");
   }, [workspaceId, activeInstanceId]);
+
+  useEffect(() => {
+    if (!workspaceId || !includeLibrary) {
+      setLibrarySources([]);
+      return;
+    }
+    let cancelled = false;
+    setLibraryLoading(true);
+    void fetchAllLibrarySources(workspaceId)
+      .then((sources) => {
+        if (!cancelled) setLibrarySources(sources);
+      })
+      .catch(() => {
+        if (!cancelled) setLibrarySources([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLibraryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, includeLibrary]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setBodyById(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchDocumentBodies(workspaceId)
+      .then((map) => {
+        if (!cancelled) setBodyById(map);
+      })
+      .catch(() => {
+        if (!cancelled) setBodyById(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, documents]);
+
+  useEffect(() => {
+    if (!workspaceId || !includeLibrary) {
+      setChunkToSourceId(new Map());
+      return;
+    }
+    const libraryIds = new Set(librarySources.map((source) => source.id));
+    const unresolved = new Set<string>();
+    for (const content of bodyById.values()) {
+      for (const ref of walkCitationNodes(content)) {
+        if (libraryIds.has(ref.sourceRefId)) continue;
+        unresolved.add(ref.sourceRefId);
+      }
+    }
+    if (unresolved.size === 0) {
+      setChunkToSourceId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void resolveCitationRefs(workspaceId, [...unresolved]).then((map) => {
+      if (!cancelled) setChunkToSourceId(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, includeLibrary, librarySources, bodyById]);
 
   const pageTitle = instance?.label ?? "Knowledge Graph";
 
@@ -248,16 +422,64 @@ export function KnowledgeGraphView() {
     for (const doc of activeDocs) map.set(doc.id, doc);
     return map;
   }, [activeDocs]);
+  const libraryById = useMemo(() => {
+    const map = new Map<string, LibrarySourceNode>();
+    for (const source of librarySources) map.set(source.id, source);
+    return map;
+  }, [librarySources]);
 
   const fields = useMemo(
     () => relationFields(schemas, config.relationFields),
     [schemas, config.relationFields],
   );
-  const edges = useMemo(
+  const relationEdges = useMemo(
     () => buildRelationEdges(activeDocs, fields),
     [activeDocs, fields],
   );
-  const degrees = useMemo(() => computeDegrees(activeDocs, edges), [activeDocs, edges]);
+
+  const citationEdges = useMemo(() => {
+    if (!includeLibrary) return [] as CitationEdge[];
+    const libraryIds = new Set(librarySources.map((source) => source.id));
+    const docsWithBodies = activeDocs.map((doc) => ({
+      id: doc.id,
+      content: bodyById.get(doc.id) ?? doc.content,
+    }));
+    return buildCitationEdges(docsWithBodies, libraryIds, chunkToSourceId);
+  }, [includeLibrary, librarySources, activeDocs, bodyById, chunkToSourceId]);
+
+  const edges = useMemo<GraphDisplayEdge[]>(
+    () => [...relationEdges, ...citationEdges],
+    [relationEdges, citationEdges],
+  );
+
+  /** Documents that participate in at least one relation or citation edge. */
+  const connectedDocs = useMemo(() => {
+    const ids = new Set<string>();
+    for (const edge of edges) {
+      if (docsById.has(edge.source)) ids.add(edge.source);
+      if (docsById.has(edge.target)) ids.add(edge.target);
+    }
+    return activeDocs.filter((doc) => ids.has(doc.id));
+  }, [activeDocs, edges, docsById]);
+
+  const graphEntities = useMemo<GraphDocument[]>(() => {
+    const entities: GraphDocument[] = connectedDocs.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      metadata: doc.metadata,
+    }));
+    if (includeLibrary) {
+      for (const source of librarySources) {
+        entities.push({ id: source.id, title: source.title, metadata: null });
+      }
+    }
+    return entities;
+  }, [connectedDocs, includeLibrary, librarySources]);
+
+  const degrees = useMemo(
+    () => computeDegrees(graphEntities, edges as RelationEdge[]),
+    [graphEntities, edges],
+  );
   const maxDegree = useMemo(
     () => Math.max(0, ...[...degrees.values()]),
     [degrees],
@@ -265,8 +487,11 @@ export function KnowledgeGraphView() {
 
   const showCommunities = showCommunitiesEnabled(config);
   const communities = useMemo(
-    () => (showCommunities ? detectCommunities(activeDocs, edges) : new Map<string, number>()),
-    [showCommunities, activeDocs, edges],
+    () =>
+      showCommunities
+        ? detectCommunities(graphEntities, edges as RelationEdge[])
+        : new Map<string, number>(),
+    [showCommunities, graphEntities, edges],
   );
 
   const communityLegend = useMemo(() => {
@@ -282,125 +507,172 @@ export function KnowledgeGraphView() {
       .map(([community, count]) => ({ community, count }));
   }, [showCommunities, communities]);
 
-  const positions = useMemo(
-    () => computeForceLayout(activeDocs.map((doc) => doc.id), edges),
-    [activeDocs, edges],
-  );
-
   const query = search.trim().toLowerCase();
 
-  const nodes = useMemo<Node[]>(
-    () =>
-      activeDocs.map((doc) => {
-        const position = positions.get(doc.id) ?? { x: 0, y: 0 };
-        const degree = degrees.get(doc.id) ?? 0;
-        const community = communities.get(doc.id);
-        const dimmed = query.length > 0 && !(doc.title || "").toLowerCase().includes(query);
+  const graphNodes = useMemo<KnowledgeGraph3DNode[]>(() => {
+    const nodes: KnowledgeGraph3DNode[] = connectedDocs.map((doc) => {
+      const degree = degrees.get(doc.id) ?? 0;
+      const community = communities.get(doc.id);
+      return {
+        id: doc.id,
+        name: doc.title?.trim() || "Untitled",
+        kind: "document",
+        degree,
+        emphasis: degreeEmphasis(degree, maxDegree),
+        color:
+          showCommunities && community !== undefined
+            ? paletteColor(community)
+            : paletteColor(0),
+      };
+    });
+    if (includeLibrary) {
+      for (const source of librarySources) {
+        const degree = degrees.get(source.id) ?? 0;
+        nodes.push({
+          id: source.id,
+          name: source.title,
+          kind: "library",
+          degree,
+          emphasis: degreeEmphasis(degree, maxDegree),
+          color: LIBRARY_NODE_COLOR,
+        });
+      }
+    }
+    return nodes;
+  }, [
+    connectedDocs,
+    includeLibrary,
+    librarySources,
+    degrees,
+    maxDegree,
+    communities,
+    showCommunities,
+  ]);
 
-        return {
-          id: doc.id,
-          type: "document",
-          position,
-          data: {
-            title: doc.title || "Untitled",
-            emphasis: degreeEmphasis(degree, maxDegree),
-            color:
-              showCommunities && community !== undefined ? paletteColor(community) : undefined,
-            dimmed,
-            connectable: false,
-          },
-          draggable: true,
-        };
-      }),
-    [activeDocs, positions, degrees, maxDegree, communities, showCommunities, query],
-  );
-
-  const flowEdges = useMemo<Edge[]>(
+  const graphLinks = useMemo<KnowledgeGraph3DLink[]>(
     () =>
       edges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        label: edge.fieldLabel,
+        fieldLabel: edge.fieldLabel,
       })),
     [edges],
   );
 
-  const selectedDoc = selectedDocId ? docsById.get(selectedDocId) ?? null : null;
-  const selectedConnections = useMemo(() => {
-    if (!selectedDocId) return [];
+  const selectedConnections = useMemo<ViewDocumentPanelConnection[]>(() => {
+    if (!selectedId || !docsById.has(selectedId)) return [];
     return edges
-      .filter((edge) => edge.source === selectedDocId || edge.target === selectedDocId)
+      .filter((edge) => edge.source === selectedId || edge.target === selectedId)
       .map((edge) => {
-        const otherId = edge.source === selectedDocId ? edge.target : edge.source;
-        const other = docsById.get(otherId);
+        const otherId = edge.source === selectedId ? edge.target : edge.source;
+        const otherDoc = docsById.get(otherId);
+        const otherLib = libraryById.get(otherId);
+        if (!otherDoc && !otherLib) return null;
         return {
-          edge,
-          direction: edge.source === selectedDocId ? "outgoing" : ("incoming" as const),
-          doc: other,
+          documentId: otherId,
+          title: otherDoc
+            ? otherDoc.title?.trim() || "Untitled"
+            : otherLib?.title || "Library file",
+          direction:
+            edge.source === selectedId
+              ? ("outgoing" as const)
+              : ("incoming" as const),
+          fieldLabel: edge.fieldLabel,
         };
       })
-      .filter(
-        (
-          entry,
-        ): entry is {
-          edge: RelationEdge;
-          direction: "incoming" | "outgoing";
-          doc: DocumentRecord;
-        } => Boolean(entry.doc),
-      );
-  }, [selectedDocId, edges, docsById]);
+      .filter((entry): entry is ViewDocumentPanelConnection => entry != null);
+  }, [selectedId, edges, docsById, libraryById]);
 
-  const openInEditor = (doc: DocumentRecord) => {
-    cacheDocumentTitle(doc.id, doc.title);
-    setDocumentTitle(doc.title);
-    setDocumentId(doc.id);
-    openEditor(doc.id);
+  const selectDocument = (docId: string) => {
+    setSelectedId(docId);
+    setDocPanel({ mode: "viewing", documentId: docId });
+    setPanel(null);
   };
 
-  const graphLoading = scopesPending || loading || schemasLoading || instancesLoading;
+  const selectNode = (nodeId: string) => {
+    if (libraryById.has(nodeId)) {
+      setSelectedId(nodeId);
+      setDocPanel({ mode: "closed" });
+      setPanel(null);
+      openKnowledgeSourcePreview({
+        originType: "library",
+        sourceRefId: nodeId,
+      });
+      return;
+    }
+    selectDocument(nodeId);
+  };
+
+  const selectConnection = (id: string) => {
+    if (libraryById.has(id)) {
+      setSelectedId(id);
+      openKnowledgeSourcePreview({
+        originType: "library",
+        sourceRefId: id,
+      });
+      return;
+    }
+    selectDocument(id);
+  };
+
+  const openFullPage = (documentId: string, title?: string) => {
+    const doc = docsById.get(documentId);
+    const resolvedTitle = title ?? doc?.title ?? "Untitled";
+    cacheDocumentTitle(documentId, resolvedTitle);
+    setDocumentTitle(resolvedTitle);
+    setDocumentId(documentId);
+    openEditor(documentId);
+  };
+
+  const handleSearchChange = (next: string) => {
+    setSearch(next);
+    setFitToken((token) => token + 1);
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return;
+    const q = search.trim().toLowerCase();
+    if (!q) return;
+    const match = graphNodes.find((node) => node.name.toLowerCase().includes(q));
+    if (!match) return;
+    event.preventDefault();
+    selectNode(match.id);
+    setFitToken((token) => token + 1);
+  };
+
+  const graphLoading =
+    scopesPending || loading || schemasLoading || instancesLoading || libraryLoading;
   const help = VIEW_HELP_CONTENT.graph;
+  const hasGraphContent = graphNodes.length > 0;
   const infoWarnings =
-    edges.length === 0
+    edges.length === 0 && librarySources.length === 0
       ? [
-          "No relation-linked documents yet — add a Linked document property and connect documents, e.g. from Mind-Map.",
+          "No relation-linked documents or library files yet — add a Linked document property, cite a library file, or upload to Library.",
         ]
       : [];
 
   return (
     <DocumentsSyncGate>
       <div className="knowledge-graph-view">
-        <ViewInstanceTabBar
-          className="knowledge-graph-view__tabs"
-          tabs={instances.map((entry) => ({
-            id: entry.id,
-            label: entry.label,
-          }))}
-          activeId={activeInstanceId}
-          onSelect={setActiveInstanceId}
-          onCreate={(label) => createTab(label)}
-          onDelete={(id) => deleteTab(id)}
-          canEdit={canWriteActiveScope}
-          createTitle="New graph"
-          deleteNoun="graph"
-          trailing={
-            <ViewHeaderActions
-              panel={panel}
-              onPanelChange={setPanel}
-              canEditSettings={canWriteActiveScope}
-              extra={
-                <div className="knowledge-graph-view__search">
-                  <Input
-                    icon={<Search size={14} strokeWidth={1.75} />}
-                    value={search}
-                    onChange={setSearch}
-                    placeholder="Search documents…"
-                  />
-                </div>
-              }
-            />
-          }
-        />
+        <header className="knowledge-graph-view__header">
+          <ViewHeaderActions
+            panel={panel}
+            onPanelChange={setPanel}
+            canEditSettings={canWriteActiveScope}
+            extra={
+              <div className="knowledge-graph-view__search">
+                <Input
+                  icon={<Search size={14} strokeWidth={1.75} />}
+                  value={search}
+                  onChange={handleSearchChange}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search documents & library…"
+                />
+              </div>
+            }
+          />
+        </header>
 
         {instancesError ? (
           <p className="caption knowledge-graph-view__error">{instancesError}</p>
@@ -409,26 +681,31 @@ export function KnowledgeGraphView() {
 
         {graphLoading ? (
           <LoaderState label="Loading knowledge graph…" align="fill" />
-        ) : edges.length === 0 ? (
-          <p className="caption knowledge-graph-view__empty">
-            No relation-linked documents yet. Add a &ldquo;Linked document&rdquo; property and
-            connect documents (e.g. from the Mind-Map) to see them here.
-          </p>
+        ) : !hasGraphContent ? (
+          <ViewEmptyState
+            layout="panel"
+            title={knowledgeGraphEmptyCopy(canWriteActiveScope).title}
+            description={knowledgeGraphEmptyCopy(canWriteActiveScope).description}
+            primaryAction={
+              canWriteActiveScope
+                ? {
+                    label: "Open Library",
+                    onClick: () => setView("library"),
+                  }
+                : undefined
+            }
+          />
         ) : (
           <div className="knowledge-graph-view__canvas">
-            <ReactFlow
-              nodes={nodes}
-              edges={flowEdges}
-              nodeTypes={GRAPH_NODE_TYPES}
-              nodesConnectable={false}
-              nodesDraggable
-              elementsSelectable
-              onNodeClick={(_event, node) => setSelectedDocId(node.id)}
-              fitView
-            >
-              <Background />
-              <Controls />
-            </ReactFlow>
+            <KnowledgeGraph3D
+              nodes={graphNodes}
+              links={graphLinks}
+              selectedId={selectedId}
+              searchQuery={query}
+              fitToken={fitToken}
+              panelOpen={docPanel.mode === "viewing"}
+              onNodeClick={selectNode}
+            />
 
             {communityLegend.length > 0 ? (
               <div className="knowledge-graph-legend">
@@ -442,54 +719,6 @@ export function KnowledgeGraphView() {
                   </span>
                 ))}
               </div>
-            ) : null}
-
-            {selectedDoc && panel === null ? (
-              <aside className="knowledge-graph-explain overlay-scrollbar">
-                <header className="knowledge-graph-explain__header">
-                  <h3 className="knowledge-graph-explain__title">
-                    {selectedDoc.title || "Untitled"}
-                  </h3>
-                  <button
-                    type="button"
-                    aria-label="Close panel"
-                    className="knowledge-graph-explain__icon-button"
-                    onClick={() => setSelectedDocId(null)}
-                  >
-                    <X size={16} strokeWidth={1.75} />
-                  </button>
-                </header>
-                <p className="caption knowledge-graph-explain__meta">
-                  {selectedConnections.length} connection
-                  {selectedConnections.length === 1 ? "" : "s"}
-                </p>
-                <ul className="knowledge-graph-explain__list">
-                  {selectedConnections.map(({ edge, direction, doc }) => (
-                    <li key={edge.id}>
-                      <button
-                        type="button"
-                        className="knowledge-graph-explain__connection"
-                        onClick={() => setSelectedDocId(doc.id)}
-                      >
-                        <span className="knowledge-graph-explain__connection-title">
-                          {doc.title || "Untitled"}
-                        </span>
-                        <span className="caption knowledge-graph-explain__connection-field">
-                          {direction === "outgoing" ? "→" : "←"} {edge.fieldLabel}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="knowledge-graph-explain__open-button"
-                  onClick={() => openInEditor(selectedDoc)}
-                >
-                  <ExternalLink size={14} strokeWidth={1.75} />
-                  Open in Editor
-                </button>
-              </aside>
             ) : null}
           </div>
         )}
@@ -518,6 +747,17 @@ export function KnowledgeGraphView() {
             onClose={() => setPanel(null)}
           />
         ) : null}
+
+        <ViewDocumentPanelHost
+          state={docPanel}
+          onClose={() => {
+            setDocPanel({ mode: "closed" });
+            setSelectedId(null);
+          }}
+          onOpenFullPage={openFullPage}
+          connections={selectedConnections}
+          onSelectConnection={selectConnection}
+        />
       </div>
     </DocumentsSyncGate>
   );

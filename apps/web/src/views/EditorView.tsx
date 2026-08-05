@@ -36,7 +36,13 @@ const SCROLL_TOP_THRESHOLD = 16;
 const SCROLL_HIDE_OFFSET = 48;
 const SCROLLBAR_FADE_MS = 900;
 
-function EditorViewContent() {
+function EditorViewContent({
+  documentId: embeddedDocumentId,
+  embedded = false,
+}: {
+  documentId?: string | null;
+  embedded?: boolean;
+} = {}) {
   const {
     documentTitle,
     panelOpen,
@@ -122,7 +128,11 @@ function EditorViewContent() {
     registerEditorForConflict,
     isOffline,
     flushEditorBodySave,
-  } = useEditorSession();
+  } = useEditorSession(
+    embedded
+      ? { embedded: true, documentId: embeddedDocumentId ?? null }
+      : {},
+  );
 
   const hydrated = useClientHydrated();
 
@@ -156,6 +166,8 @@ function EditorViewContent() {
   } = useInsights(
     isTemplateMode ? null : activeScopeId,
     contentPlain,
+    3000,
+    isTemplateMode ? null : documentId || null,
   );
 
   const {
@@ -363,6 +375,7 @@ function EditorViewContent() {
   }, [propertiesStage, setHeaderHidden]);
 
   useEffect(() => {
+    if (embedded) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -392,12 +405,12 @@ function EditorViewContent() {
       if (scrollFadeTimer.current) clearTimeout(scrollFadeTimer.current);
       setHeaderHidden(false);
     };
-  }, [propertiesStage, setHeaderHidden]);
+  }, [embedded, propertiesStage, setHeaderHidden]);
 
   const canvasClass = [
     "editor-view__canvas",
     "overlay-scrollbar",
-    !headerHidden && "editor-view__canvas--header-visible",
+    !embedded && !headerHidden && "editor-view__canvas--header-visible",
     canvasTransitionsEnabled && "editor-view__canvas--transitions",
     isScrolling && "is-scrolling",
   ]
@@ -423,7 +436,13 @@ function EditorViewContent() {
 
   return (
     <div
-      className={`editor-view ${panelOpen ? "editor-view--panel-open" : ""}`}
+      className={[
+        "editor-view",
+        panelOpen ? "editor-view--panel-open" : "",
+        embedded ? "editor-view--embedded" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div ref={canvasRef} className={canvasClass}>
         <article className="editor-content">
@@ -534,7 +553,7 @@ function EditorViewContent() {
                 disabled={isOffline}
                 title={
                   isOffline
-                    ? "Properties unavailable offline — you can still write"
+                    ? "Properties offline — you can still write"
                     : undefined
                 }
                 onClick={() => {
@@ -732,6 +751,16 @@ function EditorViewContent() {
         askPrefill={askPrefill}
         onConsumeAskPrefill={() => setAskPrefill("")}
         onInsertCitation={isTemplateMode ? undefined : handleInsertCitation}
+        offsetForAppHeader={embedded ? false : undefined}
+        readOnlyFieldKeys={embedded ? ["origin"] : undefined}
+        fieldHints={
+          embedded
+            ? {
+                origin:
+                  "Wiki parent — drag the page in the tree to reparent. Clearing Origin would remove it from this Space.",
+              }
+            : undefined
+        }
       />
 
       <ConflictCompareModal
@@ -766,6 +795,28 @@ export function EditorView() {
       }
     >
       <EditorViewContent />
+    </Suspense>
+  );
+}
+
+/** Full document workspace hosted inside another view (Wiki). Does not own URL. */
+export function EmbeddedDocumentEditor({
+  documentId,
+}: {
+  documentId: string;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <LoaderState
+          label="Loading document…"
+          size="m"
+          align="fill"
+          className="editor-suspense-fallback"
+        />
+      }
+    >
+      <EditorViewContent documentId={documentId} embedded />
     </Suspense>
   );
 }

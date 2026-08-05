@@ -1,0 +1,49 @@
+.mindmap-node {
+  position: relative;
+}
+
+.mindmap-node__body {
+  position: relative;
+}
+
+.mindmap-node__body .document-card {
+  /* Room for overlay + / trash without clipping the title */
+  padding-right: calc(var(--space-md) + 52px);
+}
+
+.mindmap-node__actions {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) ease;
+}
+
+/* Hover via React state (RF wrappers can block :hover on the inner root). */
+.mindmap-node--actions-visible .mindmap-node__actions,
+.react-flow__node:hover .mindmap-node__actions,
+.mindmap-node:focus-within .mindmap-node__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mindmap-node__handle {
+  width: 8px;
+  height: 8px;
+  top: 50%;
+  border: 1px solid var(--color-border-strong, var(--color-border));
+  background: var(--color-surface);
+}
+
+.mindmap-node .react-flow__handle-left {
+  left: -4px;
+}
+
+.mindmap-node .react-flow__handle-right {
+  right: -4px;
+}

@@ -124,6 +124,8 @@
   flex-wrap: nowrap;
   gap: var(--space-sm);
   min-width: 0;
+  height: 100%;
+  max-height: var(--view-chrome-height);
 }
 
 .view-header-actions__extra {

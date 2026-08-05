@@ -14,6 +14,7 @@ export type ViewTemplateAffinityMap = Record<string, ViewTemplateAffinity>;
 export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
   kanban: {
     recommended: [
+      "ticket",
       "project-kickoff",
       "sprint-retro",
       "meeting-notes",
@@ -132,6 +133,7 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
   },
   mindmap: {
     recommended: [
+      "blank",
       "insight",
       "problem",
       "prd",
@@ -144,6 +146,7 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
   },
   graph: {
     recommended: [
+      "blank",
       "insight",
       "problem",
       "prd",
@@ -159,7 +162,8 @@ export const VIEW_TEMPLATE_AFFINITY: ViewTemplateAffinityMap = {
 
 /** System template slugs and which additional views they support (M2.5.0 seeds). */
 export const TEMPLATE_SUPPORTED_VIEWS: Record<string, string[]> = {
-  blank: ["wiki", "kanban", "calendar", "gantt", "dashboard"],
+  blank: ["wiki", "kanban", "calendar", "gantt", "dashboard", "mindmap", "graph"],
+  ticket: ["kanban", "calendar", "gantt", "wiki"],
   "meeting-notes": ["calendar", "kanban"],
   report: ["dashboard", "calendar", "gantt"],
   "product-spec": ["kanban", "gantt", "dashboard"],

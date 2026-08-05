@@ -112,6 +112,14 @@ type RightPanelProps = {
   askPrefill?: string;
   onConsumeAskPrefill?: () => void;
   onInsertCitation?: (input: CitationInsertInput) => void;
+  /**
+   * When true, panel sits below the app header (full /editor).
+   * When false, panel fills the host (embedded Wiki editor).
+   * Default follows app header visibility.
+   */
+  offsetForAppHeader?: boolean;
+  readOnlyFieldKeys?: string[];
+  fieldHints?: Record<string, string>;
 };
 
 export function RightPanel({
@@ -155,9 +163,14 @@ export function RightPanel({
   askPrefill = "",
   onConsumeAskPrefill,
   onInsertCitation,
+  offsetForAppHeader,
+  readOnlyFieldKeys,
+  fieldHints,
 }: RightPanelProps) {
   const { panelOpen, panelTab, setPanelTab, closePanel, headerHidden } = useApp();
   const { online } = useOnlineStatus(workspaceId);
+  const pinBelowAppHeader =
+    offsetForAppHeader ?? !headerHidden;
 
   useEffect(() => {
     if (panelTab !== "properties" && propertiesStage !== "view") {
@@ -167,7 +180,7 @@ export function RightPanel({
 
   return (
     <aside
-      className={`right-panel ${panelOpen ? "right-panel--open" : ""} ${!headerHidden ? "right-panel--below-header" : ""}`}
+      className={`right-panel ${panelOpen ? "right-panel--open" : ""} ${pinBelowAppHeader ? "right-panel--below-header" : ""}`}
       aria-hidden={!panelOpen}
     >
       <div className="right-panel__header">
@@ -187,8 +200,8 @@ export function RightPanel({
         {panelTab === "insights" &&
           (!online ? (
             <OfflineUnavailable
-              title="Insights unavailable offline"
-              message="Related insights need an internet connection."
+              title="Insights offline"
+              message="Connect to see related insights."
             />
           ) : (
             <InsightsTab
@@ -204,8 +217,8 @@ export function RightPanel({
         {panelTab === "ask" &&
           (!online ? (
             <OfflineUnavailable
-              title="Ask unavailable offline"
-              message="Rhodes Ask needs an internet connection."
+              title="Ask offline"
+              message="Connect to use Ask."
             />
           ) : (
             <AskPanel
@@ -230,8 +243,8 @@ export function RightPanel({
         {panelTab === "properties" &&
           (!online ? (
             <OfflineUnavailable
-              title="Properties unavailable offline"
-              message="Metadata and property fields need an internet connection. You can still write in the document."
+              title="Properties offline"
+              message="You can still write in the document."
             />
           ) : (
           <PropertiesTab
@@ -259,6 +272,8 @@ export function RightPanel({
             documentId={documentId}
             onVersionRestored={onVersionRestored}
             onNavigateToActivity={onNavigateToActivity}
+            readOnlyFieldKeys={readOnlyFieldKeys}
+            fieldHints={fieldHints}
           />
           ))}
       </div>

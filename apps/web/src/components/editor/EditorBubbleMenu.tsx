@@ -340,7 +340,7 @@ export function EditorBubbleMenu({
         onMarkClick={handleMarkClick}
         onAsk={onAsk ? handleAsk : undefined}
         askDisabled={askOffline}
-        askDisabledTitle="Ask unavailable offline — you can still write"
+        askDisabledTitle="Ask offline — you can still write"
         onLinkApply={applyLink}
         commentOpen={commentOpen}
         onCommentToggle={() => {

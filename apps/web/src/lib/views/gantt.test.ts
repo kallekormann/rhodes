@@ -59,11 +59,32 @@ describe("documentTaskDates", () => {
     expect(span && format(span.end, "yyyy-MM-dd")).toBe("2026-08-05");
   });
 
-  it("falls back to a zero-duration span when no end field is configured", () => {
+  it("falls back to a zero-duration span when no end field or duration is configured", () => {
     const doc: GanttDocument = { id: "a", title: "A", metadata: { start_date: "2026-08-01" } };
     const span = documentTaskDates(doc, startField, null);
     expect(span && format(span.start, "yyyy-MM-dd")).toBe("2026-08-01");
     expect(span && format(span.end, "yyyy-MM-dd")).toBe("2026-08-01");
+  });
+
+  it("derives end from planned_duration_days when end field is unset", () => {
+    const doc: GanttDocument = {
+      id: "a",
+      title: "A",
+      metadata: { start_date: "2026-08-01", planned_duration_days: 14 },
+    };
+    const span = documentTaskDates(doc, startField, null);
+    expect(span && format(span.start, "yyyy-MM-dd")).toBe("2026-08-01");
+    expect(span && format(span.end, "yyyy-MM-dd")).toBe("2026-08-15");
+  });
+
+  it("uses an explicit duration field key when provided", () => {
+    const doc: GanttDocument = {
+      id: "a",
+      title: "A",
+      metadata: { start_date: "2026-08-01", run_days: 3 },
+    };
+    const span = documentTaskDates(doc, startField, null, "run_days");
+    expect(span && format(span.end, "yyyy-MM-dd")).toBe("2026-08-04");
   });
 
   it("reads a date_range field directly", () => {

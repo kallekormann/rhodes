@@ -12,7 +12,36 @@
 }
 
 .knowledge-graph-view__search {
-  width: 240px;
+  width: 220px;
+}
+
+.knowledge-graph-view__search .input {
+  min-height: 32px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 13px;
+}
+
+.knowledge-graph-view__search .input-wrap__icon {
+  left: 10px;
+}
+
+.knowledge-graph-view__search .input-wrap:has(.input-wrap__icon) .input {
+  padding-left: 34px;
+}
+
+.knowledge-graph-view__header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  height: var(--view-chrome-height);
+  min-height: var(--view-chrome-height);
+  max-height: var(--view-chrome-height);
+  gap: var(--space-md);
+  min-width: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .knowledge-graph-settings__relations {
@@ -27,10 +56,6 @@
   color: var(--color-text-secondary);
 }
 
-.knowledge-graph-view__tabs {
-  margin-top: 0;
-}
-
 .knowledge-graph-view__error {
   color: var(--color-danger, var(--color-text-secondary));
 }
@@ -41,12 +66,7 @@
   position: relative;
   border-radius: var(--radius-sm);
   background: var(--color-surface-hover);
-}
-
-.knowledge-graph-view__canvas .react-flow {
-  width: 100%;
-  height: 100%;
-  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
 
 .knowledge-graph-legend {
@@ -61,6 +81,7 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   z-index: 5;
+  pointer-events: none;
 }
 
 .knowledge-graph-legend__item {
@@ -75,112 +96,4 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-}
-
-.knowledge-graph-explain {
-  position: absolute;
-  top: var(--space-md);
-  right: var(--space-md);
-  width: 300px;
-  max-height: calc(100% - var(--space-lg) * 2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
-  overflow: auto;
-  z-index: 5;
-}
-
-.knowledge-graph-explain__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-}
-
-.knowledge-graph-explain__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.knowledge-graph-explain__icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: var(--radius-xs, 4px);
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.knowledge-graph-explain__icon-button:hover {
-  background: var(--color-surface-hover);
-}
-
-.knowledge-graph-explain__meta {
-  margin: 0;
-  color: var(--color-text-tertiary);
-}
-
-.knowledge-graph-explain__list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.knowledge-graph-explain__connection {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  gap: 2px;
-  padding: var(--space-xs) var(--space-sm);
-  border: none;
-  border-radius: var(--radius-xs, 4px);
-  background: var(--color-surface-hover);
-  text-align: left;
-  cursor: pointer;
-}
-
-.knowledge-graph-explain__connection:hover {
-  background: var(--color-accent-subtle, var(--color-surface-hover));
-}
-
-.knowledge-graph-explain__connection-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.knowledge-graph-explain__connection-field {
-  color: var(--color-text-tertiary);
-}
-
-.knowledge-graph-explain__open-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-xs, 4px);
-  background: var(--color-accent-subtle, var(--color-surface-hover));
-  color: var(--color-text-primary);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.knowledge-graph-explain__open-button:hover {
-  background: var(--color-surface-hover);
 }

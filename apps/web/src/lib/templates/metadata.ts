@@ -1,13 +1,24 @@
 import type { MetadataFieldValue } from "@/lib/metadata/schemas";
-import type { TemplateSchemaFieldSeed } from "@rhodes/shared/system-templates";
+import type {
+  TemplateCategoryId,
+  TemplateSchemaFieldSeed,
+  TemplateSchemaGroupSeed,
+} from "@rhodes/shared/system-templates";
+import { TEMPLATE_CATEGORY_CATALOG } from "@rhodes/shared/system-templates";
 
 export type TemplateMetadata = {
   use_cases?: string[];
   document_type?: string;
+  category?: TemplateCategoryId;
   supported_views?: string[];
   schema_fields?: TemplateSchemaFieldSeed[];
+  schema_groups?: TemplateSchemaGroupSeed[];
   default_properties?: Record<string, MetadataFieldValue>;
 };
+
+const CATEGORY_IDS = new Set(
+  TEMPLATE_CATEGORY_CATALOG.map((entry) => entry.id as string),
+);
 
 const FIELD_TYPES = new Set([
   "text",
@@ -107,6 +118,66 @@ function parseSchemaFields(raw: unknown): TemplateSchemaFieldSeed[] | undefined 
   return fields.length > 0 ? fields : undefined;
 }
 
+function parseSchemaGroups(raw: unknown): TemplateSchemaGroupSeed[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const groups: TemplateSchemaGroupSeed[] = [];
+
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    const group_key = typeof record.group_key === "string" ? record.group_key.trim() : "";
+    const group_label =
+      typeof record.group_label === "string" ? record.group_label.trim() : "";
+    if (!group_key || !group_label || !Array.isArray(record.fields)) continue;
+
+    const fields: TemplateSchemaGroupSeed["fields"] = [];
+    for (const fieldEntry of record.fields) {
+      if (!fieldEntry || typeof fieldEntry !== "object") continue;
+      const field = fieldEntry as Record<string, unknown>;
+      const sub_key = typeof field.sub_key === "string" ? field.sub_key.trim() : "";
+      const field_label =
+        typeof field.field_label === "string" ? field.field_label.trim() : "";
+      const field_type =
+        typeof field.field_type === "string" && FIELD_TYPES.has(field.field_type)
+          ? (field.field_type as TemplateSchemaFieldSeed["field_type"])
+          : null;
+      if (!sub_key || !field_label || !field_type) continue;
+
+      const options = Array.isArray(field.options)
+        ? field.options.every(isStatusOptionSeed)
+          ? (field.options as StatusOptionSeedShape[])
+          : field.options.filter((item): item is string => typeof item === "string")
+        : field.options === null
+          ? null
+          : field.options &&
+              typeof field.options === "object" &&
+              typeof (field.options as { unit?: unknown }).unit === "string"
+            ? { unit: (field.options as { unit: string }).unit }
+            : undefined;
+
+      fields.push({
+        sub_key,
+        field_label,
+        field_type,
+        ...(options !== undefined ? { options } : {}),
+        ...(typeof field.ai_fill_enabled === "boolean"
+          ? { ai_fill_enabled: field.ai_fill_enabled }
+          : {}),
+      });
+    }
+
+    if (fields.length === 0) continue;
+    groups.push({
+      group_key,
+      group_label,
+      ...(typeof record.repeatable === "boolean" ? { repeatable: record.repeatable } : {}),
+      fields,
+    });
+  }
+
+  return groups.length > 0 ? groups : undefined;
+}
+
 export function parseTemplateMetadata(metadata: unknown): TemplateMetadata {
   if (!metadata || typeof metadata !== "object") return {};
 
@@ -135,11 +206,18 @@ export function parseTemplateMetadata(metadata: unknown): TemplateMetadata {
   const documentType =
     typeof record.document_type === "string" ? record.document_type : undefined;
 
+  const category =
+    typeof record.category === "string" && CATEGORY_IDS.has(record.category)
+      ? (record.category as TemplateCategoryId)
+      : undefined;
+
   return {
     use_cases: useCases,
     document_type: documentType,
+    category,
     supported_views: supportedViews,
     schema_fields: parseSchemaFields(record.schema_fields),
+    schema_groups: parseSchemaGroups(record.schema_groups),
     default_properties: defaultProperties,
   };
 }
@@ -153,11 +231,17 @@ export function buildTemplateMetadata(input: TemplateMetadata): Record<string, u
   if (input.document_type) {
     metadata.document_type = input.document_type;
   }
+  if (input.category) {
+    metadata.category = input.category;
+  }
   if (input.supported_views && input.supported_views.length > 0) {
     metadata.supported_views = input.supported_views;
   }
   if (input.schema_fields && input.schema_fields.length > 0) {
     metadata.schema_fields = input.schema_fields;
+  }
+  if (input.schema_groups && input.schema_groups.length > 0) {
+    metadata.schema_groups = input.schema_groups;
   }
   if (input.default_properties && Object.keys(input.default_properties).length > 0) {
     metadata.default_properties = input.default_properties;

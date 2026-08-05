@@ -166,7 +166,18 @@ async function persistContentProjection(
   }
 }
 
-export function useEditorSession() {
+export type UseEditorSessionOptions = {
+  /**
+   * When `embedded` is true, load this document and skip URL rewrite to `/editor`.
+   * Pass `null` to show an empty embedded shell (no document).
+   */
+  documentId?: string | null;
+  /** Hosted inside another view (e.g. Wiki) — do not own browser history. */
+  embedded?: boolean;
+};
+
+export function useEditorSession(options: UseEditorSessionOptions = {}) {
+  const { embedded = false, documentId: embeddedDocumentId } = options;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -201,11 +212,21 @@ export function useEditorSession() {
 
   const requestedId = searchParams.get("doc");
   const browserDocId = readDocIdFromBrowserLocation();
+  const embeddedId =
+    embedded &&
+    typeof embeddedDocumentId === "string" &&
+    isDocumentId(embeddedDocumentId)
+      ? embeddedDocumentId
+      : embedded
+        ? null
+        : undefined;
   const effectiveRequestedId =
-    (requestedId && isDocumentId(requestedId) ? requestedId : null) ??
-    (isDocumentId(appDocumentId) ? appDocumentId : null) ??
-    (browserDocId && isDocumentId(browserDocId) ? browserDocId : null);
-  const requestedTemplateId = searchParams.get("template");
+    embeddedId !== undefined
+      ? embeddedId
+      : (requestedId && isDocumentId(requestedId) ? requestedId : null) ??
+        (isDocumentId(appDocumentId) ? appDocumentId : null) ??
+        (browserDocId && isDocumentId(browserDocId) ? browserDocId : null);
+  const requestedTemplateId = embedded ? null : searchParams.get("template");
   const isEditingTemplate = isTemplateId(requestedTemplateId);
 
   const [resolvedId, setResolvedId] = useState<string | null>(
@@ -677,6 +698,13 @@ export function useEditorSession() {
   useEffect(() => {
     if (isEditingTemplate) return;
 
+    if (embedded) {
+      setResolvedId(
+        embeddedId && isDocumentId(embeddedId) ? embeddedId : null,
+      );
+      return;
+    }
+
     if (scopesLoading && !browserOffline) return;
 
     const browserDoc =
@@ -708,6 +736,8 @@ export function useEditorSession() {
     browserDocId,
     browserOffline,
     effectiveRequestedId,
+    embedded,
+    embeddedId,
     isEditingTemplate,
     pathname,
     resolvedWorkspaceId,

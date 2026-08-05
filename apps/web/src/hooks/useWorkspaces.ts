@@ -261,7 +261,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       }
       setActiveScopeIdState(null);
       setLoading(false);
-      setError("Scopes unavailable offline");
+      setError("Scopes offline");
       return;
     }
 
@@ -329,7 +329,7 @@ export function useWorkspaces(userId: string | undefined): UseWorkspacesResult {
       }
       const storedId = readActiveWorkspaceId();
       setActiveScopeIdState(storedId);
-      setError(storedId ? null : "Scopes unavailable offline");
+      setError(storedId ? null : "Scopes offline");
       return null;
     }
 

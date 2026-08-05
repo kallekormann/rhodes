@@ -31,10 +31,26 @@ function friendlyInsightsError(raw: string | null | undefined): string {
   return raw;
 }
 
+function isCurrentDocumentInsight(
+  insight: InsightMatch,
+  documentId: string,
+): boolean {
+  if (
+    insight.origin_type !== "document" &&
+    insight.origin_type !== "document_chunk"
+  ) {
+    return false;
+  }
+  return (
+    insight.source_ref_id === documentId || insight.item_id === documentId
+  );
+}
+
 export function useInsights(
   workspaceId: string | null,
   queryText: string,
   debounceMs = 3000,
+  excludeDocumentId: string | null = null,
 ) {
   const [insights, setInsights] = useState<InsightMatch[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +65,7 @@ export function useInsights(
     setError(null);
     setLoading(false);
     abortRef.current?.abort();
-  }, [workspaceId]);
+  }, [workspaceId, excludeDocumentId]);
 
   const fetchInsights = useCallback(async () => {
     const query = queryText.trim();
@@ -82,6 +98,9 @@ export function useInsights(
         body: JSON.stringify({
           workspace_id: workspaceId,
           query_text: query.slice(-500),
+          ...(excludeDocumentId
+            ? { exclude_document_id: excludeDocumentId }
+            : {}),
         }),
         signal: controller.signal,
       });
@@ -99,7 +118,12 @@ export function useInsights(
         return;
       }
 
-      setInsights((data.insights as InsightMatch[]) ?? []);
+      const next = ((data.insights as InsightMatch[]) ?? []).filter(
+        (insight) =>
+          !excludeDocumentId ||
+          !isCurrentDocumentInsight(insight, excludeDocumentId),
+      );
+      setInsights(next);
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -109,7 +133,7 @@ export function useInsights(
       setError(friendlyInsightsError(message));
       setLoading(false);
     }
-  }, [queryText, workspaceId]);
+  }, [excludeDocumentId, queryText, workspaceId]);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);

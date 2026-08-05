@@ -11,6 +11,9 @@ export type Template = {
   useCases: string[];
   properties?: TemplateProperty[];
   mine?: boolean;
+  /** System browse category; null for user templates. */
+  category?: string | null;
+  slug?: string | null;
 };
 
 export const templates: Template[] = [

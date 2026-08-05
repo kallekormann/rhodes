@@ -18,6 +18,7 @@ export const SCOPE_ENGINE_NAV_IDS = [
   "gantt",
   "mindmap",
   "graph",
+  "wiki",
 ] as const;
 
 export type ScopeEngineNavId = (typeof SCOPE_ENGINE_NAV_IDS)[number];

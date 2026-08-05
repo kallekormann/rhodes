@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { ScopeViewInstanceRecord } from "@rhodes/shared/view-engine";
+import type {
+  MindMapLayout,
+  MindMapLayoutV1,
+  ScopeViewInstanceRecord,
+  WikiLayout,
+} from "@rhodes/shared/view-engine";
 import { isCacheFresh } from "@/lib/cache/swr-cache";
+
+type ViewInstanceLayout = MindMapLayout | MindMapLayoutV1 | WikiLayout | null;
 
 type UseScopeViewInstancesResult = {
   instances: ScopeViewInstanceRecord[];
@@ -16,7 +23,7 @@ type UseScopeViewInstancesResult = {
     input: {
       label?: string;
       config?: Record<string, unknown>;
-      layout?: Record<string, { x: number; y: number }> | null;
+      layout?: ViewInstanceLayout;
     },
   ) => Promise<
     { ok: true; instance: ScopeViewInstanceRecord } | { ok: false; error: string }
@@ -25,7 +32,7 @@ type UseScopeViewInstancesResult = {
     base_view_type: string;
     label?: string;
     config?: Record<string, unknown>;
-    layout?: Record<string, { x: number; y: number }>;
+    layout?: ViewInstanceLayout;
   }) => Promise<
     | { ok: true; instance: ScopeViewInstanceRecord }
     | { ok: false; error: string }
@@ -156,12 +163,28 @@ export function useScopeViewInstances(
       input: {
         label?: string;
         config?: Record<string, unknown>;
-        layout?: Record<string, { x: number; y: number }> | null;
+        layout?: ViewInstanceLayout;
       },
     ) => {
       if (!workspaceId) {
         return { ok: false as const, error: "No scope selected" };
       }
+
+      let snapshot: ScopeViewInstanceRecord[] | null = null;
+      setInstances((current) => {
+        snapshot = current;
+        const next = current.map((instance) => {
+          if (instance.id !== instanceId) return instance;
+          return {
+            ...instance,
+            ...(input.label !== undefined ? { label: input.label } : {}),
+            ...(input.config !== undefined ? { config: input.config } : {}),
+            ...(input.layout !== undefined ? { layout: input.layout } : {}),
+          };
+        });
+        writeViewInstanceCache(workspaceId, next);
+        return next;
+      });
 
       const response = await fetch(
         `/app/api/workspaces/${workspaceId}/view-instances/${instanceId}`,
@@ -174,6 +197,10 @@ export function useScopeViewInstances(
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (snapshot) {
+          setInstances(snapshot);
+          writeViewInstanceCache(workspaceId, snapshot);
+        }
         const message =
           typeof data.error === "string" ? data.error : "Failed to update view";
         return { ok: false as const, error: message };
@@ -197,7 +224,7 @@ export function useScopeViewInstances(
       base_view_type: string;
       label?: string;
       config?: Record<string, unknown>;
-      layout?: Record<string, { x: number; y: number }>;
+      layout?: ViewInstanceLayout;
     }) => {
       if (!workspaceId) {
         return { ok: false as const, error: "No scope selected" };

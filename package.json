@@ -14,6 +14,8 @@
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
     "db:seed:kanban": "node scripts/seed-kanban-sample.js",
+    "db:wipe:docs": "node scripts/wipe-workspace-documents.js",
+    "db:seed:views": "node scripts/seed-view-fixtures.js",
     "library:requeue": "node scripts/requeue-library.js",
     "library:reindex": "node scripts/reindex-library-metadata.mjs",
     "documents:reindex": "node scripts/reindex-document-chunks.mjs",

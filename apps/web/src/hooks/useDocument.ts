@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "@/context/AppContext";
 import { fetchDocumentMetadata } from "@/lib/documents/fetch-document-metadata";
+import {
+  DOCUMENT_METADATA_PATCHED_EVENT,
+  type DocumentMetadataPatchedDetail,
+} from "@/lib/documents/document-metadata-bus";
 import { isDocumentId } from "@/lib/documents/ids";
 import { documentHasUnsentWork } from "@/lib/offline/document-unsent-work";
 import { bodyRichness } from "@/lib/offline/document-body";
@@ -10,6 +14,7 @@ import { extractPlainText } from "@/lib/documents/plain-text";
 import type { DocumentShareContext } from "@/lib/documents/share-context";
 import {
   getOfflineDocument,
+  putOfflineDocument,
   toOfflineDocumentRecord,
 } from "@/lib/offline/documents-cache";
 import {
@@ -368,7 +373,15 @@ export function useDocument(
         );
         const remoteRich = contentRichness(remote.content, remote.content_plain);
         if (localRich > remoteRich) {
-          setDocument(recordFromOffline(richestCached));
+          // Prefer local body, but take remote metadata (Origin reparent, etc.).
+          setDocument({
+            ...recordFromOffline(richestCached),
+            metadata:
+              remote.metadata !== undefined
+                ? remote.metadata
+                : richestCached.metadata ?? null,
+            title: remote.title || richestCached.title,
+          });
           serverUpdatedAtRef.current =
             richestCached.server_updated_at || richestCached.updated_at;
           setSyncStatus(
@@ -443,6 +456,54 @@ export function useDocument(
         });
       }
     });
+  }, [documentId]);
+
+  // External metadata writes (Wiki reparent, Mind-Map reconnect) update the
+  // documents list but not this editor session — apply them in place.
+  useEffect(() => {
+    if (!documentId) return;
+    const onPatched = (event: Event) => {
+      const detail = (event as CustomEvent<DocumentMetadataPatchedDetail>)
+        .detail;
+      if (!detail || detail.documentId !== documentId) return;
+      setDocument((prev) => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          metadata: detail.metadata,
+          ...(detail.updated_at ? { updated_at: detail.updated_at } : {}),
+        };
+        documentRef.current = next;
+        return next;
+      });
+      if (detail.updated_at) {
+        serverUpdatedAtRef.current = detail.updated_at;
+      }
+      void (async () => {
+        try {
+          const cached = await getOfflineDocument(documentId);
+          if (!cached) return;
+          await putOfflineDocument(
+            toOfflineDocumentRecord({
+              ...cached,
+              metadata: detail.metadata,
+              ...(detail.updated_at
+                ? {
+                    updated_at: detail.updated_at,
+                    server_updated_at: detail.updated_at,
+                  }
+                : {}),
+            }),
+          );
+        } catch {
+          /* IndexedDB unavailable */
+        }
+      })();
+    };
+    window.addEventListener(DOCUMENT_METADATA_PATCHED_EVENT, onPatched);
+    return () => {
+      window.removeEventListener(DOCUMENT_METADATA_PATCHED_EVENT, onPatched);
+    };
   }, [documentId]);
 
   const save = useCallback(

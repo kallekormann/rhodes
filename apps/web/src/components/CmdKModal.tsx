@@ -48,7 +48,7 @@ export function CmdKModal() {
     cmdKOpen,
     closeCmdK,
     setView,
-    openPanel,
+    openGlobalAsk,
     openEditor,
     createNewDocument,
     openLibraryUpload,
@@ -112,7 +112,7 @@ export function CmdKModal() {
         label: `Ask about ${scopeName}`,
         section: "Actions",
         icon: Sparkles,
-        run: () => openPanel("ask"),
+        run: () => openGlobalAsk(),
       });
     }
     return rows;
@@ -121,7 +121,7 @@ export function CmdKModal() {
     createNewDocument,
     featureGates,
     openLibraryUpload,
-    openPanel,
+    openGlobalAsk,
     scopeName,
     setView,
   ]);

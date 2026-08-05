@@ -1,6 +1,7 @@
 "use client";
 
 import { SchemaFieldRow } from "@/components/properties/SchemaFieldRow";
+import { GroupLabel } from "@/components/SectionHeader";
 import type { MetadataFieldValue, MetadataSchemaGroup } from "@/lib/metadata/schemas";
 import {
   groupFieldAsSchemaField,
@@ -30,7 +31,7 @@ export function GroupInstanceSection({
 
   return (
     <section className="props-group">
-      <h4 className="props-group__title">{group.group_label}</h4>
+      <GroupLabel className="props-group__title">{group.group_label}</GroupLabel>
       <dl className="props-list">
         {group.fields.map((field) => (
           <SchemaFieldRow

@@ -1,6 +1,10 @@
 .view-instance-tabbar {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  height: var(--view-chrome-height);
+  min-height: var(--view-chrome-height);
+  max-height: var(--view-chrome-height);
   min-width: 0;
   width: 100%;
   gap: var(--space-sm);
@@ -114,7 +118,7 @@
   gap: 4px;
   max-width: 200px;
   min-width: 72px;
-  height: 36px;
+  height: 40px;
   padding: 0 6px 0 12px;
   border: 1px solid transparent;
   border-bottom: none;

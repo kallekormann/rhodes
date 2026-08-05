@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, X } from "lucide-react";
 import { DatePickerField } from "@/components/DatePickerField";
 import { DateRangeField, type DateRange } from "@/components/DateRangePicker";
 import { Dropdown } from "@/components/Dropdown";
+import { IconButton } from "@/components/IconButton";
 import { Input } from "@/components/Input";
 import { Checkbox } from "@/components/Checkbox";
+import { NeutralPill } from "@/components/NeutralPill";
 import { TextArea } from "@/components/TextArea";
 import { RelationFieldEditor } from "@/components/properties/RelationFieldEditor";
 import {
@@ -68,16 +71,14 @@ function TagsEditor({
     <div className="props-tags">
       <div className="props-tags__list">
         {tags.map((tag) => (
-          <span key={tag} className="tag">
-            {tag}
-            <button
-              type="button"
-              className="props-tags__remove"
+          <span key={tag} className="props-tags__chip">
+            <NeutralPill>{tag}</NeutralPill>
+            <IconButton
+              icon={X}
+              label={`Remove ${tag}`}
+              size="small"
               onClick={() => onChange(tags.filter((item) => item !== tag))}
-              aria-label={`Remove ${tag}`}
-            >
-              ×
-            </button>
+            />
           </span>
         ))}
       </div>
@@ -94,9 +95,7 @@ function TagsEditor({
             }
           }}
         />
-        <button type="button" className="tag tag--add" onClick={addTag}>
-          +
-        </button>
+        <IconButton icon={Plus} label="Add tag" size="small" onClick={addTag} />
       </div>
     </div>
   );
@@ -190,6 +189,8 @@ export function SchemaFieldRow({
   aiSuggested = false,
   preview = false,
   excludeDocumentId = null,
+  readOnly = false,
+  hint,
 }: {
   field: MetadataSchemaField;
   value: MetadataFieldValue;
@@ -197,6 +198,8 @@ export function SchemaFieldRow({
   aiSuggested?: boolean;
   preview?: boolean;
   excludeDocumentId?: string | null;
+  readOnly?: boolean;
+  hint?: string;
 }) {
   const options = parseSchemaOptions(field.options);
   const unit = parseSchemaUnit(field.options);
@@ -249,7 +252,10 @@ export function SchemaFieldRow({
             value={relation}
             onChange={(next) => onChange(next)}
             excludeDocumentId={excludeDocumentId}
+            readOnly={readOnly}
+            emptyLabel={readOnly ? "Space home" : "None"}
           />
+          {hint ? <p className="caption props-list__field-hint">{hint}</p> : null}
         </dd>
       </div>
     );
@@ -291,19 +297,17 @@ export function SchemaFieldRow({
               {options.map((option) => {
                 const active = selected.includes(option);
                 return (
-                  <button
+                  <Checkbox
                     key={option}
-                    type="button"
-                    className={`tag ${active ? "tag--active" : ""}`}
-                    onClick={() => {
+                    label={option.replace(/_/g, " ")}
+                    checked={active}
+                    onChange={() => {
                       const next = active
                         ? selected.filter((item) => item !== option)
                         : [...selected, option];
                       onChange(next.length > 0 ? next : null);
                     }}
-                  >
-                    {option.replace(/_/g, " ")}
-                  </button>
+                  />
                 );
               })}
             </div>

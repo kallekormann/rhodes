@@ -16,9 +16,11 @@ Add an **optional chat mode** accessible from the insight sidebar or Cmd+K — s
 
 | Path | Action |
 |------|--------|
-| Insight sidebar | Tab: "Insights" / "Ask" — **docked** compact `RightPanel` |
-| Cmd+K / Global Ask | "Ask about {scope name}" — **~50vw overlay** (does not squeeze page content) |
-| Selection | Right-click selected text → "Ask about selection" |
+| Insight sidebar / document editor Ask tab | Tab: "Insights" / "Ask" — **docked** compact `RightPanel` (also used when Ask is opened from the bubble toolbar) |
+| Cmd+K / Global Ask | "Ask about {scope name}" — always the **~50vw GlobalAsk overlay** (`openGlobalAsk`), even while a document editor is open |
+| Selection | Bubble toolbar → "Ask" opens the **docked** Ask tab with the selection as prefill |
+
+Document editor Ask (sidebar tab / bubble) and Cmd+K scope Ask are separate shells: docked `RightPanel` vs `GlobalAskPanel`. Opening one closes the other when both would otherwise stack.
 
 ### Dual context + tools
 

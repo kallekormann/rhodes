@@ -66,7 +66,7 @@ export function BubbleMenu({
   style,
   onAsk,
   askDisabled = false,
-  askDisabledTitle = "Ask unavailable offline",
+  askDisabledTitle = "Ask offline",
   onLinkApply,
   onCommentSave,
   onMarkClick,

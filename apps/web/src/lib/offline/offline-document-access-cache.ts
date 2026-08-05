@@ -54,6 +54,12 @@ export async function cacheDocumentForOfflineAccess(
         toOfflineDocumentRecord({
           ...existing,
           title: document.title || existing.title,
+          // Keep richer local body, but always take remote metadata/title
+          // (e.g. Wiki Origin reparent) so Properties don't stay stale.
+          metadata:
+            document.metadata !== undefined
+              ? document.metadata
+              : existing.metadata,
           server_updated_at: document.updated_at,
           sync_status:
             localRich > remoteRich || existing.sync_status !== "synced"

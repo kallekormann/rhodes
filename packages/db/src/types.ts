@@ -243,6 +243,10 @@ export interface Database {
         Args: { ws_id: string; fields: Json };
         Returns: undefined;
       };
+      seed_scope_metadata_groups: {
+        Args: { ws_id: string; groups: Json };
+        Returns: undefined;
+      };
       create_user_workspace: {
         Args: { ws_name: string; is_team?: boolean };
         Returns: string;

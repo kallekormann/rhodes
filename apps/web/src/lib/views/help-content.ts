@@ -50,7 +50,7 @@ export const VIEW_HELP_CONTENT = {
   },
   gantt: {
     description:
-      "Roadmap (Gantt) plots documents on a timeline using start (and optional end) date properties, with optional grouping.",
+      "Roadmap (Gantt) plots documents on a timeline using a start date property and an optional end date — or planned duration in days (e.g. A/B `planned_duration_days`) when end is unset.",
     setupSteps: [
       "Add a date or date-range property for when work starts (and optionally ends).",
       "Open Roadmap settings to choose the start field, optional end field, and optional group-by property.",
@@ -64,30 +64,48 @@ export const VIEW_HELP_CONTENT = {
   },
   mindmap: {
     description:
-      "Mind-Map lets you place documents on a canvas and connect them via a relation (linked document) property.",
+      "Mind-Map is a tree of documents. Start with a central topic, then add children — each node is a real document you can open and edit.",
     setupSteps: [
-      "Add a Linked document (relation) property to this scope.",
-      "Open Mind-Map settings and choose which relation field new connections write to.",
-      "Add nodes to the canvas, then drag between handles to connect them.",
+      "Open Mind-Map — the central topic is selected and the template picker opens.",
+      "Choose a template and name the topic; the card label updates as you type.",
+      "Use + on a node to pick a template for a child, or trash to delete it.",
     ],
     actions: [
-      "Add or remove documents on the canvas without deleting them from the scope.",
-      "Drag nodes to rearrange; positions are saved for this view.",
-      "Draw connections to write relation metadata on the source document.",
+      "Click a card to edit it in the sidebar.",
+      "Drag from a topic onto another topic to nest it under that parent (or drag an existing link to a new parent). Connect to the root’s left/right side to flip a branch.",
+      "Positions and the tree structure are saved for this mind-map tab.",
     ],
   },
   graph: {
     description:
-      "Knowledge Graph shows how documents in this scope relate to each other through relation properties, with optional community highlighting.",
+      "Knowledge Graph is a 3D explorer of how documents relate through Linked document properties and how documents cite library files. Library sources appear as nodes (including isolates); citation edges connect when a TipTap citation references a file.",
     setupSteps: [
       "Add one or more Linked document properties and connect documents (for example from Mind-Map).",
+      "Upload files to Library — every file in the scope appears as a graph node.",
+      "Cite a library file in a document body to draw a citation edge.",
       "Open Graph settings to limit which relation fields are traversed, or toggle communities.",
-      "Optionally rename the graph title and subtitle.",
     ],
     actions: [
-      "Search to highlight matching documents.",
-      "Click a node to see its connections and jump between them.",
-      "Open a document from the explain panel into the editor.",
+      "Drag to orbit, scroll to zoom, and right-drag (or library pan) to move the camera.",
+      "Search to dim non-matches and frame the results; press Enter to open the first match.",
+      "Click a document node to highlight neighbors and read it in the side panel (view only).",
+      "Click a library node to open the file preview.",
+      "Open full page from the panel to edit in the document editor.",
+    ],
+  },
+  wiki: {
+    description:
+      "Wiki is a Space (root document) with a nested page tree. Nesting writes Origin links — the same relationships Knowledge Graph and Rhodes can use.",
+    setupSteps: [
+      "Open Wiki — a Space home is created for the first tab.",
+      "Use Wiki settings to rename the Space tab.",
+      "Click + on a page (or Create) and pick a template (Blank is first).",
+    ],
+    actions: [
+      "Select a page in the tree to edit it with the full document editor in the center pane.",
+      "Drag pages to reorder siblings or drop onto a page to reparent.",
+      "Use Properties, comments, share, and Insights from the editor chrome — same tools as Documents.",
+      "Add more Spaces with + on the tab bar; overflow uses the same back/next controls as other views.",
     ],
   },
 } as const satisfies Record<string, ViewHelpContent>;

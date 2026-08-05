@@ -12,6 +12,12 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
     description: "Start from an empty page",
   },
   {
+    slug: "ticket",
+    label: "Ticket",
+    description:
+      "Lightweight Kanban work item — context, acceptance criteria, and notes",
+  },
+  {
     slug: "meeting-notes",
     label: "Meeting Notes",
     description: "Objective, agenda, discussion, and action items",
@@ -19,7 +25,8 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
   {
     slug: "product-spec",
     label: "Product Spec",
-    description: "Problem, hypothesis, scope, UX flow, and success metrics",
+    description:
+      "Hypothesis-driven growth/feature spec — for experiments and data-backed bets",
   },
   {
     slug: "report",
@@ -79,32 +86,38 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
   {
     slug: "prd",
     label: "Product Requirements Document",
-    description: "Problem, scope, requirements, and what's explicitly out",
+    description:
+      "Delivery PRD for larger core epics — MoSCoW scope and user stories",
   },
   {
     slug: "product-feature",
     label: "Product Feature",
-    description: "Problem, proposed solution, acceptance criteria, and success metrics",
+    description:
+      "Tactical one-pager for bounded features with acceptance criteria",
   },
   {
     slug: "user-flow-definition",
     label: "User Flow Definition",
-    description: "Goal, steps, edge cases, and success state for a user journey",
+    description:
+      "Happy path, decisions, edge cases, and success state for one user task",
   },
   {
     slug: "swot-analysis",
     label: "SWOT Analysis",
-    description: "Strengths, weaknesses, opportunities, and threats for a product or strategy",
+    description:
+      "Scoped SWOT with strategic implications and freshness tracking",
   },
   {
     slug: "project-charter",
     label: "Project Charter",
-    description: "Objective, scope, stakeholders, milestones, and success criteria",
+    description:
+      "Executive buy-in charter — objective, sponsor, risks, and milestones",
   },
   {
     slug: "gtm-plan",
     label: "GTM Plan",
-    description: "Positioning, audience, channels, and success metrics for a launch",
+    description:
+      "ICP, positioning, channels, internal enablement, and launch metrics",
   },
   {
     slug: "launch-checklist",
@@ -114,97 +127,115 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
   {
     slug: "weekly-status",
     label: "Status Report",
-    description: "Summary, key metrics, wins, risks, and next steps for a reporting period",
+    description:
+      "Metrics, wins, blockers, and next steps — TL;DR in Properties Summary",
   },
   {
     slug: "campaign-brief",
     label: "Campaign Brief",
-    description: "Objective, audience, channels, timeline, and success metrics for a campaign",
+    description:
+      "Single key message, channels, budget, creative assets, and success metrics",
   },
   {
     slug: "editorial-calendar",
     label: "Content Calendar Item",
-    description: "Brief, outline, SEO keywords, and distribution for a single piece of content",
+    description:
+      "Campaign-linked brief, angle, outline, draft, SEO meta, funnel stage, and distribution",
   },
   {
     slug: "seo-brief",
     label: "SEO Brief",
-    description: "Target keyword, search intent, competing pages, and content outline",
+    description:
+      "Keyword volume/difficulty, SERP strategy, competing pages, and on-page outline",
   },
   {
     slug: "social-post-batch",
     label: "Social Post Batch",
-    description: "A batch of scheduled posts across platforms, with copy and performance notes",
+    description:
+      "Reviewable batch of posts with media links, hashtags, and performance-to-insight loop",
   },
   {
     slug: "digital-maturity-audit",
     label: "Digital Maturity Audit",
-    description: "Score maturity dimensions, surface findings, and recommend a roadmap",
+    description:
+      "Scored maturity dimensions with gap analysis and roadmap into charter/PRD work",
   },
   {
     slug: "general-audit",
     label: "General Audit",
-    description: "Scope, findings by risk level, executive summary, and action plan",
+    description:
+      "Executive-first audit with risk-rated findings and an action plan",
   },
   {
     slug: "business-plan",
     label: "Business Plan",
-    description: "Executive summary, market analysis, business model, and financial projections",
+    description:
+      "Executive summary, market, GTM, model, funding/ARR targets, and financials",
   },
   {
     slug: "professional-business-letter",
     label: "Professional Business Letter",
-    description: "Salutation, body, and closing for a formal business letter",
+    description: "Subject line, salutation, body, enclosures, and formal closing",
   },
   {
     slug: "one-on-one-notes",
     label: "1:1 Notes",
-    description: "Check-in, topics discussed, action items, and notes for next time",
+    description:
+      "Private check-in notes with career topics, actions, and next-meeting continuity",
   },
   {
     slug: "personal-development-plan",
     label: "Personal Development Plan",
-    description: "Career goals, skill development areas, and a check-in schedule",
+    description:
+      "Career goals, skill table, support needed, and a binding check-in cadence",
   },
   {
     slug: "job-description",
     label: "Job Description",
-    description: "Role summary, responsibilities, requirements, and compensation",
+    description:
+      "Role purpose, impact-oriented responsibilities, requirements, and compensation",
   },
   {
     slug: "performance-review",
     label: "Performance Review",
-    description: "Summary, goals and achievements, strengths, growth areas, and next-period goals",
+    description:
+      "Calibration pipeline with evidence-based goals and PDP-linked growth areas",
   },
   {
     slug: "legal-document",
     label: "Legal Document",
-    description: "Parties, terms, obligations, and signatures for a formal legal document",
+    description:
+      "Parties, terms, obligations, termination/renewal, and signatures",
   },
   {
     slug: "contract-review",
     label: "Contract Review",
-    description: "Contract summary, key terms, risks, and a review recommendation",
+    description:
+      "Intake-to-approval review with key terms, redlines, and liability/privacy checks",
   },
   {
     slug: "compliance-checklist",
     label: "Compliance Checklist",
-    description: "Requirements, evidence, and a remediation plan for a compliance framework",
+    description:
+      "Framework requirements with evidence links, gaps, and remediation owners",
   },
   {
     slug: "financial-report",
     label: "Financial Report",
-    description: "Summary, key figures with variance, and outlook for a reporting period",
+    description:
+      "Period summary, key figures vs baseline, variances, and outlook",
   },
   {
     slug: "research-paper",
     label: "Research Paper",
-    description: "Abstract, methodology, results, discussion, and references",
+    description:
+      "IMRAD paper with related work, limitations-aware discussion, and references",
   },
   {
     slug: "thesis",
     label: "Thesis",
-    description: "Abstract, research question, literature review, methodology, and findings",
+    description:
+      "Full thesis lifecycle including defense Q&A prep and advisor link",
   },
   {
     slug: "student-essay",
@@ -214,7 +245,8 @@ export const SYSTEM_SCOPE_TEMPLATE_CATALOG: readonly ScopeTemplateCatalogEntry[]
   {
     slug: "literature-review",
     label: "Literature Review",
-    description: "Sources reviewed, synthesis of themes, and gaps in the literature",
+    description:
+      "Replicable search scope, source table, thematic synthesis, and gaps",
   },
 ];
 

@@ -59,9 +59,9 @@ export const ADDITIONAL_SCOPE_VIEW_CATALOG: readonly ScopeViewDefinition[] = [
   },
   {
     id: "wiki",
-    label: "Wiki / links",
-    description: "Internal doc graph",
-    status: "coming_soon",
+    label: "Wiki",
+    description: "Spaces with a page tree and full document editor",
+    status: "available",
     minTier: "basic",
   },
   {

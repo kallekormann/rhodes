@@ -21,6 +21,14 @@ export function showCommunitiesEnabled(config: KnowledgeGraphViewConfig): boolea
   return config.showCommunities !== false;
 }
 
+/** Library source nodes default on (citation edges + isolates). */
+export function showLibraryNodesEnabled(config: KnowledgeGraphViewConfig): boolean {
+  return config.showLibraryNodes !== false;
+}
+
+/** Fixed color for library source nodes (distinct from document community palette). */
+export const LIBRARY_NODE_COLOR = "#0f766e";
+
 /** Normalizes a raw connection count into a 0–1 emphasis value for node sizing. */
 export function degreeEmphasis(degree: number, maxDegree: number): number {
   if (maxDegree <= 0) return 0;

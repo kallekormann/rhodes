@@ -46,11 +46,40 @@ function parseDateOnly(value: unknown): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function readDurationDays(
+  metadata: Record<string, unknown> | null,
+  durationFieldKey?: string | null,
+): number | null {
+  if (!metadata) return null;
+  const keys = [
+    ...(durationFieldKey ? [durationFieldKey] : []),
+    "planned_duration_days",
+  ];
+  for (const key of keys) {
+    const raw = metadata[key];
+    const n =
+      typeof raw === "number"
+        ? raw
+        : typeof raw === "string" && raw.trim()
+          ? Number(raw)
+          : NaN;
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return null;
+}
+
+function addDays(start: Date, days: number): Date {
+  const end = new Date(start.getTime());
+  end.setDate(end.getDate() + days);
+  return end;
+}
+
 /** Reads a document's [start, end] span for the Gantt bar. Returns null if unset/unparseable. */
 export function documentTaskDates(
   doc: GanttDocument,
   startField: MetadataSchemaField,
   endField: MetadataSchemaField | null,
+  durationFieldKey?: string | null,
 ): { start: Date; end: Date } | null {
   if (startField.field_type === "date_range") {
     const range = readMetadataDateRange(doc.metadata, startField.field_key);
@@ -66,6 +95,11 @@ export function documentTaskDates(
   if (endField) {
     const end = parseDateOnly(doc.metadata ? doc.metadata[endField.field_key] : null) ?? start;
     return { start, end };
+  }
+
+  const days = readDurationDays(doc.metadata, durationFieldKey);
+  if (days != null) {
+    return { start, end: addDays(start, days) };
   }
 
   return { start, end: start };
@@ -85,11 +119,12 @@ export function buildGanttTasks(
   hierarchyFields: MetadataSchemaField[],
   startField: MetadataSchemaField,
   endField: MetadataSchemaField | null,
+  durationFieldKey?: string | null,
 ): GanttTask[] {
   type Entry = { doc: GanttDocument; start: Date; end: Date };
   const entries: Entry[] = [];
   for (const doc of documents) {
-    const span = documentTaskDates(doc, startField, endField);
+    const span = documentTaskDates(doc, startField, endField, durationFieldKey);
     if (span) entries.push({ doc, ...span });
   }
 

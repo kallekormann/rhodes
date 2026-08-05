@@ -1,5 +1,6 @@
 import { PanelRightClose } from "lucide-react";
 import type { Template } from "@/data/templates";
+import { templateCategoryLabel, type TemplateCategoryId } from "@rhodes/shared/system-templates";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
 import { NeutralPill } from "./NeutralPill";
@@ -44,6 +45,13 @@ export function TemplateDetailPanel({
             <section className="template-detail__section">
               <h3>Description</h3>
               <p className="template-detail__body">{template.fullDescription}</p>
+              {template.category ? (
+                <div className="template-detail__pills template-detail__pills--category">
+                  <NeutralPill>
+                    {templateCategoryLabel(template.category as TemplateCategoryId)}
+                  </NeutralPill>
+                </div>
+              ) : null}
             </section>
 
             <section className="template-detail__section">

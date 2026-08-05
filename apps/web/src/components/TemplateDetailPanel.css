@@ -78,3 +78,7 @@
   flex-wrap: wrap;
   gap: var(--space-sm);
 }
+
+.template-detail__pills--category {
+  margin-top: var(--space-sm);
+}

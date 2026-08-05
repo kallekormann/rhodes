@@ -37,6 +37,9 @@ import {
   type KanbanColumn,
 } from "@/lib/views/kanban";
 import { VIEW_HELP_CONTENT } from "@/lib/views/help-content";
+import { kanbanEmptyCopy } from "@/lib/views/empty-states";
+import { DocumentCard } from "@/components/DocumentCard";
+import { ViewEmptyState } from "@/components/ViewEmptyState";
 import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { Dropdown } from "@/components/Dropdown";
 import { IconButton } from "@/components/IconButton";
@@ -66,29 +69,18 @@ type AuthorInfo = {
   userId?: string;
 };
 
-function KanbanCardBody({
-  document,
-  author,
-}: {
-  document: DocumentRecord;
-  author: AuthorInfo | null;
-}) {
+function KanbanAuthorMeta({ author }: { author: AuthorInfo }) {
   return (
-    <>
-      <span className="kanban-card__title">{document.title || "Untitled"}</span>
-      {author ? (
-        <span className="kanban-card__author">
-          <UserAvatar
-            name={author.name}
-            userId={author.userId}
-            src={author.avatarUrl}
-            size="sm"
-            className="kanban-card__avatar"
-          />
-          <span className="kanban-card__author-name">{author.name}</span>
-        </span>
-      ) : null}
-    </>
+    <span className="kanban-card__author">
+      <UserAvatar
+        name={author.name}
+        userId={author.userId}
+        src={author.avatarUrl}
+        size="sm"
+        className="kanban-card__avatar"
+      />
+      <span className="kanban-card__author-name">{author.name}</span>
+    </span>
   );
 }
 
@@ -106,22 +98,15 @@ function KanbanCard({
   });
 
   return (
-    <button
-      type="button"
+    <DocumentCard
       ref={setNodeRef}
-      className={`kanban-card${isDragging ? " kanban-card--dragging" : ""}`}
+      title={document.title || "Untitled"}
+      className={isDragging ? "document-card--dragging" : ""}
+      meta={author ? <KanbanAuthorMeta author={author} /> : null}
+      onClick={() => onOpen(document)}
       {...listeners}
       {...attributes}
-      onClick={() => onOpen(document)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen(document);
-        }
-      }}
-    >
-      <KanbanCardBody document={document} author={author} />
-    </button>
+    />
   );
 }
 
@@ -622,16 +607,51 @@ export function KanbanView() {
             {boardLoading ? (
               <LoaderState label="Loading board…" align="fill" />
             ) : instances.length === 0 ? (
-              <p className="caption kanban-view__empty">
-                {canWriteActiveScope
-                  ? "No boards yet. Use + above to create one — boards are saved with this scope, not recreated on each visit."
-                  : "No boards in this view yet."}
-              </p>
+              <ViewEmptyState
+                layout="panel"
+                title={
+                  kanbanEmptyCopy({
+                    canWrite: canWriteActiveScope,
+                    hasBoards: false,
+                    hasGroupField: true,
+                  }).title
+                }
+                description={
+                  kanbanEmptyCopy({
+                    canWrite: canWriteActiveScope,
+                    hasBoards: false,
+                    hasGroupField: true,
+                  }).description
+                }
+                primaryAction={
+                  canWriteActiveScope
+                    ? {
+                        label: "New board",
+                        onClick: () => {
+                          void createTab("Board");
+                        },
+                      }
+                    : undefined
+                }
+              />
             ) : !groupField ? (
-              <p className="caption kanban-view__empty">
-                This scope has no status or select properties yet. Add one in
-                Settings, or create documents from a bundle that includes them.
-              </p>
+              <ViewEmptyState
+                layout="panel"
+                title={
+                  kanbanEmptyCopy({
+                    canWrite: canWriteActiveScope,
+                    hasBoards: true,
+                    hasGroupField: false,
+                  }).title
+                }
+                description={
+                  kanbanEmptyCopy({
+                    canWrite: canWriteActiveScope,
+                    hasBoards: true,
+                    hasGroupField: false,
+                  }).description
+                }
+              />
             ) : (
               <DndContext
                 sensors={sensors}
@@ -656,12 +676,15 @@ export function KanbanView() {
                 </div>
                 <DragOverlay dropAnimation={null}>
                   {activeDoc ? (
-                    <div className="kanban-card kanban-card--overlay">
-                      <KanbanCardBody
-                        document={activeDoc}
-                        author={resolveAuthor(activeDoc)}
-                      />
-                    </div>
+                    <DocumentCard
+                      title={activeDoc.title || "Untitled"}
+                      className="document-card--overlay"
+                      meta={
+                        resolveAuthor(activeDoc) ? (
+                          <KanbanAuthorMeta author={resolveAuthor(activeDoc)!} />
+                        ) : null
+                      }
+                    />
                   ) : null}
                 </DragOverlay>
               </DndContext>

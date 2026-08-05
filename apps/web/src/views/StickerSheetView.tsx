@@ -56,6 +56,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { TabBar } from "@/components/TabBar";
 import { ViewInstanceTabBar } from "@/components/views/ViewInstanceTabBar";
 import { TemplateCard, TemplateCardGrid } from "@/components/TemplateCard";
+import { DocumentCard } from "@/components/DocumentCard";
 import { TextArea } from "@/components/TextArea";
 import { Toast } from "@/components/Toast";
 import { Toggle } from "@/components/Toggle";
@@ -117,8 +118,7 @@ export function StickerSheetView() {
   const listDemo = documents.slice(0, 3);
 
   return (
-    <OfflineGate title="Design system preview unavailable offline">
-    <div className="sticker-sheet">
+    <OfflineGate title="Design system offline" message="Connect to preview the sticker sheet.">    <div className="sticker-sheet">
       <header className="sticker-sheet__header">
         <h1 className="type-page-title">Rhodes Design System</h1>
         <p className="type-caption">
@@ -344,6 +344,25 @@ export function StickerSheetView() {
           <IconLabelButton variant="meta" icon={SlidersHorizontal} active>
             Properties
           </IconLabelButton>
+        </div>
+      </section>
+
+      <section className="sticker-section">
+        <h2 className="type-sticker-heading">Document cards</h2>
+        <p className="caption">
+          Shared surface for Kanban and Mind Map nodes. Tokens only.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "var(--space-md)",
+            alignItems: "flex-start",
+          }}
+        >
+          <DocumentCard title="Product Spec" />
+          <DocumentCard title="Central topic" placeholder selected />
+          <DocumentCard title="Selected topic" selected />
         </div>
       </section>
 

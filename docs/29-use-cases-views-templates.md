@@ -29,7 +29,7 @@ Populate `ADDITIONAL_SCOPE_VIEW_CATALOG` incrementally. M2 ships catalog metadat
 | `mindmap` | Mind-Map | pro | **available** | Author a map of documents; connections become relations |
 | `graph` | Knowledge Graph | pro | **available** | Explore relation-linked documents across the scope |
 | `gantt` | Gantt | pro | **available** | Long-form planning |
-| `wiki` | Wiki / links | basic | coming_soon | Internal doc graph (M6) |
+| `wiki` | Wiki | basic | **available** | Spaces + page tree + full editor |
 | `dashboard` | Dashboard | pro | **available** | Scope metrics |
 
 Tier limits (`maxAdditionalScopeViews`): free 1, basic 3, pro 5, team 5.

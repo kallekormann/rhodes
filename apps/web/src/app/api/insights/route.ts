@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 const insightsSchema = z.object({
   workspace_id: z.string().uuid(),
   query_text: z.string().min(1).max(8000),
+  /** Active editor document — exclude its own chunks from Insights. */
+  exclude_document_id: z.string().uuid().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
       workspaceId: parsed.data.workspace_id,
       queryText: parsed.data.query_text,
       matchCount: 8,
+      excludeDocumentId: parsed.data.exclude_document_id ?? null,
     });
 
     const insights = matches.slice(0, 4).map((match) => ({

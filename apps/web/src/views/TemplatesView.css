@@ -24,6 +24,16 @@
   margin-bottom: var(--space-lg);
 }
 
+.templates-toolbar__tabs {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.templates-toolbar__tabs .segmented {
+  flex-wrap: nowrap;
+  width: max-content;
+}
+
 .templates-view__status {
   margin: 0;
 }

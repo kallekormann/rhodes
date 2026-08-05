@@ -1153,7 +1153,7 @@ export function TipTapEditor({
 
   return (
     <div className="tiptap-editor" ref={editorContainerRef}>
-      {editor && (
+      {editor && editable ? (
         <EditorBubbleMenu
           editor={editor}
           onAsk={onAsk}
@@ -1163,7 +1163,7 @@ export function TipTapEditor({
           onCommentSave={handleCommentSave}
           suppressed={Boolean(spellSuggestion)}
         />
-      )}
+      ) : null}
 
       {editor && spellSuggestion && (
         <SpellSuggestionPopover

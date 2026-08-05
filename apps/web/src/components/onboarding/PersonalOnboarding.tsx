@@ -5,13 +5,25 @@ import { AuthField } from "@/components/auth/AuthField";
 import { Button } from "@/components/Button";
 import { OnboardingScreen } from "@/components/onboarding/OnboardingScreen";
 
+export type PersonalOnboardingPath = "personal" | "organization";
+
 type PersonalOnboardingProps = {
   initialDisplayName: string;
+  /** Which fork the user took before this display-name step. */
+  path?: PersonalOnboardingPath;
   onComplete: (displayName: string) => Promise<void>;
 };
 
+function leadForPath(path: PersonalOnboardingPath): string {
+  if (path === "organization") {
+    return "Your organization is ready. Confirm how you'd like to appear to collaborators — next you'll set up your private scope to explore Rhodes.";
+  }
+  return "Confirm how you'd like to appear to collaborators — next you'll set up your private scope.";
+}
+
 export function PersonalOnboarding({
   initialDisplayName,
+  path = "personal",
   onComplete,
 }: PersonalOnboardingProps) {
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -37,10 +49,7 @@ export function PersonalOnboarding({
   };
 
   return (
-    <OnboardingScreen
-      title="Welcome to Rhodes"
-      lead="Your private scope is ready. Confirm how you'd like to appear to collaborators."
-    >
+    <OnboardingScreen title="Welcome to Rhodes" lead={leadForPath(path)}>
       <form className="auth-form onboarding-form" onSubmit={(event) => void handleSubmit(event)}>
         <AuthField
           label="Display name"

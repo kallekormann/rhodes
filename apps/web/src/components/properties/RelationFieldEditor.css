@@ -3,6 +3,19 @@
   min-width: 0;
 }
 
+.relation-field-editor__selected {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs, 4px);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.relation-field-editor__empty {
+  font-size: 14px;
+  color: var(--color-text-tertiary);
+}
+
 .relation-field-editor__results {
   position: absolute;
   z-index: 20;
@@ -33,8 +46,10 @@
   color: var(--color-text);
 }
 
-.relation-field-editor__result:hover {
+.relation-field-editor__result:hover,
+.relation-field-editor__result:focus-visible {
   background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+  outline: none;
 }
 
 .relation-field-editor__hint {
@@ -42,26 +57,4 @@
   padding: 6px 8px;
   font-size: 13px;
   color: var(--color-text-secondary);
-}
-
-.relation-field-editor__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--color-surface-muted, rgba(0, 0, 0, 0.05));
-  font-size: 13px;
-  max-width: 100%;
-}
-
-.relation-field-editor__remove {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: inherit;
-  font-size: 14px;
-  line-height: 1;
-  padding: 0;
 }

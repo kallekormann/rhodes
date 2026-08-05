@@ -10,9 +10,9 @@ Templates are **best-in-class starters**. Users pick a template, then enhance Pr
 |-------|---------|---------|
 | Body + tips | `templates.structure_json` | TipTap outline; italic tip under each H2 |
 | Classification | `documents.metadata.document_type` | Tier A — derived from template; **not** a Properties schema field |
-| Schema definitions | `templates.metadata.schema_fields` → seeded into `metadata_schemas` | Drives `SchemaFieldRow` controls |
+| Schema definitions | `templates.metadata.schema_fields` (+ optional `schema_groups`) → seeded into `metadata_schemas` / `metadata_schema_groups` | Drives `SchemaFieldRow` / group controls |
 | Defaults | `templates.metadata.default_properties` | Prefills those controls on create |
-| Affinity | `supported_views` + `use_cases` | Wizard / catalog / composition |
+| Affinity | `supported_views` + `use_cases` + `category` | Wizard / catalog / Templates page browse tabs |
 
 ## Field tiers
 
@@ -45,7 +45,7 @@ Anything added later via Properties Manage. Full create/edit/delete; AI toggle i
 
 ## On “Use template”
 
-1. Seed missing `schema_fields` onto the workspace (`seed_scope_metadata_fields`).  
+1. Seed missing `schema_fields` (and `schema_groups` when present) onto the workspace (`seed_scope_metadata_fields` / `seed_scope_metadata_groups`).  
 2. Copy `structure_json` → `documents.content`.  
 3. Merge `default_properties` + `document_type` (+ `template_slug`) into `documents.metadata`.  
 4. Editor must hydrate TipTap/Yjs from that content (collab empty-doc seed).

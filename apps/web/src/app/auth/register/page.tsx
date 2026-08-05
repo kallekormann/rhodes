@@ -56,7 +56,7 @@ function RegisterForm() {
       <p className="auth-subtitle">
         {invitedEmail
           ? "Create your Rhodes account to accept the team invite."
-          : "Start your private Rhodes scope."}
+          : "Create your Rhodes account. You’ll choose private or organization setup next."}
       </p>
       <form className="auth-form" onSubmit={onSubmit}>
         <AuthField
