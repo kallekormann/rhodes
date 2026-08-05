@@ -38,9 +38,10 @@ const GanttView = dynamic(
 );
 
 /**
- * Routes scope surfaces. Engine views are client-only (ssr: false) so heavy
- * canvas libs never SSR. The documents list lives in DocumentsListView and is
- * imported directly by /documents to avoid Suspense/hydration drift.
+ * Routes scope engine surfaces (Kanban, Calendar, …).
+ * Engine views are client-only (`ssr: false`). The documents list is mounted
+ * via DocumentsListPage / AppViewSwitch — not through this router — so it does
+ * not inherit engine Suspense boundaries.
  */
 export function DocumentsView() {
   const { view } = useApp();

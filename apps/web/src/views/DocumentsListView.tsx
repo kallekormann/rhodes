@@ -28,7 +28,6 @@ import { useMetadataSchemas } from "@/hooks/useMetadataSchemas";
 import { pickOverviewTemplates, templateRecordToUi } from "@/lib/templates/map";
 import { cacheDocumentTitle } from "@/lib/editor/editor-shell-session";
 import { RhodesActivityRail } from "@/components/rhodes-activity/RhodesActivityRail";
-import { DocumentsSyncGate } from "@/components/DocumentsSyncGate";
 import { LoaderState } from "@/components/Loader";
 import { DocumentShareBadge } from "@/components/DocumentShareBadge";
 import { Dialog } from "@/components/Dialog";
@@ -167,7 +166,6 @@ export function DocumentsListView() {
   })();
 
   return (
-    <DocumentsSyncGate>
     <div className="canvas-view documents-view">
       <div className="documents-view__scroll overlay-scrollbar">
         <div className="documents-view__inner">
@@ -432,6 +430,5 @@ export function DocumentsListView() {
         />
       )}
     </div>
-    </DocumentsSyncGate>
   );
 }

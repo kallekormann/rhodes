@@ -7,12 +7,14 @@ import { useApp, type AppView } from "@/context/AppContext";
 import { pathToView } from "@/lib/navigation";
 import { isBrowserOffline } from "@/lib/navigation/app-path";
 import { LoaderState } from "@/components/Loader";
+import { DocumentsListView } from "@/views/DocumentsListView";
 
 const viewLoading = (label: string) => (
   <LoaderState label={label} align="fill" />
 );
 
-const DocumentsView = dynamic(
+/** Engines only — documents list is imported statically to avoid Suspense/hydration drift. */
+const ScopeEnginesView = dynamic(
   () => import("@/views/DocumentsView").then((m) => ({ default: m.DocumentsView })),
   { loading: () => viewLoading("Loading…"), ssr: false },
 );
@@ -46,13 +48,14 @@ function renderAppView(view: AppView) {
     case "editor":
       return <EditorView />;
     case "documents":
+      return <DocumentsListView />;
     case "kanban":
     case "dashboard":
     case "calendar":
     case "gantt":
     case "mindmap":
     case "graph":
-      return <DocumentsView />;
+      return <ScopeEnginesView />;
     case "templates":
       return <TemplatesView />;
     case "library":
